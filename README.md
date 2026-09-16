@@ -2,11 +2,13 @@
 
 Cross-repository control plane for DesktopApplication.
 
-After a successful CI run on `main` in [defrances/DesktopApplication](https://github.com/defrances/DesktopApplication), this repository:
+After a successful CI run on `main` in [defrances/DesktopApplication](https://github.com/defrances/DesktopApplication), a run starts **in this repository**, then this repository starts a run **in FindUpdates**:
 
-1. Runs FindUpdates **live** detect (`source=live`): prefers `detect.yml` in FindUpdates, otherwise executes the same live pipeline here and writes `report.json`
-2. Runs the GitHub Copilot skill `analyze-vendor-update-impact` against DesktopApplication (code, recent commits, SBOM)
-3. Opens GitHub Issues in DesktopApplication for updates that may affect the app **on a specific workstation**
+1. DesktopApplication [Notify Orchestrator](https://github.com/defrances/DesktopApplication/actions/workflows/notify-orchestrator.yml) sends `repository_dispatch` (`desktop-application-merged`)
+2. [This workflow](https://github.com/defrances/Orchestrator/actions) starts [FindUpdates `detect.yml`](https://github.com/defrances/FindUpdates/actions/workflows/detect.yml) with **`source=live`**
+3. Downloads the `findupdates-report-json` artifact (`report.json`)
+4. Runs the GitHub Copilot skill `analyze-vendor-update-impact` against DesktopApplication (code, recent commits, SBOM)
+5. Opens GitHub Issues in DesktopApplication for updates that may affect the app **on a specific workstation**
 
 The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
 
@@ -18,19 +20,31 @@ sequenceDiagram
   participant Copilot as CopilotCLI
   DA->>DA: merge to main plus CI success
   DA->>Orch: repository_dispatch desktop-application-merged
+  Note over Orch: run appears in Orchestrator Actions
   Orch->>FU: workflow_dispatch detect.yml source=live
+  Note over FU: run appears in FindUpdates Actions
   FU-->>Orch: artifact findupdates-report-json
   Orch->>Copilot: skill analyze-vendor-update-impact
   Copilot-->>DA: GitHub Issues per impactful update and workstation
 ```
 
+## Where each run appears
+
+| Step | Repository | Actions URL |
+| --- | --- | --- |
+| Build, test, SBOM | DesktopApplication | https://github.com/defrances/DesktopApplication/actions |
+| Notify Orchestrator | DesktopApplication | https://github.com/defrances/DesktopApplication/actions/workflows/notify-orchestrator.yml |
+| Orchestrate (this pipeline) | Orchestrator | https://github.com/defrances/Orchestrator/actions |
+| Live detect | FindUpdates | https://github.com/defrances/FindUpdates/actions/workflows/detect.yml |
+| Impact issues | DesktopApplication | https://github.com/defrances/DesktopApplication/issues?q=label%3Avendor-update-impact |
+
 ## Workflows
 
 | Workflow | Repository | Role |
 | --- | --- | --- |
-| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM; on `main` push calls this Orchestrator workflow |
-| [Notify Orchestrator](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/notify-orchestrator.yml) | DesktopApplication | Optional `repository_dispatch` when `ORCHESTRATOR_PAT` is set |
-| [Orchestrate](.github/workflows/orchestrate.yml) | Orchestrator | Live detect, Copilot analysis, issue publish |
+| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM |
+| [Notify Orchestrator](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/notify-orchestrator.yml) | DesktopApplication | After successful `main` CI, start this repo |
+| [Orchestrate](.github/workflows/orchestrate.yml) | Orchestrator | Dispatch FindUpdates, Copilot analysis, issue publish |
 | [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Poll MSRC/Intel, station report |
 
 ## Secrets
@@ -39,20 +53,20 @@ Create a fine-grained PAT (or classic `repo` + `workflow` PAT) that can:
 
 | Repository | Permissions |
 | --- | --- |
-| `defrances/Orchestrator` | Contents: read and write (so DesktopApplication can send `repository_dispatch`) |
-| `defrances/FindUpdates` | Actions: read and write (dispatch `detect.yml`, download artifacts) |
-| `defrances/DesktopApplication` | Contents: read, Actions: read, Issues: write (checkout, SBOM artifact, create issues) |
+| `defrances/Orchestrator` | Contents: **Read and write** (`repository_dispatch`), Actions: **Read and write** (`workflow_dispatch`) |
+| `defrances/FindUpdates` | Actions: **Read and write** (start `detect.yml`, download artifacts) |
+| `defrances/DesktopApplication` | Contents: read, Actions: read, Issues: **write** (checkout, SBOM artifact, create issues) |
+
+Edit an existing token in place if needed: https://github.com/settings/personal-access-tokens — the secret value can stay the same.
 
 Store it as **`ORCHESTRATOR_PAT`** in:
 
 - [DesktopApplication secrets](https://github.com/defrances/DesktopApplication/settings/secrets/actions)
 - [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions)
 
-Optional: **`COPILOT_GITHUB_TOKEN`** in Orchestrator, with Copilot Requests enabled. If unset, the workflow falls back to `ORCHESTRATOR_PAT` / `GITHUB_TOKEN` with `copilot-requests: write`.
+Optional: **`COPILOT_GITHUB_TOKEN`** in Orchestrator, with Copilot Requests enabled. If Copilot CLI cannot authenticate, the workflow uses deterministic fallback analysis and still publishes Issues.
 
-DesktopApplication CI on `main` calls this workflow as a reusable workflow, so Issues can be created with `GITHUB_TOKEN` (permission `issues: write`) even when the PAT cannot dispatch cross-repo Actions.
-
-`ORCHESTRATOR_PAT` is still recommended for `repository_dispatch` and for triggering `detect.yml` remotely. If that dispatch is denied, Orchestrator clones FindUpdates and runs `python -m findupdates.pipeline detect --source live` locally, then continues with Copilot analysis.
+`GITHUB_TOKEN` cannot start workflows in another repository. Cross-repo dispatch and issue creation use `ORCHESTRATOR_PAT` only.
 
 ## Manual run
 
@@ -83,4 +97,4 @@ At most 20 individual issues are opened per run. Overflow is one summary issue. 
 
 ## Artifacts
 
-Orchestrator uploads `orchestrator-analysis` (`inputs/report.json` and `issues-out/**`), retained 14 days.
+Orchestrator uploads `orchestrator-analysis` (`inputs/report.json` and `issues-out/**`), retained 14 days. The live detect artifacts stay on the FindUpdates run.

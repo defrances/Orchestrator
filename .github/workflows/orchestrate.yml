@@ -12,27 +12,9 @@ on:
       ci_run_id:
         description: DesktopApplication CI run id (for SBOM download)
         required: false
-  workflow_call:
-    inputs:
-      sha:
-        description: DesktopApplication git SHA or ref to analyze
-        type: string
-        required: false
-        default: main
-      ci_run_id:
-        description: DesktopApplication CI run id (for SBOM download)
-        type: string
-        required: false
-        default: ""
-    secrets:
-      ORCHESTRATOR_PAT:
-        required: false
-      COPILOT_GITHUB_TOKEN:
-        required: false
 
 permissions:
   contents: read
-  issues: write
   actions: read
   copilot-requests: write
 
@@ -48,26 +30,34 @@ jobs:
     env:
       FINDUPDATES_REPO: defrances/FindUpdates
       APP_REPO: defrances/DesktopApplication
-      GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT || github.token }}
-      DA_SHA: ${{ inputs.sha || github.event.client_payload.sha || github.event.inputs.sha || github.sha }}
-      DA_RUN_ID: ${{ inputs.ci_run_id || github.event.client_payload.run_id || github.event.inputs.ci_run_id || '' }}
+      GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+      DA_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha || 'main' }}
+      DA_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.ci_run_id || '' }}
       DA_CI_URL: ${{ github.event.client_payload.html_url || '' }}
       FINDUPDATES_AI_ENABLED: "true"
       FINDUPDATES_AI_PROVIDER: copilot
       FINDUPDATES_COPILOT_MAX_COMPLETIONS: "8"
       COPILOT_AUTO_UPDATE: "false"
     steps:
+      - name: Require ORCHESTRATOR_PAT
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "ORCHESTRATOR_PAT is not configured in Orchestrator secrets." >&2
+            echo "https://github.com/defrances/Orchestrator/settings/secrets/actions" >&2
+            exit 1
+          fi
+          echo "This run lives in defrances/Orchestrator and will dispatch FindUpdates detect.yml"
+
       - name: Checkout Orchestrator
         uses: actions/checkout@v4
-        with:
-          repository: defrances/Orchestrator
 
       - name: Checkout DesktopApplication
         uses: actions/checkout@v4
         with:
           repository: defrances/DesktopApplication
           ref: ${{ env.DA_SHA }}
-          token: ${{ secrets.ORCHESTRATOR_PAT || github.token }}
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
           path: workspace/DesktopApplication
 
       - name: Set up Python
@@ -79,10 +69,10 @@ jobs:
         continue-on-error: true
         run: npm install -g @github/copilot
 
-      - name: Run FindUpdates detect (live) and collect report.json
+      - name: Run FindUpdates detect.yml (live) and download report.json
         env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT || github.token }}
-          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
         run: bash scripts/wait-and-download-detect.sh
 
       - name: Download DesktopApplication SBOM from triggering CI
@@ -105,8 +95,8 @@ jobs:
         id: copilot
         continue-on-error: true
         env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT || github.token }}
-          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
           COPILOT_AUTO_UPDATE: "false"
         run: |
           set -euo pipefail
@@ -126,8 +116,6 @@ jobs:
         run: python3 scripts/fallback-analyze.py
 
       - name: Publish GitHub Issues in DesktopApplication
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/publish-issues.py
 
       - name: Upload analysis artifacts
