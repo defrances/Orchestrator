@@ -3,3 +3,5 @@ issues-out/
 workspace/
 .DS_Store
 *.log
+__pycache__/
+*.pyc
