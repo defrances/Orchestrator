@@ -34,6 +34,15 @@ List the files you read on `main` and the symbols or settings that connect this 
 
 Do not cite files you did not read.
 
+## Risk to DesktopApplication on main
+
+- Required for the app to keep working: `{required_for_app}` (`required` only if a cited library or logic path on `main` cannot run without this vendor package)
+- Risk if the vendor update **is installed**: `{install_risk}` — incompatible API, ABI, WPF/DPI/reboot, or bundled runtime mismatch
+- Risk if the vendor update **is not installed**: `{skip_risk}` — app fails, stays on a vulnerable library the process loads, or no app impact
+- Compatibility of current `main` with the proposed bits: `{compatibility}`
+
+Name the library or logic (csproj, SBOM package, `NoteStore`, WPF, `RuntimeInformation`). If the app does **not** load that component, say so. Do not claim "DesktopApplication will not work without this update" unless `required_for_app` is `required` and you cited the binding.
+
 ## How this can affect DesktopApplication
 
 Explain the failure mode using those files: startup, WPF rendering, DPI, notes I/O, `RuntimeInformation` strings, reboot during a session, or a publish/SBOM mismatch. Say when the OS KB does **not** change the bundled runtime.

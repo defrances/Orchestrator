@@ -1,6 +1,6 @@
 ---
 name: analyze-vendor-update-impact
-description: Analyze FindUpdates station report JSON against the full DesktopApplication main branch, then write GitHub issue payloads for vendor updates that may affect the app on a workstation. Use when given findupdates-report-json, report.json, workstation recommendations, or asked to open DesktopApplication impact issues.
+description: Analyze FindUpdates station report JSON against the full DesktopApplication main branch, score install vs skip risk (library and logic compatibility), then write GitHub issue payloads. Use when given findupdates-report-json, report.json, workstation recommendations, or asked to open DesktopApplication impact issues.
 ---
 
 # Analyze vendor update impact
@@ -90,6 +90,36 @@ Typical couplings from this repo (use only if the file supports it):
 
 Do **not** claim an OS .NET / .NET Framework KB patches the runtime inside the published exe unless you show the publish is framework-dependent. On current `main`, CI publishes `--self-contained true` for `win-x64`.
 
+## Score the risk of this update
+
+After the full-repo pass, score **both directions** for every row you might file. The question is not only "does this CVE sound serious". It is whether **this codebase on `main`** needs the update, survives the update, or breaks because of it.
+
+Look for a real library or logic path:
+
+- `PackageReference` / `ProjectReference` in `*.csproj`
+- packages in the SBOM that the published exe actually embeds
+- BCL / WPF / Win32 APIs the `.cs` / `.xaml` files call (`NoteStore` file I/O, `RuntimeInformation`, WPF types, `app.manifest` DPI)
+- tests that freeze those contracts
+
+Then assign:
+
+| Field | Allowed values | Meaning |
+| --- | --- | --- |
+| `required_for_app` | `required` / `not_required` / `unknown` | `required` only if the app on `main` will fail, refuse to start, or stay on a library version the code cannot run without this vendor package |
+| `install_risk` | `breaks_app` / `may_break_app` / `compatible` / `unknown` | Risk **if the vendor update is installed** on the station: API/ABI/behavior mismatch with code or bundled libs |
+| `skip_risk` | `app_will_fail` / `stays_vulnerable` / `no_app_impact` / `unknown` | Risk **if the update is not installed**: missing patched library the code loads, or no path to this app |
+| `compatibility` | `incompatible` / `compatible` / `unknown` | Does current `main` logic work with the proposed vendor bits? |
+
+Rules:
+
+1. **`required_for_app: required` and `skip_risk: app_will_fail`** only with a cited file that loads the patched component (PackageReference, SBOM package + publish embedding, or a runtime the process actually binds). "Windows has a CVE" is not enough. Current `main` has no third-party `PackageReference`; Core is `net9.0` BCL only. Do not invent NuGet deps.
+2. **Self-contained publish:** an OS .NET / .NET Framework KB almost never makes the app "not work without the KB". The exe already carries `Microsoft.NETCore.App` / `Microsoft.WindowsDesktop.App` from publish. Say `not_required` unless you prove framework-dependent load.
+3. **`install_risk: breaks_app` / `may_break_app`** when host OS/WPF/ALPC/Shell/DPI/reboot would change behavior of files you read (`MainWindow.xaml`, `app.manifest`, `NoteStore.cs`, `ci.yml` publish). That is incompatibility **with** the vendor update, not a reason to install it.
+4. If FindUpdates is `do_not_install` / HOLD / BLOCK, keep that verdict. A high `skip_risk` does **not** override HOLD/BLOCK and must not recommend production install.
+5. If you cannot match the vendor package to a library or logic path on `main`, set `required_for_app: not_required`, `skip_risk: no_app_impact` (or `unknown`), and either skip the issue or file only for host/reboot coupling with `install_risk` explained.
+
+Put the four fields in the JSON payload **and** in the issue body (see the template). Title `{short risk}` must reflect the worse of install vs skip (for example `may break WPF DPI` or `OS KB does not patch bundled runtime`).
+
 Skip:
 
 - `not_in_scope` unless `main` still targets that OS/package
@@ -105,7 +135,7 @@ Cap: at most 20 individual issue files. Overflow goes to `issues-out/summary.jso
 
 `issues-out/01-<advisory_id>-<device_id>.json`
 
-Required keys: `title`, `body`, `advisory_id`, `device_id`, `labels`.
+Required keys: `title`, `body`, `advisory_id`, `device_id`, `labels`, `required_for_app`, `install_risk`, `skip_risk`, `compatibility`.
 
 Title format:
 

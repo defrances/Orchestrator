@@ -70,7 +70,22 @@ def relevant(item: dict[str, object]) -> bool:
     return False
 
 
-def issue_body(item: dict[str, object], evidence: str, log: str) -> str:
+def risk_fields(item: dict[str, object]) -> dict[str, str]:
+    title = f"{item.get('title', '')} {item.get('package', '')}".lower()
+    hostish = any(
+        token in title
+        for token in ("wpf", "shell", "alpc", "dpi", "graphics", "reboot", "update stack")
+    )
+    net_kb = any(token in title for token in (".net", "framework", "runtime", "visual studio"))
+    return {
+        "required_for_app": "not_required",
+        "install_risk": "may_break_app" if hostish else "unknown",
+        "skip_risk": "no_app_impact" if net_kb else ("unknown" if hostish else "no_app_impact"),
+        "compatibility": "unknown" if hostish else "compatible",
+    }
+
+
+def issue_body(item: dict[str, object], evidence: str, log: str, risk: dict[str, str]) -> str:
     advisory = str(item.get("advisory_id") or "")
     device = str(item.get("device_id") or "")
     cves = item.get("cve_ids") or []
@@ -99,13 +114,24 @@ This issue is **not** an authorization to install, approve, or deploy. HOLD and 
 - Clinical criticality: {item.get("clinical_criticality")}
 - Network exposure: {item.get("network_exposure")}
 
+## Evidence from DesktopApplication main
+
+{evidence}
+
+## Risk to DesktopApplication on main
+
+- Required for the app to keep working: `{risk["required_for_app"]}`
+- Risk if the vendor update **is installed**: `{risk["install_risk"]}`
+- Risk if the vendor update **is not installed**: `{risk["skip_risk"]}`
+- Compatibility of current `main` with the proposed bits: `{risk["compatibility"]}`
+
+Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime and the app does not stop working solely because this KB is absent.
+
 ## How this can affect DesktopApplication
 
 {item.get("explanation")}
 
-{evidence}
-
-A Windows / .NET OS update on this station can change the runtime, reboot behavior, or Win32/WPF stack used by the self-contained `DesktopApplication.exe`.
+A host Windows update can still change WPF, DPI, reboot, or Win32 behavior used by `DesktopApplication.exe`. That is install-side incompatibility, not a reason to treat the KB as required.
 
 ## Recent code that raises or lowers the risk
 
@@ -149,13 +175,18 @@ def main() -> int:
             (OUT_DIR / "summary.json").write_text(json.dumps(overflow, indent=2) + "\n", encoding="utf-8")
             break
         written += 1
+        risk = risk_fields(item)
         short = str(item.get("title") or "vendor update")[:80]
         issue = {
             "title": f"[Impact] {advisory} on {device} — {short}",
             "advisory_id": advisory,
             "device_id": device,
             "labels": ["vendor-update-impact", f"workstation:{device}"],
-            "body": issue_body(item, evidence, log),
+            "required_for_app": risk["required_for_app"],
+            "install_risk": risk["install_risk"],
+            "skip_risk": risk["skip_risk"],
+            "compatibility": risk["compatibility"],
+            "body": issue_body(item, evidence, log, risk),
         }
         name = f"{written:02d}-{re.sub(r'[^A-Za-z0-9._-]+', '-', advisory)}-{device}.json"
         (OUT_DIR / name).write_text(json.dumps(issue, indent=2) + "\n", encoding="utf-8")
