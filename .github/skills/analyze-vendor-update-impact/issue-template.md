@@ -1,5 +1,7 @@
 <!-- impact:{advisory_id}:{device_id} -->
 
+Analyzed https://github.com/defrances/DesktopApplication branch `main` at `{main_sha}`.
+
 ## Update
 
 - Advisory: `{advisory_id}`
@@ -22,20 +24,24 @@ This issue is **not** an authorization to install, approve, or deploy. HOLD and 
 - Clinical criticality: `{clinical_criticality}`
 - Network exposure: `{network_exposure}`
 
+## Evidence from DesktopApplication main
+
+List the files you read on `main` and the symbols or settings that connect this update to the app. Example shape:
+
+- `src/DesktopApplication.Core/NoteStore.cs` — `%AppData%\DesktopApplication\notes.txt`
+- `src/DesktopApplication/app.manifest` — `PerMonitorV2`
+- `.github/workflows/ci.yml` — `dotnet publish` `--self-contained true` `-r win-x64`
+
+Do not cite files you did not read.
+
 ## How this can affect DesktopApplication
 
-Explain the plausible failure mode on **this** workstation: crash on startup, missing runtime, reboot during use, WPF rendering, single-file extraction, DPI/manifest, notes file I/O, or a SBOM package bump.
+Explain the failure mode using those files: startup, WPF rendering, DPI, notes I/O, `RuntimeInformation` strings, reboot during a session, or a publish/SBOM mismatch. Say when the OS KB does **not** change the bundled runtime.
 
-Cite evidence:
+## Recent code on main that raises or lowers the risk
 
-- App files or APIs (for example `src/DesktopApplication/MainWindow.xaml`, `net9.0-windows`, self-contained publish)
-- SBOM / dependency names if present
-- FindUpdates explanation for the station
-
-## Recent code that raises or lowers the risk
-
-Summarize the latest DesktopApplication commits/diffs that interact with this update (runtime, OS version assumptions, packaging, native deps). If none, say so.
+Commits on `main` that touch the cited files. If none, write `No recent main commits change this coupling.`
 
 ## Recommended reviewer action
 
-What a human should verify on this station before any change. Do not instruct production install.
+What to verify on this station against the **current main** build. Do not instruct production install.

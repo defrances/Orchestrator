@@ -52,13 +52,17 @@ jobs:
       - name: Checkout Orchestrator
         uses: actions/checkout@v4
 
-      - name: Checkout DesktopApplication
+      - name: Checkout DesktopApplication main
         uses: actions/checkout@v4
         with:
           repository: defrances/DesktopApplication
-          ref: ${{ env.DA_SHA }}
+          ref: main
           token: ${{ secrets.ORCHESTRATOR_PAT }}
           path: workspace/DesktopApplication
+          fetch-depth: 0
+
+      - name: Inventory DesktopApplication main
+        run: python3 scripts/inventory-desktop-application.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -108,8 +112,10 @@ jobs:
           copilot --yolo --no-ask-user -p "$(cat <<'PROMPT'
           Use the /analyze-vendor-update-impact skill.
 
+          Analyze the entire https://github.com/defrances/DesktopApplication repository on branch main.
+          The checkout is workspace/DesktopApplication and MUST be main (see workspace/desktop-application-inventory.md).
+          Read every source file listed in that inventory before writing issues.
           Input report: inputs/report.json
-          Application repository checkout: workspace/DesktopApplication
           Optional SBOM: workspace/sbom/DesktopApplication.sbom.spdx.json or workspace/DesktopApplication/artifacts/DesktopApplication.sbom.spdx.json
           Write issue JSON files only to issues-out/. Do not call gh issue create. Do not deploy or change policy.
           PROMPT
@@ -130,5 +136,6 @@ jobs:
           path: |
             inputs/report.json
             issues-out/**
+            workspace/desktop-application-inventory.md
           if-no-files-found: warn
           retention-days: 14

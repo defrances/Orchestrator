@@ -28,13 +28,23 @@ def git_log() -> str:
 
 
 def app_notes() -> str:
+    notes = [
+        "Analyzed https://github.com/defrances/DesktopApplication branch `main` (full checkout).",
+        "DesktopApplication is a WPF WinExe (`src/DesktopApplication/DesktopApplication.csproj`: `UseWPF`, `net9.0-windows`).",
+        "CI publishes `--self-contained true` `-r win-x64` (`.github/workflows/ci.yml`); an OS .NET KB does not patch the bundled runtime.",
+        "`NoteStore` writes `%AppData%\\DesktopApplication\\notes.txt`.",
+        "`SystemInformationProvider` reads OS/user/machine via `RuntimeInformation`.",
+        "`app.manifest` sets Windows 10 compatibility and `PerMonitorV2` DPI.",
+    ]
     csproj = APP_DIR / "src" / "DesktopApplication" / "DesktopApplication.csproj"
-    notes = ["DesktopApplication is a self-contained WPF client targeting net9.0-windows / win-x64."]
     if csproj.exists():
         text = csproj.read_text(encoding="utf-8")
         tfm = re.search(r"<TargetFramework>([^<]+)</TargetFramework>", text)
         if tfm:
             notes.append(f"Project TargetFramework is `{tfm.group(1)}`.")
+    inventory = Path("workspace/desktop-application-inventory.md")
+    if inventory.exists():
+        notes.append(f"Repo inventory: `{inventory.as_posix()}`.")
     sbom = (
         Path("workspace/sbom/DesktopApplication.sbom.spdx.json")
         if Path("workspace/sbom/DesktopApplication.sbom.spdx.json").exists()

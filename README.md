@@ -74,14 +74,14 @@ Actions → **Orchestrate vendor impact analysis** → **Run workflow**.
 
 Inputs:
 
-- `sha` — DesktopApplication ref (default `main`)
+- `sha` — triggering DesktopApplication commit (CI correlation); analysis always uses branch `main`
 - `ci_run_id` — optional CI run id, used to download the `sbom` artifact
 
 ## Copilot skill
 
 [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/)
 
-The skill reads `inputs/report.json`, inspects `workspace/DesktopApplication`, and writes JSON under `issues-out/`. A separate script publishes Issues so the model does not get a write token for `gh issue create`.
+The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout (every source file, not only the csproj/SBOM). It reads `inputs/report.json` and writes JSON under `issues-out/`. A separate script publishes Issues so the model does not get a write token for `gh issue create`.
 
 ## Issues in DesktopApplication
 
