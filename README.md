@@ -64,7 +64,7 @@ Store it as **`ORCHESTRATOR_PAT`** in:
 - [DesktopApplication secrets](https://github.com/defrances/DesktopApplication/settings/secrets/actions)
 - [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions)
 
-Optional: **`COPILOT_GITHUB_TOKEN`** in Orchestrator, with Copilot Requests enabled. If Copilot CLI cannot authenticate, the workflow uses deterministic fallback analysis and still publishes Issues.
+The Copilot skill step authenticates with `GITHUB_TOKEN` and `permissions: copilot-requests: write` (no PAT). Optional **`COPILOT_GITHUB_TOKEN`** overrides that if you want a user-owned fine-grained PAT with Account permission **Copilot Requests**. If Copilot CLI cannot authenticate, the workflow uses deterministic fallback analysis and still publishes Issues.
 
 `GITHUB_TOKEN` cannot start workflows in another repository. Cross-repo dispatch and issue creation use `ORCHESTRATOR_PAT` only.
 

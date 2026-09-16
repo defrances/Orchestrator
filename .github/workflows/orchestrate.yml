@@ -95,12 +95,16 @@ jobs:
         id: copilot
         continue-on-error: true
         env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
-          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
+          # Copilot CLI reads COPILOT_GITHUB_TOKEN, then GH_TOKEN, then GITHUB_TOKEN.
+          # The job-level GH_TOKEN is ORCHESTRATOR_PAT and does not have Copilot Requests.
+          # Use the Actions token (copilot-requests: write) unless a dedicated secret is set.
+          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
           COPILOT_AUTO_UPDATE: "false"
         run: |
           set -euo pipefail
           mkdir -p issues-out
+          unset COPILOT_GITHUB_TOKEN
           copilot --yolo --no-ask-user -p "$(cat <<'PROMPT'
           Use the /analyze-vendor-update-impact skill.
 
