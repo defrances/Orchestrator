@@ -4,10 +4,9 @@ Cross-repository control plane for DesktopApplication.
 
 After a successful CI run on `main` in [defrances/DesktopApplication](https://github.com/defrances/DesktopApplication), this repository:
 
-1. Starts [FindUpdates `detect.yml`](https://github.com/defrances/FindUpdates/actions/workflows/detect.yml) with **`source=live`**
-2. Downloads the `findupdates-report-json` artifact (`report.json`)
-3. Runs the GitHub Copilot skill `analyze-vendor-update-impact` against DesktopApplication (code, recent commits, SBOM)
-4. Opens GitHub Issues in DesktopApplication for updates that may affect the app **on a specific workstation**
+1. Runs FindUpdates **live** detect (`source=live`): prefers `detect.yml` in FindUpdates, otherwise executes the same live pipeline here and writes `report.json`
+2. Runs the GitHub Copilot skill `analyze-vendor-update-impact` against DesktopApplication (code, recent commits, SBOM)
+3. Opens GitHub Issues in DesktopApplication for updates that may affect the app **on a specific workstation**
 
 The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
 
@@ -29,8 +28,8 @@ sequenceDiagram
 
 | Workflow | Repository | Role |
 | --- | --- | --- |
-| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM |
-| [Notify Orchestrator](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/notify-orchestrator.yml) | DesktopApplication | After successful `main` CI, dispatch this repo |
+| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM; on `main` push calls this Orchestrator workflow |
+| [Notify Orchestrator](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/notify-orchestrator.yml) | DesktopApplication | Optional `repository_dispatch` when `ORCHESTRATOR_PAT` is set |
 | [Orchestrate](.github/workflows/orchestrate.yml) | Orchestrator | Live detect, Copilot analysis, issue publish |
 | [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Poll MSRC/Intel, station report |
 
@@ -51,7 +50,9 @@ Store it as **`ORCHESTRATOR_PAT`** in:
 
 Optional: **`COPILOT_GITHUB_TOKEN`** in Orchestrator, with Copilot Requests enabled. If unset, the workflow falls back to `ORCHESTRATOR_PAT` / `GITHUB_TOKEN` with `copilot-requests: write`.
 
-Without these secrets, dispatch, artifact download, Copilot, and issue creation cannot run.
+DesktopApplication CI on `main` calls this workflow as a reusable workflow, so Issues can be created with `GITHUB_TOKEN` (permission `issues: write`) even when the PAT cannot dispatch cross-repo Actions.
+
+`ORCHESTRATOR_PAT` is still recommended for `repository_dispatch` and for triggering `detect.yml` remotely. If that dispatch is denied, Orchestrator clones FindUpdates and runs `python -m findupdates.pipeline detect --source live` locally, then continues with Copilot analysis.
 
 ## Manual run
 
