@@ -19,13 +19,18 @@ FINGERPRINT_RE = re.compile(r"<!--\s*impact:([^:]+):([^>]+?)\s*-->")
 
 def gh(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
-    return subprocess.run(
+    result = subprocess.run(
         ["gh", *args],
-        check=check,
+        check=False,
         text=True,
         capture_output=True,
         env=env,
     )
+    if check and result.returncode != 0:
+        sys.stderr.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        result.check_returncode()
+    return result
 
 
 def ensure_label(name: str, color: str, description: str) -> None:
@@ -154,9 +159,13 @@ def create_issue(item: dict[str, object]) -> str:
         "--body",
         body,
     ]
+    labeled_args = list(args)
     for name in sorted(labels):
-        args.extend(["--label", name])
-    result = gh(*args)
+        labeled_args.extend(["--label", name])
+    result = gh(*labeled_args, check=False)
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        result = gh(*args)
     url = (result.stdout or "").strip()
     print(url)
     return url

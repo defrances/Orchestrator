@@ -127,7 +127,7 @@ jobs:
 
       - name: Publish GitHub Issues in DesktopApplication
         env:
-          GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/publish-issues.py
 
       - name: Upload analysis artifacts
