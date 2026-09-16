@@ -1,0 +1,102 @@
+name: Orchestrate vendor impact analysis
+
+on:
+  repository_dispatch:
+    types: [desktop-application-merged]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: DesktopApplication git SHA or ref to analyze
+        required: false
+        default: main
+      ci_run_id:
+        description: DesktopApplication CI run id (for SBOM download)
+        required: false
+
+permissions:
+  contents: read
+  copilot-requests: write
+
+concurrency:
+  group: orchestrate-desktop-application
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    name: Detect, analyze, open issues
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FINDUPDATES_REPO: defrances/FindUpdates
+      APP_REPO: defrances/DesktopApplication
+      GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+      DA_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha || 'main' }}
+      DA_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.ci_run_id || '' }}
+      DA_CI_URL: ${{ github.event.client_payload.html_url || '' }}
+    steps:
+      - name: Checkout Orchestrator
+        uses: actions/checkout@v4
+
+      - name: Checkout DesktopApplication
+        uses: actions/checkout@v4
+        with:
+          repository: defrances/DesktopApplication
+          ref: ${{ env.DA_SHA }}
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
+          path: workspace/DesktopApplication
+
+      - name: Trigger FindUpdates detect (live) and download report
+        run: bash scripts/wait-and-download-detect.sh
+
+      - name: Download DesktopApplication SBOM from triggering CI
+        if: env.DA_RUN_ID != ''
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p workspace/sbom
+          gh run download "${DA_RUN_ID}" \
+            --repo "${APP_REPO}" \
+            --name sbom \
+            --dir workspace/sbom
+          if [ -f workspace/sbom/DesktopApplication.sbom.spdx.json ]; then
+            mkdir -p workspace/DesktopApplication/artifacts
+            cp workspace/sbom/DesktopApplication.sbom.spdx.json \
+              workspace/DesktopApplication/artifacts/DesktopApplication.sbom.spdx.json
+          fi
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
+      - name: Analyze vendor updates with Copilot skill
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+        run: |
+          set -euo pipefail
+          mkdir -p issues-out
+          copilot --yolo --no-ask-user -p "$(cat <<'PROMPT'
+          Use the /analyze-vendor-update-impact skill.
+
+          Input report: inputs/report.json
+          Application repository checkout: workspace/DesktopApplication
+          Optional SBOM: workspace/sbom/DesktopApplication.sbom.spdx.json or workspace/DesktopApplication/artifacts/DesktopApplication.sbom.spdx.json
+          Write issue JSON files only to issues-out/. Do not call gh issue create. Do not deploy or change policy.
+          PROMPT
+          )"
+
+      - name: Publish GitHub Issues in DesktopApplication
+        env:
+          GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+        run: python3 scripts/publish-issues.py
+
+      - name: Upload analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestrator-analysis
+          path: |
+            inputs/report.json
+            issues-out/**
+          if-no-files-found: warn
+          retention-days: 14

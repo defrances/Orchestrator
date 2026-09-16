@@ -1,0 +1,5 @@
+inputs/
+issues-out/
+workspace/
+.DS_Store
+*.log
