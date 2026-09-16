@@ -18,7 +18,8 @@ if [ -z "${GH_TOKEN:-}" ]; then
 fi
 
 echo "Dispatching ${REPO} ${WORKFLOW} source=${SOURCE}"
-if ! gh workflow run "${WORKFLOW}" --repo "${REPO}" -f "source=${SOURCE}"; then
+if ! dispatch_out="$(gh workflow run "${WORKFLOW}" --repo "${REPO}" -f "source=${SOURCE}" 2>&1)"; then
+  echo "${dispatch_out}" >&2
   echo "Could not start ${WORKFLOW} in ${REPO}." >&2
   echo "Edit the existing fine-grained PAT (same token value is fine) and grant:" >&2
   echo "  ${REPO}  Actions: Read and write" >&2
@@ -26,11 +27,13 @@ if ! gh workflow run "${WORKFLOW}" --repo "${REPO}" -f "source=${SOURCE}"; then
   echo "https://github.com/${REPO}/actions/workflows/${WORKFLOW}" >&2
   exit 1
 fi
+echo "${dispatch_out}"
 
-start_iso="$(date -u -d '15 seconds ago' +%Y-%m-%dT%H:%M:%SZ)"
-run_id=""
+start_iso="$(date -u -d '30 seconds ago' +%Y-%m-%dT%H:%M:%SZ)"
+run_id="$(printf '%s\n' "${dispatch_out}" | sed -n 's#.*/actions/runs/\([0-9][0-9]*\).*#\1#p' | tail -n 1)"
+
 deadline=$(( $(date -u +%s) + APPEAR_TIMEOUT ))
-while [ "$(date -u +%s)" -lt "${deadline}" ]; do
+while [ -z "${run_id}" ] && [ "$(date -u +%s)" -lt "${deadline}" ]; do
   run_id="$(
     gh run list \
       --repo "${REPO}" \
@@ -38,11 +41,7 @@ while [ "$(date -u +%s)" -lt "${deadline}" ]; do
       --event workflow_dispatch \
       --limit 20 \
       --json databaseId,createdAt \
-      --jq --arg start "${start_iso}" \
-      '[.[] | select(.createdAt >= $start)]
-       | sort_by(.createdAt)
-       | reverse
-       | .[0].databaseId // empty'
+      --jq "[.[] | select(.createdAt >= \"${start_iso}\")] | sort_by(.createdAt) | reverse | .[0].databaseId // empty"
   )"
   if [ -n "${run_id}" ]; then
     break
