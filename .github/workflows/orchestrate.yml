@@ -34,9 +34,8 @@ jobs:
       DA_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha || 'main' }}
       DA_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.ci_run_id || '' }}
       DA_CI_URL: ${{ github.event.client_payload.html_url || '' }}
-      FINDUPDATES_AI_ENABLED: "true"
-      FINDUPDATES_AI_PROVIDER: copilot
-      FINDUPDATES_COPILOT_MAX_COMPLETIONS: "8"
+      FINDUPDATES_AI_ENABLED: "false"
+      FINDUPDATES_AI_PROVIDER: offline
       COPILOT_AUTO_UPDATE: "false"
     steps:
       - name: Require ORCHESTRATOR_PAT
