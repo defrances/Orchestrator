@@ -115,6 +115,9 @@ jobs:
           The checkout is workspace/DesktopApplication and MUST be main (see workspace/desktop-application-inventory.md).
           Read every source file listed in that inventory before writing issues.
           Score install_risk, skip_risk, required_for_app, and compatibility against libraries and logic on main.
+          Cluster rows that share the same workstation, cluster_key, risk fields, and reviewer action into ONE issue.
+          Do not write one issue per CVE when the coupling paragraph would be identical.
+          Cap at 8 issue files. Prefer cluster_key values from the skill (schannel-tls, win32k-wpf, dwm-wpf, shell-launch, ntfs-notes, os-dotnet).
           Do not claim the app cannot run without an OS KB unless a cited file on main loads that patched component.
           Input report: inputs/report.json
           Optional SBOM: workspace/sbom/DesktopApplication.sbom.spdx.json or workspace/DesktopApplication/artifacts/DesktopApplication.sbom.spdx.json

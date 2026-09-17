@@ -81,7 +81,7 @@ Inputs:
 
 [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/)
 
-The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout (every source file, not only the csproj/SBOM). It then scores each vendor row both ways: risk if the update is **installed** (library or logic on `main` becomes incompatible) and risk if it is **skipped** (app actually needs that patched library to keep working). `required` is allowed only with a cited binding on `main`. It reads `inputs/report.json` and writes JSON under `issues-out/`. A separate script publishes Issues so the model does not get a write token for `gh issue create`.
+The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout (every source file, not only the csproj/SBOM). It then scores each vendor row both ways: risk if the update is **installed** (library or logic on `main` becomes incompatible) and risk if it is **skipped** (app actually needs that patched library to keep working). `required` is allowed only with a cited binding on `main`. Rows that share the same workstation, coupling (`cluster_key`), and risk fields become **one** issue with a table of CVEs — not one issue per advisory. It reads `inputs/report.json` and writes JSON under `issues-out/`. A separate script publishes Issues so the model does not get a write token for `gh issue create`.
 
 ## Issues in DesktopApplication
 
@@ -89,12 +89,13 @@ Look at [DesktopApplication Issues](https://github.com/defrances/DesktopApplicat
 
 Each issue names:
 
-- which vendor update may affect the app
+- which **cluster** of vendor updates share the same coupling on `main` (Schannel/TLS, Win32k, DWM, Shell, NTFS/notes, OS .NET KB)
 - which workstation (`device_id`, OS, role)
+- every member advisory / KB / CVE in one table
 - evidence from DesktopApplication `main`
 - install vs skip risk and whether the app actually requires the update
 
-At most 20 individual issues are opened per run. Overflow is one summary issue. Duplicates of an open `advisory_id` + `device_id` pair are skipped.
+At most 8 clustered issues are opened per run. Overflow is one summary issue. Duplicates of a `cluster_key` + `device_id` pair are skipped, including already-closed issues.
 
 ## Artifacts
 

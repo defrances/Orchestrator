@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 APP_REPO = os.environ.get("APP_REPO", "defrances/DesktopApplication")
-MAX_ISSUES = int(os.environ.get("MAX_ISSUES", "20"))
+MAX_ISSUES = int(os.environ.get("MAX_ISSUES", "8"))
 OUT_DIR = Path(os.environ.get("ISSUES_OUT_DIR", "issues-out"))
 IMPACT_LABEL = "vendor-update-impact"
 FINGERPRINT_RE = re.compile(r"<!--\s*impact:([^:]+):([^>]+?)\s*-->")
@@ -87,10 +87,10 @@ def fingerprint(item: dict[str, object]) -> str:
     match = FINGERPRINT_RE.search(body)
     if match:
         return f"{match.group(1).strip()}:{match.group(2).strip()}"
-    advisory = str(item.get("advisory_id") or "").strip()
+    cluster = str(item.get("cluster_key") or item.get("advisory_id") or "").strip()
     device = str(item.get("device_id") or "").strip()
-    if advisory and device:
-        return f"{advisory}:{device}"
+    if cluster and device:
+        return f"{cluster}:{device}"
     title = str(item.get("title") or "").strip()
     return title or json.dumps(item, sort_keys=True)
 
@@ -104,7 +104,7 @@ def existing_fingerprints() -> set[str]:
         "--label",
         IMPACT_LABEL,
         "--state",
-        "open",
+        "all",
         "--limit",
         "200",
         "--json",
@@ -131,7 +131,7 @@ def workstation_label(device_id: str) -> str:
 def create_issue(item: dict[str, object]) -> str:
     title = str(item.get("title") or "").strip()
     body = str(item.get("body") or "").strip()
-    advisory = str(item.get("advisory_id") or "").strip()
+    advisory = str(item.get("cluster_key") or item.get("advisory_id") or "").strip()
     device = str(item.get("device_id") or "").strip()
     if not title or not body:
         raise SystemExit(f"issue is missing title or body: {item!r}")
@@ -188,7 +188,7 @@ def create_summary(overflow: list[dict[str, object]]) -> None:
     )
     create_issue(
         {
-            "title": "[Impact] Additional vendor updates not filed individually",
+            "title": "[Impact] Additional vendor-update clusters not filed individually",
             "advisory_id": "summary",
             "device_id": "overflow",
             "labels": [IMPACT_LABEL],
