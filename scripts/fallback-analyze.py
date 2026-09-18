@@ -173,9 +173,9 @@ def issue_body(
     for item in members:
         url = item.get("official_url")
         rows.append(
-            "| {advisory} | {title} | {package} | {cves} | `{action}` | `{policy}` | {score} |".format(
-                advisory=linked_update(item.get("advisory_id"), url) or "`unknown`",
-                title=linked_update(item.get("title"), url) or _md_cell(item.get("title")),
+            "| `{advisory}` | {title} | {package} | {cves} | `{action}` | `{policy}` | {score} |".format(
+                advisory=_md_cell(item.get("advisory_id")) or "unknown",
+                title=_md_cell(item.get("title")),
                 package=linked_update(item.get("package"), url) or "`-`",
                 cves=cve_text(item),
                 action=item.get("action"),

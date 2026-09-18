@@ -8,9 +8,9 @@ One GitHub issue for this coupling on this workstation. Do not open a second iss
 
 | Advisory | Title | Package | CVEs | Action | Policy | Score |
 | --- | --- | --- | --- | --- | --- | --- |
-| [`{advisory_id}`]({official_url}) | [{title}]({official_url}) | [`{package}`]({official_url}) | `{cve_ids}` | `{action}` | `{policy_result}` | `{risk_score}` |
+| `{advisory_id}` | `{title}` | [`{package}`]({official_url}) | `{cve_ids}` | `{action}` | `{policy_result}` | `{risk_score}` |
 
-Add one table row per clustered report row. When `official_url` is present on that report row and starts with `https://`, wrap **Title** and **Package** (and Advisory id) as markdown links to that URL so the email is clickable. If `official_url` is missing, keep plain text. Do not invent URLs. Do not use `http://` or non-vendor hosts.
+Add one table row per clustered report row. When `official_url` is present on that report row and starts with `https://`, wrap **only Package** as a markdown link to that URL so the KB is clickable in email. Leave Advisory, Title, and CVEs as plain text. If `official_url` is missing, keep Package as plain text. Do not invent URLs. Do not use `http://` or non-vendor hosts.
 
 This issue is **not** an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
 

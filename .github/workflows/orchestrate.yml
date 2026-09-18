@@ -139,7 +139,7 @@ jobs:
           Do not claim the app cannot run without an OS KB unless a cited file on main loads that patched component.
           Input report: inputs/report.json
           Optional SBOM: workspace/sbom/DesktopApplication.sbom.spdx.json or workspace/DesktopApplication/artifacts/DesktopApplication.sbom.spdx.json
-          In the Updates table, link Title and Package to that row's official_url when it is https. Do not invent URLs.
+          In the Updates table, link only Package to that row's official_url when it is https. Do not link Title or Advisory. Do not invent URLs.
           Write analysis JSON files only to issues-out/. Do not call gh issue create. Do not publish GitHub Issues. Do not deploy or change policy.
           PROMPT
           )"

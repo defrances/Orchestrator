@@ -7,7 +7,7 @@ Cross-repository control plane for DesktopApplication.
 1. FindUpdates `detect.yml` (schedule or `workflow_dispatch`) uploads `findupdates-report-json`
 2. FindUpdates sends `repository_dispatch` (`findupdates-complete`) with the FindUpdates **run id**
 3. [This workflow](https://github.com/defrances/Orchestrator/actions) downloads `report.json`, checks out [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main), and runs the Copilot skill `analyze-vendor-update-impact` (or the deterministic fallback)
-4. Results are **always emailed** to `andrey02061987@gmail.com`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). Each update row links Title and Package to that row's `official_url` from FindUpdates when the URL is `https://`. Overflow uses the summary payload. If there are no clusters, one status email is sent.
+4. Results are **always emailed** to `andrey02061987@gmail.com`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). In the Updates table, only **Package** links to that row's `official_url` from FindUpdates when the URL is `https://`. Overflow uses the summary payload. If there are no clusters, one status email is sent.
 5. GitHub Issues are **not** created
 
 The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
@@ -88,7 +88,7 @@ Inputs:
 
 [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/)
 
-The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout. It scores each vendor row both ways: risk if the update is **installed** and risk if it is **skipped**. It reads `inputs/report.json` and writes JSON under `issues-out/`. Each file with a `title` and `body` becomes **one Gmail message** (subject = Issue title, body = Issue markdown plus a short run footer). Title and Package in the Updates table link to that row's `official_url` when FindUpdates supplied an `https://` vendor URL. They are **not** published as GitHub Issues.
+The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout. It scores each vendor row both ways: risk if the update is **installed** and risk if it is **skipped**. It reads `inputs/report.json` and writes JSON under `issues-out/`. Each file with a `title` and `body` becomes **one Gmail message** (subject = Issue title, body = Issue markdown plus a short run footer). Only **Package** in the Updates table links to that row's `official_url` when FindUpdates supplied an `https://` vendor URL. They are **not** published as GitHub Issues.
 
 ## Artifacts
 

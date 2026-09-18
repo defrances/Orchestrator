@@ -138,7 +138,7 @@ After scoring, group rows that share **all** of:
 - the same four risk fields
 - the same reviewer action (validate / HOLD / BLOCK)
 
-Write **one** issue for that group. Put every member advisory, package, CVE, policy, and score in the Updates table. For each row, if `official_url` is a `https://` value from that same report row, make **Title** and **Package** markdown links to it (`[Windows Schannel ...](https://msrc.microsoft.com/...)`). Never invent or rewrite the URL. The "How this can affect" section is written **once** for the coupling. Do not copy the same paragraph and only swap the CVE title.
+Write **one** issue for that group. Put every member advisory, package, CVE, policy, and score in the Updates table. For each row, if `official_url` is a `https://` value from that same report row, make **only Package** a markdown link (`[KB5122871](https://msrc.microsoft.com/...)`). Do not link Title, Advisory, or CVEs. Never invent or rewrite the URL. The "How this can affect" section is written **once** for the coupling. Do not copy the same paragraph and only swap the CVE title.
 
 Do **not** file a second issue because:
 

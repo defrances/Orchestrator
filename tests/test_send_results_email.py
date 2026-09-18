@@ -27,7 +27,7 @@ CLUSTER_BODY = """<!-- impact:schannel-tls:SYNTHETIC-W11-24H2-01 -->
 
 | Advisory | Title | Package | CVEs | Action | Policy | Score |
 | --- | --- | --- | --- | --- | --- | --- |
-| [advisory_1](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) | [Schannel RCE](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) | [KB5122871](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) | CVE-2026-72940 | `candidate_for_validation` | `REQUIRE_APPROVAL` | 75 |
+| `advisory_1` | Schannel RCE | [KB5122871](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) | CVE-2026-72940 | `candidate_for_validation` | `REQUIRE_APPROVAL` | 75 |
 
 This issue is **not** an authorization to install, approve, or deploy.
 
@@ -53,6 +53,7 @@ class MarkdownHtmlTests(unittest.TestCase):
         self.assertIn('<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">', html)
         self.assertIn("Schannel RCE", html)
         self.assertIn("KB5122871", html)
+        self.assertIn("<code>advisory_1</code>", html)
         self.assertIn("<ul>", html)
         self.assertIn("<h2>Updates in this cluster</h2>", html)
         self.assertNotIn("impact:schannel-tls", html)
@@ -60,11 +61,11 @@ class MarkdownHtmlTests(unittest.TestCase):
     def test_https_table_links_are_anchors(self) -> None:
         html = mail.markdown_to_html(CLUSTER_BODY)
         self.assertIn(
-            '<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">Schannel RCE</a>',
+            '<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">KB5122871</a>',
             html,
         )
-        self.assertIn(
-            '<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">KB5122871</a>',
+        self.assertNotIn(
+            '<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">Schannel RCE</a>',
             html,
         )
 
@@ -287,8 +288,11 @@ class FallbackLinkTests(unittest.TestCase):
             "log",
             fallback.risk_fields("schannel-tls"),
         )
-        self.assertIn(f"[Schannel RCE]({url})", body)
         self.assertIn(f"[KB5122871]({url})", body)
+        self.assertNotIn(f"[Schannel RCE]({url})", body)
+        self.assertNotIn(f"[advisory_1]({url})", body)
+        self.assertIn("`advisory_1`", body)
+        self.assertIn("Schannel RCE", body)
 
 
 if __name__ == "__main__":
