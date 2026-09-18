@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run FindUpdates live detect locally (same path as detect.yml) and write inputs/report.json.
+# Local helper: clone FindUpdates and run live detect into inputs/report.json.
+# GitHub Actions does not use this; detect.yml in FindUpdates is the scheduled job.
 set -euo pipefail
 
 REPO="${FINDUPDATES_REPO:-defrances/FindUpdates}"

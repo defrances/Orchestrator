@@ -222,7 +222,27 @@ Validate the published win-x64 build on `{device}` for this `{key}` cluster in a
 
 def main() -> int:
     if not REPORT.exists():
-        raise SystemExit(f"missing {REPORT}")
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        (OUT_DIR / "missing-report.json").write_text(
+            json.dumps(
+                {
+                    "title": "FindUpdates report.json was not available",
+                    "advisory_id": "missing-report",
+                    "device_id": "n/a",
+                    "cluster_key": "missing-report",
+                    "body": (
+                        "inputs/report.json was missing. "
+                        "Orchestrator did not start FindUpdates and did not create GitHub Issues. "
+                        "This is not an authorization to install, approve, or deploy."
+                    ),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"missing {REPORT}; wrote placeholder analysis")
+        return 0
     payload = json.loads(REPORT.read_text(encoding="utf-8"))
     items = [item for item in payload.get("items") or [] if isinstance(item, dict) and relevant(item)]
     items.sort(key=lambda item: (item.get("action") != CANDIDATE, -int(item.get("risk_score") or 0)))

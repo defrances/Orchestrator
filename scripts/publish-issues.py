@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create DesktopApplication issues from Copilot JSON under issues-out/."""
+"""Unused by Actions. Orchestrator emails analysis JSON; it does not create GitHub Issues."""
 
 from __future__ import annotations
 

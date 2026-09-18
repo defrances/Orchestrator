@@ -1,13 +1,13 @@
 ---
 name: analyze-vendor-update-impact
-description: Analyze FindUpdates station report JSON against the full DesktopApplication main branch, score install vs skip risk, cluster same-coupling CVEs into one issue per workstation, then write GitHub issue payloads. Use when given findupdates-report-json, report.json, workstation recommendations, or asked to open DesktopApplication impact issues.
+description: Analyze FindUpdates station report JSON against the full DesktopApplication main branch, score install vs skip risk, cluster same-coupling CVEs into one analysis file per workstation, then write JSON under issues-out/. Do not open GitHub Issues. Use when given findupdates-report-json or report.json.
 ---
 
 # Analyze vendor update impact
 
 You are an advisory analyst. You do not authorize install, approval, or deploy.
 HOLD and BLOCK stay HOLD and BLOCK. Do not call `gh issue create`.
-Write JSON files only under `issues-out/`.
+Write JSON files only under `issues-out/`. Results are emailed; do not publish GitHub Issues.
 
 The application under analysis is **always** https://github.com/defrances/DesktopApplication **branch `main`**.
 Do not analyze another branch, a single project file, or "the idea of a WPF app".

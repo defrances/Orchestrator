@@ -2,16 +2,16 @@ name: Orchestrate vendor impact analysis
 
 on:
   repository_dispatch:
-    types: [desktop-application-merged]
+    types: [findupdates-complete]
   workflow_dispatch:
     inputs:
-      sha:
-        description: DesktopApplication git SHA or ref to analyze
+      findupdates_run_id:
+        description: FindUpdates Actions run id that uploaded findupdates-report-json
+        required: true
+      source:
+        description: FindUpdates source recorded on that run (live or fixtures)
         required: false
-        default: main
-      ci_run_id:
-        description: DesktopApplication CI run id (for SBOM download)
-        required: false
+        default: live
 
 permissions:
   contents: read
@@ -24,21 +24,26 @@ concurrency:
 
 jobs:
   analyze:
-    name: Detect, analyze, open issues
+    name: Analyze report and email results
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       FINDUPDATES_REPO: defrances/FindUpdates
       APP_REPO: defrances/DesktopApplication
       GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
-      DA_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha || 'main' }}
-      DA_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.ci_run_id || '' }}
-      DA_CI_URL: ${{ github.event.client_payload.html_url || '' }}
+      FU_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.findupdates_run_id || '' }}
+      FU_SOURCE: ${{ github.event.client_payload.source || github.event.inputs.source || '' }}
+      FU_CONCLUSION: ${{ github.event.client_payload.conclusion || '' }}
+      FU_HTML_URL: ${{ github.event.client_payload.html_url || '' }}
       FINDUPDATES_AI_ENABLED: "false"
       FINDUPDATES_AI_PROVIDER: offline
       COPILOT_AUTO_UPDATE: "false"
     steps:
+      - name: Checkout Orchestrator
+        uses: actions/checkout@v4
+
       - name: Require ORCHESTRATOR_PAT
+        continue-on-error: true
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
@@ -46,12 +51,12 @@ jobs:
             echo "https://github.com/defrances/Orchestrator/settings/secrets/actions" >&2
             exit 1
           fi
-          echo "This run lives in defrances/Orchestrator and will dispatch FindUpdates detect.yml"
-
-      - name: Checkout Orchestrator
-        uses: actions/checkout@v4
+          echo "This run lives in defrances/Orchestrator."
+          echo "It downloads findupdates-report-json from FindUpdates run ${FU_RUN_ID:-<missing>}."
+          echo "It does not start FindUpdates and does not create GitHub Issues."
 
       - name: Checkout DesktopApplication main
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: defrances/DesktopApplication
@@ -61,6 +66,7 @@ jobs:
           fetch-depth: 0
 
       - name: Inventory DesktopApplication main
+        continue-on-error: true
         run: python3 scripts/inventory-desktop-application.py
 
       - name: Set up Python
@@ -72,19 +78,31 @@ jobs:
         continue-on-error: true
         run: npm install -g @github/copilot
 
-      - name: Run FindUpdates detect.yml (live) and download report.json
-        env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
-          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || secrets.ORCHESTRATOR_PAT }}
-        run: bash scripts/wait-and-download-detect.sh
+      - name: Download findupdates-report-json
+        id: report
+        continue-on-error: true
+        run: bash scripts/download-findupdates-report.sh
 
-      - name: Download DesktopApplication SBOM from triggering CI
-        if: env.DA_RUN_ID != ''
+      - name: Download latest DesktopApplication SBOM
         continue-on-error: true
         run: |
           set -euo pipefail
           mkdir -p workspace/sbom
-          gh run download "${DA_RUN_ID}" \
+          run_id="$(
+            gh run list \
+              --repo "${APP_REPO}" \
+              --workflow ci.yml \
+              --branch main \
+              --status success \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId // empty'
+          )"
+          if [ -z "${run_id}" ]; then
+            echo "No successful DesktopApplication CI run found for SBOM."
+            exit 0
+          fi
+          gh run download "${run_id}" \
             --repo "${APP_REPO}" \
             --name sbom \
             --dir workspace/sbom
@@ -97,10 +115,10 @@ jobs:
       - name: Analyze vendor updates with Copilot skill
         id: copilot
         continue-on-error: true
+        if: hashFiles('inputs/report.json') != ''
         env:
           # Copilot CLI reads COPILOT_GITHUB_TOKEN, then GH_TOKEN, then GITHUB_TOKEN.
           # The job-level GH_TOKEN is ORCHESTRATOR_PAT and does not have Copilot Requests.
-          # Use the Actions token (copilot-requests: write) unless a dedicated secret is set.
           GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
           GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
           COPILOT_AUTO_UPDATE: "false"
@@ -113,24 +131,22 @@ jobs:
 
           Analyze the entire https://github.com/defrances/DesktopApplication repository on branch main.
           The checkout is workspace/DesktopApplication and MUST be main (see workspace/desktop-application-inventory.md).
-          Read every source file listed in that inventory before writing issues.
+          Read every source file listed in that inventory before writing analysis JSON.
           Score install_risk, skip_risk, required_for_app, and compatibility against libraries and logic on main.
-          Cluster rows that share the same workstation, cluster_key, risk fields, and reviewer action into ONE issue.
-          Do not write one issue per CVE when the coupling paragraph would be identical.
-          Cap at 8 issue files. Prefer cluster_key values from the skill (schannel-tls, win32k-wpf, dwm-wpf, shell-launch, ntfs-notes, os-dotnet).
+          Cluster rows that share the same workstation, cluster_key, risk fields, and reviewer action into ONE analysis file.
+          Do not write one file per CVE when the coupling paragraph would be identical.
+          Cap at 8 analysis files. Prefer cluster_key values from the skill (schannel-tls, win32k-wpf, dwm-wpf, shell-launch, ntfs-notes, os-dotnet).
           Do not claim the app cannot run without an OS KB unless a cited file on main loads that patched component.
           Input report: inputs/report.json
           Optional SBOM: workspace/sbom/DesktopApplication.sbom.spdx.json or workspace/DesktopApplication/artifacts/DesktopApplication.sbom.spdx.json
-          Write issue JSON files only to issues-out/. Do not call gh issue create. Do not deploy or change policy.
+          Write analysis JSON files only to issues-out/. Do not call gh issue create. Do not publish GitHub Issues. Do not deploy or change policy.
           PROMPT
           )"
 
       - name: Fallback analysis without Copilot
-        if: steps.copilot.outcome != 'success'
+        if: always() && steps.copilot.outcome != 'success'
+        continue-on-error: true
         run: python3 scripts/fallback-analyze.py
-
-      - name: Publish GitHub Issues in DesktopApplication
-        run: python3 scripts/publish-issues.py
 
       - name: Upload analysis artifacts
         if: always()
@@ -143,3 +159,19 @@ jobs:
             workspace/desktop-application-inventory.md
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Email results
+        if: always()
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: "587"
+          MAIL_FROM: andrey02061987@gmail.com
+          MAIL_TO: andrey02061987@gmail.com
+          ORCH_CONCLUSION: ${{ job.status }}
+          ORCH_HTML_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_JSON: inputs/report.json
+          ISSUES_OUT_DIR: issues-out
+          DA_CHECKOUT: workspace/DesktopApplication
+        run: python3 scripts/send-results-email.py

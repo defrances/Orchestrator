@@ -1,72 +1,79 @@
-# Orchestrator 
+# Orchestrator
 
 Cross-repository control plane for DesktopApplication.
 
-After a successful CI run on `main` in [defrances/DesktopApplication](https://github.com/defrances/DesktopApplication), a run starts **in this repository**, then this repository starts a run **in FindUpdates**:
+[FindUpdates](https://github.com/defrances/FindUpdates) runs **once per day** (and manually). After that job finishes it notifies **this** repository and points at the `findupdates-report-json` artifact. This repository never starts FindUpdates (that would loop).
 
-1. DesktopApplication [Notify Orchestrator](https://github.com/defrances/DesktopApplication/actions/workflows/notify-orchestrator.yml) sends `repository_dispatch` (`desktop-application-merged`)
-2. [This workflow](https://github.com/defrances/Orchestrator/actions) starts [FindUpdates `detect.yml`](https://github.com/defrances/FindUpdates/actions/workflows/detect.yml) with **`source=live`**
-3. Downloads the `findupdates-report-json` artifact (`report.json`)
-4. Runs the GitHub Copilot skill `analyze-vendor-update-impact` against DesktopApplication (code, recent commits, SBOM)
-5. Opens GitHub Issues in DesktopApplication for updates that may affect the app **on a specific workstation**
+1. FindUpdates `detect.yml` (schedule or `workflow_dispatch`) uploads `findupdates-report-json`
+2. FindUpdates sends `repository_dispatch` (`findupdates-complete`) with the FindUpdates **run id**
+3. [This workflow](https://github.com/defrances/Orchestrator/actions) downloads `report.json`, checks out [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main), and runs the Copilot skill `analyze-vendor-update-impact` (or the deterministic fallback)
+4. Results are **always emailed** to `andrey02061987@gmail.com`, including when analysis or the report download fails
+5. GitHub Issues are **not** created
 
 The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
 
 ```mermaid
 sequenceDiagram
-  participant DA as DesktopApplication
-  participant Orch as Orchestrator
   participant FU as FindUpdates
-  participant Copilot as CopilotCLI
-  DA->>DA: merge to main plus CI success
-  DA->>Orch: repository_dispatch desktop-application-merged
+  participant Orch as Orchestrator
+  participant DA as DesktopApplication
+  participant Mail as GmailSMTP
+  FU->>FU: daily cron or workflow_dispatch
+  FU->>FU: detect.yml live, upload findupdates-report-json
+  FU->>Orch: repository_dispatch findupdates-complete plus run_id
   Note over Orch: run appears in Orchestrator Actions
-  Orch->>FU: workflow_dispatch detect.yml source=live
-  Note over FU: run appears in FindUpdates Actions
-  FU-->>Orch: artifact findupdates-report-json
-  Orch->>Copilot: skill analyze-vendor-update-impact
-  Copilot-->>DA: GitHub Issues per impactful update and workstation
+  Orch->>FU: download artifact findupdates-report-json
+  Orch->>DA: checkout main
+  Orch->>Orch: Copilot skill or fallback
+  Orch->>Mail: always email results
 ```
 
 ## Where each run appears
 
 | Step | Repository | Actions URL |
 | --- | --- | --- |
-| Build, test, SBOM | DesktopApplication | https://github.com/defrances/DesktopApplication/actions |
-| Notify Orchestrator | DesktopApplication | https://github.com/defrances/DesktopApplication/actions/workflows/notify-orchestrator.yml |
+| Daily / manual detect | FindUpdates | https://github.com/defrances/FindUpdates/actions/workflows/detect.yml |
 | Orchestrate (this pipeline) | Orchestrator | https://github.com/defrances/Orchestrator/actions |
-| Live detect | FindUpdates | https://github.com/defrances/FindUpdates/actions/workflows/detect.yml |
-| Impact issues | DesktopApplication | https://github.com/defrances/DesktopApplication/issues?q=label%3Avendor-update-impact |
+| Build, test, SBOM | DesktopApplication | https://github.com/defrances/DesktopApplication/actions |
+| Results email | Gmail | From and to `andrey02061987@gmail.com` |
 
 ## Workflows
 
 | Workflow | Repository | Role |
 | --- | --- | --- |
-| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM |
-| [Notify Orchestrator](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/notify-orchestrator.yml) | DesktopApplication | After successful `main` CI, start this repo |
-| [Orchestrate](.github/workflows/orchestrate.yml) | Orchestrator | Dispatch FindUpdates, Copilot analysis, issue publish |
-| [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Poll MSRC/Intel, station report |
+| [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload `report.json`, notify this repo |
+| [Orchestrate](.github/workflows/orchestrate.yml) | Orchestrator | Download report, Copilot analysis, always email |
+| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM (does not start Orchestrator) |
 
 ## Secrets
 
-Create a fine-grained PAT (or classic `repo` + `workflow` PAT) that can:
+### `ORCHESTRATOR_PAT`
+
+Fine-grained PAT (or classic `repo` PAT) stored in:
+
+- [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions) — download FindUpdates artifacts, checkout DesktopApplication
+- [FindUpdates secrets](https://github.com/defrances/FindUpdates/settings/secrets/actions) — `repository_dispatch` into this repo
 
 | Repository | Permissions |
 | --- | --- |
-| `defrances/Orchestrator` | Contents: **Read and write** (`repository_dispatch`), Actions: **Read and write** (`workflow_dispatch`) |
-| `defrances/FindUpdates` | Actions: **Read and write** (start `detect.yml`, download artifacts) |
-| `defrances/DesktopApplication` | Contents: read, Actions: read, Issues: **write** (checkout, SBOM artifact, create issues) |
+| `defrances/Orchestrator` | Contents: **Read and write** (`repository_dispatch` from FindUpdates) |
+| `defrances/FindUpdates` | Actions: **Read** (download `findupdates-report-json`) |
+| `defrances/DesktopApplication` | Contents: read, Actions: read (checkout `main`, optional SBOM artifact) |
 
-Edit an existing token in place if needed: https://github.com/settings/personal-access-tokens — the secret value can stay the same.
+This PAT does **not** need Actions write on FindUpdates or Issues write on DesktopApplication. `GITHUB_TOKEN` cannot start workflows in another repository.
 
-Store it as **`ORCHESTRATOR_PAT`** in:
+The Copilot skill step authenticates with `GITHUB_TOKEN` and `permissions: copilot-requests: write` (no PAT). Optional **`COPILOT_GITHUB_TOKEN`** overrides that. If Copilot CLI cannot authenticate, the workflow uses deterministic fallback analysis and still emails.
 
-- [DesktopApplication secrets](https://github.com/defrances/DesktopApplication/settings/secrets/actions)
-- [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions)
+### Gmail SMTP (required for the results email)
 
-The Copilot skill step authenticates with `GITHUB_TOKEN` and `permissions: copilot-requests: write` (no PAT). Optional **`COPILOT_GITHUB_TOKEN`** overrides that if you want a user-owned fine-grained PAT with Account permission **Copilot Requests**. If Copilot CLI cannot authenticate, the workflow uses deterministic fallback analysis and still publishes Issues.
+Create a Gmail [App Password](https://support.google.com/accounts/answer/185833) (2FA required). A normal Gmail password is rejected. Store in [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions):
 
-`GITHUB_TOKEN` cannot start workflows in another repository. Cross-repo dispatch and issue creation use `ORCHESTRATOR_PAT` only.
+| Secret | Value |
+| --- | --- |
+| `SMTP_USERNAME` | `andrey02061987@gmail.com` |
+| `SMTP_PASSWORD` | Gmail App Password for Mail |
+
+From and To are `andrey02061987@gmail.com`. The password is never written to logs or artifacts. The email step runs with `if: always()`.
 
 ## Manual run
 
@@ -74,29 +81,15 @@ Actions → **Orchestrate vendor impact analysis** → **Run workflow**.
 
 Inputs:
 
-- `sha` — triggering DesktopApplication commit (CI correlation); analysis always uses branch `main`
-- `ci_run_id` — optional CI run id, used to download the `sbom` artifact
+- `findupdates_run_id` — FindUpdates Actions run that uploaded `findupdates-report-json`
+- `source` — optional (`live` or `fixtures`) for the email body
 
 ## Copilot skill
 
 [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/)
 
-The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout (every source file, not only the csproj/SBOM). It then scores each vendor row both ways: risk if the update is **installed** (library or logic on `main` becomes incompatible) and risk if it is **skipped** (app actually needs that patched library to keep working). `required` is allowed only with a cited binding on `main`. Rows that share the same workstation, coupling (`cluster_key`), and risk fields become **one** issue with a table of CVEs — not one issue per advisory. It reads `inputs/report.json` and writes JSON under `issues-out/`. A separate script publishes Issues so the model does not get a write token for `gh issue create`.
-
-## Issues in DesktopApplication
-
-Look at [DesktopApplication Issues](https://github.com/defrances/DesktopApplication/issues?q=is%3Aissue+label%3Avendor-update-impact) labeled `vendor-update-impact`.
-
-Each issue names:
-
-- which **cluster** of vendor updates share the same coupling on `main` (Schannel/TLS, Win32k, DWM, Shell, NTFS/notes, OS .NET KB)
-- which workstation (`device_id`, OS, role)
-- every member advisory / KB / CVE in one table
-- evidence from DesktopApplication `main`
-- install vs skip risk and whether the app actually requires the update
-
-At most 8 clustered issues are opened per run. Overflow is one summary issue. Duplicates of a `cluster_key` + `device_id` pair are skipped, including already-closed issues.
+The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout. It scores each vendor row both ways: risk if the update is **installed** and risk if it is **skipped**. It reads `inputs/report.json` and writes JSON under `issues-out/`. Those files are emailed and uploaded as artifacts. They are **not** published as GitHub Issues.
 
 ## Artifacts
 
-Orchestrator uploads `orchestrator-analysis` (`inputs/report.json` and `issues-out/**`), retained 14 days. The live detect artifacts stay on the FindUpdates run.
+Orchestrator uploads `orchestrator-analysis` (`inputs/report.json` and `issues-out/**`), retained 14 days. The live detect artifacts stay on the FindUpdates run. The email links to that FindUpdates run instead of attaching the full JSON.
