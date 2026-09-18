@@ -7,7 +7,7 @@ Cross-repository control plane for DesktopApplication.
 1. FindUpdates `detect.yml` (schedule or `workflow_dispatch`) uploads `findupdates-report-json`
 2. FindUpdates sends `repository_dispatch` (`findupdates-complete`) with the FindUpdates **run id**
 3. [This workflow](https://github.com/defrances/Orchestrator/actions) downloads `report.json`, checks out [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main), and runs the Copilot skill `analyze-vendor-update-impact` (or the deterministic fallback)
-4. Results are **always emailed** to `andrey02061987@gmail.com`, including when analysis or the report download fails
+4. Results are **always emailed** to `andrey02061987@gmail.com`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). Overflow uses the summary payload. If there are no clusters, one status email is sent.
 5. GitHub Issues are **not** created
 
 The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
@@ -25,7 +25,7 @@ sequenceDiagram
   Orch->>FU: download artifact findupdates-report-json
   Orch->>DA: checkout main
   Orch->>Orch: Copilot skill or fallback
-  Orch->>Mail: always email results
+  Orch->>Mail: one email per cluster (Issue body)
 ```
 
 ## Where each run appears
@@ -73,7 +73,7 @@ Create a Gmail [App Password](https://support.google.com/accounts/answer/185833)
 | `SMTP_USERNAME` | `andrey02061987@gmail.com` |
 | `SMTP_PASSWORD` | Gmail App Password for Mail |
 
-From and To are `andrey02061987@gmail.com`. The password is never written to logs or artifacts. The email step runs with `if: always()`.
+From and To are `andrey02061987@gmail.com`. The password is never written to logs or artifacts. The email step runs with `if: always()`. Each cluster is a separate message (`multipart/alternative` markdown + HTML). Subject is the Issue title.
 
 ## Manual run
 
@@ -82,14 +82,14 @@ Actions → **Orchestrate vendor impact analysis** → **Run workflow**.
 Inputs:
 
 - `findupdates_run_id` — FindUpdates Actions run that uploaded `findupdates-report-json`
-- `source` — optional (`live` or `fixtures`) for the email body
+- `source` — optional (`live` or `fixtures`) recorded in the email footer
 
 ## Copilot skill
 
 [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/)
 
-The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout. It scores each vendor row both ways: risk if the update is **installed** and risk if it is **skipped**. It reads `inputs/report.json` and writes JSON under `issues-out/`. Those files are emailed and uploaded as artifacts. They are **not** published as GitHub Issues.
+The skill always analyzes the full [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main) checkout. It scores each vendor row both ways: risk if the update is **installed** and risk if it is **skipped**. It reads `inputs/report.json` and writes JSON under `issues-out/`. Each file with a `title` and `body` becomes **one Gmail message** (subject = Issue title, body = Issue markdown plus a short run footer). They are **not** published as GitHub Issues.
 
 ## Artifacts
 
-Orchestrator uploads `orchestrator-analysis` (`inputs/report.json` and `issues-out/**`), retained 14 days. The live detect artifacts stay on the FindUpdates run. The email links to that FindUpdates run instead of attaching the full JSON.
+Orchestrator uploads `orchestrator-analysis` (`inputs/report.json` and `issues-out/**`), retained 14 days. The live detect artifacts stay on the FindUpdates run. Each email links to that FindUpdates run in the footer instead of attaching the full JSON.
