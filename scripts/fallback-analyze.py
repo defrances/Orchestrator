@@ -148,6 +148,19 @@ def cve_text(item: dict[str, object]) -> str:
     return str(cves) or "none"
 
 
+def _md_cell(text: object) -> str:
+    return str(text or "").replace("|", "/").replace("\n", " ").strip()
+
+
+def linked_update(label: object, url: object) -> str:
+    """Markdown link to an allow-listed HTTPS official_url from report.json."""
+    text = _md_cell(label).replace("[", "").replace("]", "")
+    href = str(url or "").strip()
+    if text and href.startswith("https://") and " " not in href and ")" not in href:
+        return f"[{text}]({href})"
+    return f"`{text}`" if text else ""
+
+
 def issue_body(
     key: str,
     device: str,
@@ -158,11 +171,12 @@ def issue_body(
 ) -> str:
     rows = []
     for item in members:
+        url = item.get("official_url")
         rows.append(
-            "| `{advisory}` | {title} | `{package}` | {cves} | `{action}` | `{policy}` | {score} |".format(
-                advisory=item.get("advisory_id"),
-                title=item.get("title"),
-                package=item.get("package"),
+            "| {advisory} | {title} | {package} | {cves} | `{action}` | `{policy}` | {score} |".format(
+                advisory=linked_update(item.get("advisory_id"), url) or "`unknown`",
+                title=linked_update(item.get("title"), url) or _md_cell(item.get("title")),
+                package=linked_update(item.get("package"), url) or "`-`",
                 cves=cve_text(item),
                 action=item.get("action"),
                 policy=item.get("policy_result"),

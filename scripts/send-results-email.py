@@ -109,7 +109,10 @@ def attach_footer(body: str, footer: str) -> str:
     return body.rstrip() + "\n\n---\n\n" + footer.strip() + "\n"
 
 
-def _inline(text: str) -> str:
+_HTTPS_LINK = re.compile(r"\[([^\]]+)\]\((https://[^)\s]+)\)")
+
+
+def _inline_no_links(text: str) -> str:
     parts = re.split(r"(`[^`]+`)", text)
     rendered: list[str] = []
     for part in parts:
@@ -118,13 +121,20 @@ def _inline(text: str) -> str:
             continue
         escaped = html.escape(part)
         escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
-        escaped = re.sub(
-            r"\[([^\]]+)\]\(([^)]+)\)",
-            r'<a href="\2">\1</a>',
-            escaped,
-        )
         rendered.append(escaped)
     return "".join(rendered)
+
+
+def _inline(text: str) -> str:
+    pieces: list[str] = []
+    pos = 0
+    for match in _HTTPS_LINK.finditer(text):
+        pieces.append(_inline_no_links(text[pos : match.start()]))
+        href = html.escape(match.group(2), quote=True)
+        pieces.append(f'<a href="{href}">{_inline_no_links(match.group(1))}</a>')
+        pos = match.end()
+    pieces.append(_inline_no_links(text[pos:]))
+    return "".join(pieces)
 
 
 def _is_table_separator(line: str) -> bool:
@@ -242,6 +252,7 @@ def markdown_to_html(markdown: str) -> str:
         "pre code{background:none;padding:0;}"
         "h2{border-bottom:1px solid #d0d7de;padding-bottom:0.3em;}"
         "hr{border:none;border-top:1px solid #d0d7de;}"
+        "a{color:#0969da;}"
         "</style></head><body>"
         f"{inner}"
         "</body></html>"

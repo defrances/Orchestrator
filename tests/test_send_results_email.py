@@ -27,7 +27,7 @@ CLUSTER_BODY = """<!-- impact:schannel-tls:SYNTHETIC-W11-24H2-01 -->
 
 | Advisory | Title | Package | CVEs | Action | Policy | Score |
 | --- | --- | --- | --- | --- | --- | --- |
-| `advisory_1` | Schannel RCE | `KB5122871` | CVE-2026-72940 | `candidate_for_validation` | `REQUIRE_APPROVAL` | 75 |
+| [advisory_1](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) | [Schannel RCE](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) | [KB5122871](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) | CVE-2026-72940 | `candidate_for_validation` | `REQUIRE_APPROVAL` | 75 |
 
 This issue is **not** an authorization to install, approve, or deploy.
 
@@ -50,12 +50,28 @@ class MarkdownHtmlTests(unittest.TestCase):
         html = mail.markdown_to_html(CLUSTER_BODY)
         self.assertIn("<table>", html)
         self.assertIn("<th>", html)
-        self.assertIn("CVE-2026-72940", html)
-        self.assertIn("<strong>not</strong>", html)
-        self.assertIn("<code>KB5122871</code>", html)
+        self.assertIn('<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">', html)
+        self.assertIn("Schannel RCE", html)
+        self.assertIn("KB5122871", html)
         self.assertIn("<ul>", html)
         self.assertIn("<h2>Updates in this cluster</h2>", html)
         self.assertNotIn("impact:schannel-tls", html)
+
+    def test_https_table_links_are_anchors(self) -> None:
+        html = mail.markdown_to_html(CLUSTER_BODY)
+        self.assertIn(
+            '<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">Schannel RCE</a>',
+            html,
+        )
+        self.assertIn(
+            '<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">KB5122871</a>',
+            html,
+        )
+
+    def test_non_https_markdown_links_are_not_anchors(self) -> None:
+        html = mail.markdown_to_html("[click](javascript:alert(1))")
+        self.assertNotIn("<a ", html)
+        self.assertIn("javascript:alert(1)", html)
 
     def test_fenced_code_and_hr(self) -> None:
         html = mail.markdown_to_html("```\ngit log\n```\n\n---\n\nDone.")
@@ -219,6 +235,60 @@ class PayloadEmailTests(unittest.TestCase):
             self.assertIn("SUBJECT: Cluster B", output)
             self.assertIn("<table>", mail.markdown_to_html(CLUSTER_BODY))
             self.assertIn("sent=2 failed=0", output)
+
+
+FALLBACK = ROOT / "scripts" / "fallback-analyze.py"
+FALLBACK_SPEC = importlib.util.spec_from_file_location("fallback_analyze", FALLBACK)
+if FALLBACK_SPEC is None or FALLBACK_SPEC.loader is None:
+    raise SystemExit(f"cannot load {FALLBACK}")
+fallback = importlib.util.module_from_spec(FALLBACK_SPEC)
+sys.modules["fallback_analyze"] = fallback
+FALLBACK_SPEC.loader.exec_module(fallback)
+
+
+class FallbackLinkTests(unittest.TestCase):
+    def test_linked_update_uses_https_official_url(self) -> None:
+        url = "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940"
+        self.assertEqual(
+            fallback.linked_update("KB5122871", url),
+            f"[KB5122871]({url})",
+        )
+
+    def test_linked_update_skips_missing_or_non_https(self) -> None:
+        self.assertEqual(fallback.linked_update("KB1", None), "`KB1`")
+        self.assertEqual(fallback.linked_update("KB1", "http://example.invalid/x"), "`KB1`")
+
+    def test_issue_body_table_contains_official_links(self) -> None:
+        url = "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940"
+        body = fallback.issue_body(
+            "schannel-tls",
+            "SYNTHETIC-W11-24H2-01",
+            [
+                {
+                    "advisory_id": "advisory_1",
+                    "title": "Schannel RCE",
+                    "package": "KB5122871",
+                    "cve_ids": ["CVE-2026-72940"],
+                    "action": "candidate_for_validation",
+                    "policy_result": "REQUIRE_APPROVAL",
+                    "risk_score": 75,
+                    "official_url": url,
+                    "model": "PACS",
+                    "device_role": "review",
+                    "deployment_group": "pacs-validate",
+                    "os_product": "Windows 11",
+                    "os_build": "26100",
+                    "clinical_criticality": "medium",
+                    "network_exposure": "restricted_lan",
+                    "explanation": "TLS path.",
+                }
+            ],
+            "evidence",
+            "log",
+            fallback.risk_fields("schannel-tls"),
+        )
+        self.assertIn(f"[Schannel RCE]({url})", body)
+        self.assertIn(f"[KB5122871]({url})", body)
 
 
 if __name__ == "__main__":
