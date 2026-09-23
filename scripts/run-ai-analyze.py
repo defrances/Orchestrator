@@ -42,24 +42,45 @@ def run_offline(task: str) -> int:
     return subprocess.call([sys.executable, str(script)], cwd=str(ROOT))
 
 
-def run_copilot(prompt: str) -> int:
-    print("provider=copilot", flush=True)
+DEFAULT_MODELS = {
+    "agent": "composer-2.5",
+    "copilot": "claude-haiku-4.5",
+}
+
+_PLACEHOLDER_MODELS = frozenset({"", "repo-default", "default", "-"})
+
+
+def resolve_model(provider: str, explicit: str = "") -> str:
+    """Pick a model for the selected provider. Offline has none."""
+    if provider == "offline":
+        return ""
+    env_key = "AGENT_MODEL" if provider == "agent" else "COPILOT_MODEL"
+    for raw in (explicit, os.environ.get(env_key, "")):
+        value = (raw or "").strip()
+        if value.lower() not in _PLACEHOLDER_MODELS:
+            return value
+    return DEFAULT_MODELS[provider]
+
+
+def run_copilot(prompt: str, model: str) -> int:
+    print(f"provider=copilot model={model}", flush=True)
     env = os.environ.copy()
     env["COPILOT_AUTO_UPDATE"] = "false"
     env.pop("COPILOT_GITHUB_TOKEN", None)
-    result = subprocess.run(
-        ["copilot", "--yolo", "--no-ask-user", "-p", prompt],
-        cwd=str(ROOT),
-        env=env,
-    )
+    argv = ["copilot", "--yolo", "--no-ask-user", "-p", prompt]
+    if model:
+        argv.append(f"--model={model}")
+    result = subprocess.run(argv, cwd=str(ROOT), env=env)
     return result.returncode
 
 
-def run_agent(prompt: str) -> int:
+def run_agent(prompt: str, model: str) -> int:
     api_key = os.environ.get("AGENT_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("AGENT_API_KEY is not set")
-    print("provider=agent", flush=True)
+    if not model:
+        raise RuntimeError("AGENT_MODEL is not set")
+    print(f"provider=agent model={model}", flush=True)
     module = os.environ.get("AGENT_SDK_MODULE", "").strip()
     if not module:
         raise RuntimeError("AGENT_SDK_MODULE is not set")
@@ -69,11 +90,9 @@ def run_agent(prompt: str) -> int:
     full_prompt = "\n\n".join(part for part in (skill_text, prompt) if part)
     options = {
         "api_key": api_key,
+        "model": model,
         "local": sdk.LocalAgentOptions(cwd=str(ROOT)),
     }
-    model = os.environ.get("AGENT_MODEL", "").strip()
-    if model:
-        options["model"] = model
     try:
         result = sdk.Agent.prompt(full_prompt, sdk.AgentOptions(**options))
     except Exception as exc:
@@ -106,8 +125,14 @@ def main() -> int:
         default=os.environ.get("ORCHESTRATOR_AI_PROVIDER", "agent"),
         help="agent | copilot | offline",
     )
+    parser.add_argument(
+        "--model",
+        default="",
+        help="model id for the selected provider (ignored when offline)",
+    )
     args = parser.parse_args()
     provider = normalize_provider(args.provider)
+    model = resolve_model(provider, args.model)
     prompt = PDLC_PROMPT if args.task == "pdlc" else VENDOR_PROMPT
     out_dir = ROOT / ("pdlc-out" if args.task == "pdlc" else "issues-out")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -118,15 +143,16 @@ def main() -> int:
         return any(out_dir.glob("*.json"))
 
     if provider == "offline":
+        print("provider=offline model=n/a", flush=True)
         return run_offline(args.task)
     if provider == "copilot":
-        code = run_copilot(prompt)
+        code = run_copilot(prompt, model)
         if code != 0 or not output_ready():
             print("copilot failed or wrote no JSON; using offline analysis", flush=True)
             return run_offline(args.task)
         return 0
     try:
-        code = run_agent(prompt)
+        code = run_agent(prompt, model)
     except Exception as exc:
         print(f"agent failed: {exc}; using offline analysis", file=sys.stderr, flush=True)
         return run_offline(args.task)

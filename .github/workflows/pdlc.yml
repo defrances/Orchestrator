@@ -19,6 +19,27 @@ on:
           - agent
           - copilot
           - offline
+      agent_model:
+        description: Model when provider is agent (ignored for copilot/offline)
+        required: false
+        default: composer-2.5
+        type: choice
+        options:
+          - composer-2.5
+          - composer-2
+          - auto
+      copilot_model:
+        description: Model when provider is copilot (ignored for agent/offline)
+        required: false
+        default: claude-haiku-4.5
+        type: choice
+        options:
+          - claude-haiku-4.5
+          - claude-sonnet-4.6
+          - claude-sonnet-4.5
+          - gpt-5.4
+          - gpt-5.3-codex
+          - auto
 
 permissions:
   contents: read
@@ -43,7 +64,8 @@ jobs:
       AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
       AGENT_SDK_PACKAGE: ${{ vars.AGENT_SDK_PACKAGE }}
       AGENT_SDK_MODULE: ${{ vars.AGENT_SDK_MODULE }}
-      AGENT_MODEL: ${{ vars.AGENT_MODEL }}
+      AGENT_MODEL: ${{ github.event.inputs.agent_model || vars.AGENT_MODEL || 'composer-2.5' }}
+      COPILOT_MODEL: ${{ github.event.inputs.copilot_model || vars.COPILOT_MODEL || 'claude-haiku-4.5' }}
       COPILOT_AUTO_UPDATE: "false"
     steps:
       - name: Checkout Orchestrator

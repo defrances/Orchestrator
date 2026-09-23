@@ -73,7 +73,7 @@ Analysis steps pick a provider with **`ai_provider`** (`agent`, `copilot`, `offl
 | `copilot` | `GITHUB_TOKEN` (`copilot-requests: write`) or `COPILOT_GITHUB_TOKEN` | GitHub Copilot CLI |
 | `offline` | none | Deterministic fallback scripts |
 
-If the selected live provider fails, the same script falls back to offline analysis so email / PDLC still complete. Optional repo variable **`ORCHESTRATOR_AI_PROVIDER`** sets the default for scheduled `repository_dispatch` (no workflow input). For `agent`, also set repository variables **`AGENT_SDK_PACKAGE`** and **`AGENT_SDK_MODULE`** (optional **`AGENT_MODEL`**). Those values stay in GitHub settings, not in this repository.
+If the selected live provider fails, the same script falls back to offline analysis so email / PDLC still complete. Optional repo variable **`ORCHESTRATOR_AI_PROVIDER`** sets the default for scheduled `repository_dispatch` (no workflow input). Model is chosen **per provider**: form fields `agent_model` / `copilot_model` on a manual run, or repository variables **`AGENT_MODEL`** / **`COPILOT_MODEL`** on FindUpdates dispatch. Built-in defaults are `composer-2.5` (agent) and `claude-haiku-4.5` (copilot). Offline ignores both. For `agent`, also set **`AGENT_SDK_PACKAGE`** and **`AGENT_SDK_MODULE`**. Those values stay in GitHub settings, not in this repository.
 
 ### Gmail SMTP (required for the results email)
 
@@ -112,6 +112,8 @@ Inputs:
 - `findupdates_run_id` — FindUpdates Actions run that uploaded `findupdates-report-json`
 - `source` — optional (`live` or `fixtures`) recorded in the email footer
 - `ai_provider` — `agent` (default), `copilot`, or `offline`
+- `agent_model` — used when `ai_provider` is `agent` (default `composer-2.5`)
+- `copilot_model` — used when `ai_provider` is `copilot` (default `claude-haiku-4.5`)
 
 ## Copilot skill
 
