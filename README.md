@@ -6,10 +6,9 @@ Cross-repository control plane for DesktopApplication.
 
 1. FindUpdates `detect.yml` (schedule or `workflow_dispatch`) uploads `findupdates-report-json`
 2. FindUpdates sends `repository_dispatch` (`findupdates-complete`) with the FindUpdates **run id**
-3. [This workflow](https://github.com/defrances/Orchestrator/actions) downloads `report.json`, checks out [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main), and runs the Copilot skill `analyze-vendor-update-impact` (or the deterministic fallback)
-4. Results are **always emailed** to the address in `SMTP_USERNAME`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). In the Updates table, only **Package** links to that row's `official_url` from FindUpdates when the URL is `https://`. Overflow uses the summary payload. If there are no clusters, one status email is sent.
-5. The same run builds a **Windows patch bundle** (`windows-patch-bundle`): one zip of host KBs grouped for deploy (manifest, per-KB / per-station JSON, `APPLY.ps1`). Candidate rows are the deploy set; HOLD/BLOCK stay in the bundle as do-not-install. Official `.msu`/`.cab` files are not copied in — `APPLY.ps1` opens vendor URLs. This is the host patch-package step of the PDLC WBS.
-6. GitHub Issues are **not** created
+3. The same `findupdates-complete` dispatch starts **two** Orchestrator workflows: [Orchestrate](.github/workflows/orchestrate.yml) (vendor email + Windows KB bundle) and [PDLC patch and release](.github/workflows/pdlc.yml) (product corpus, tests, app zip + the same station report as a KB bundle)
+4. Orchestrate emails results to the address in `SMTP_USERNAME`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). In the Updates table, only **Package** links to that row's `official_url` from FindUpdates when the URL is `https://`. Overflow uses the summary payload. If there are no clusters, one status email is sent.
+5. Official `.msu`/`.cab` files are not copied in — `APPLY.ps1` opens vendor URLs. GitHub Issues are **not** created
 
 The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
 
@@ -22,11 +21,12 @@ sequenceDiagram
   FU->>FU: daily cron or workflow_dispatch
   FU->>FU: detect.yml live, upload findupdates-report-json
   FU->>Orch: repository_dispatch findupdates-complete plus run_id
-  Note over Orch: run appears in Orchestrator Actions
+  Note over Orch: orchestrate.yml and pdlc.yml both start
   Orch->>FU: download artifact findupdates-report-json
   Orch->>DA: checkout main
-  Orch->>Orch: Copilot skill or fallback
-  Orch->>Mail: one email per cluster (Issue body)
+  Orch->>Orch: vendor analysis or PDLC corpus
+  Orch->>Mail: vendor email one per cluster
+  Orch->>Orch: PDLC app zip plus Windows KB bundle
 ```
 
 ## Where each run appears
@@ -44,7 +44,7 @@ sequenceDiagram
 | --- | --- | --- |
 | [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload `report.json`, notify this repo |
 | [Orchestrate](.github/workflows/orchestrate.yml) | Orchestrator | Download report, AI analysis, Windows KB bundle, always email |
-| [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Product corpus → countermeasures → tests → app zip + Windows KB bundle |
+| [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Same FindUpdates dispatch (or manual). Corpus → tests → app zip + Windows KB bundle |
 | [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM (does not start Orchestrator) |
 | [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | DesktopApplication | Versioned win-x64 zip from this repo |
 
@@ -86,11 +86,11 @@ Create a Gmail [App Password](https://support.google.com/accounts/answer/185833)
 
 From and To come from `SMTP_USERNAME`. The password is never written to logs or artifacts. The email step runs with `if: always()`. Each cluster is a separate message (`multipart/alternative` markdown + HTML). Subject is the Issue title.
 
-## Product PDLC (separate from vendor-update email)
+## Product PDLC (same FindUpdates start as the vendor email)
 
-[FindUpdates](https://github.com/defrances/FindUpdates) station reports are **not** the product vulnerability input. Product PDLC uses DesktopApplication `docs/` (architecture, MDS2-lite, test plan, vulnerability report) plus the `main` checkout.
+[FindUpdates](https://github.com/defrances/FindUpdates) `detect.yml` starts this workflow through the same `findupdates-complete` dispatch as Orchestrate. Station reports are **not** the product vulnerability input. Product PDLC uses DesktopApplication `docs/` (architecture, MDS2-lite, test plan, vulnerability report) plus the `main` checkout. The dispatch `run_id` is used only to attach the matching Windows KB bundle.
 
-Actions → **PDLC patch and release** → **Run workflow** (`.github/workflows/pdlc.yml`). Choose **`ai_provider`**: `agent` (default), `copilot`, or `offline`. For `agent`, store **`AGENT_API_KEY`** in Orchestrator secrets.
+A manual run is still available: Actions → **PDLC patch and release** → **Run workflow**. Choose **`ai_provider`**: `agent` (default), `copilot`, or `offline`. For `agent`, store **`AGENT_API_KEY`** in Orchestrator secrets.
 
 That run:
 

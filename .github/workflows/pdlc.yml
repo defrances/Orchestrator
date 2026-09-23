@@ -1,8 +1,17 @@
 name: PDLC patch and release
 
 on:
+  repository_dispatch:
+    types: [findupdates-complete]
   workflow_dispatch:
     inputs:
+      findupdates_run_id:
+        description: FindUpdates run that uploaded findupdates-report-json
+        required: false
+      source:
+        description: FindUpdates source recorded on that run (live or fixtures)
+        required: false
+        default: live
       ai_provider:
         description: AI provider for analysis (agent, copilot, or offline)
         required: false
@@ -30,7 +39,9 @@ jobs:
     env:
       APP_REPO: defrances/DesktopApplication
       GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
-      ORCHESTRATOR_AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'agent' }}
+      FU_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.findupdates_run_id || '' }}
+      FU_SOURCE: ${{ github.event.client_payload.source || github.event.inputs.source || 'live' }}
+      ORCHESTRATOR_AI_PROVIDER: ${{ github.event.inputs.ai_provider || vars.ORCHESTRATOR_AI_PROVIDER || 'agent' }}
       AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
       AGENT_SDK_PACKAGE: ${{ vars.AGENT_SDK_PACKAGE }}
       AGENT_SDK_MODULE: ${{ vars.AGENT_SDK_MODULE }}
@@ -118,17 +129,15 @@ jobs:
           -p:DebugSymbols=false
           -o ../../artifacts/app
 
-      - name: Download latest FindUpdates station report
+      - name: Download FindUpdates station report
         continue-on-error: true
         env:
           FINDUPDATES_REPO: defrances/FindUpdates
-          FU_RESOLVE_LATEST: "1"
+          FU_RESOLVE_LATEST: ${{ (github.event.client_payload.run_id || github.event.inputs.findupdates_run_id) && '0' || '1' }}
         run: bash scripts/download-findupdates-report.sh
 
       - name: Assemble Windows patch bundle
         if: hashFiles('inputs/report.json') != ''
-        env:
-          FU_SOURCE: latest-detect
         run: python3 scripts/assemble-windows-patch-bundle.py
 
       - name: Assemble release package
