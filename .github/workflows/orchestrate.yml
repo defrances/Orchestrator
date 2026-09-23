@@ -1,4 +1,4 @@
-name: Orchestrate vendor impact analysis
+name: Vendor impact and PDLC
 
 on:
   repository_dispatch:
@@ -7,7 +7,7 @@ on:
     inputs:
       findupdates_run_id:
         description: FindUpdates Actions run id that uploaded findupdates-report-json
-        required: true
+        required: false
       source:
         description: FindUpdates source recorded on that run (live or fixtures)
         required: false
@@ -32,18 +32,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  analyze:
-    name: Analyze report and email results
+  follow_through:
+    name: Email, test, and package
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       FINDUPDATES_REPO: defrances/FindUpdates
       APP_REPO: defrances/DesktopApplication
       GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
       FU_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.findupdates_run_id || '' }}
-      FU_SOURCE: ${{ github.event.client_payload.source || github.event.inputs.source || '' }}
+      FU_SOURCE: ${{ github.event.client_payload.source || github.event.inputs.source || 'live' }}
       FU_CONCLUSION: ${{ github.event.client_payload.conclusion || '' }}
       FU_HTML_URL: ${{ github.event.client_payload.html_url || '' }}
+      FU_RESOLVE_LATEST: ${{ (github.event.client_payload.run_id || github.event.inputs.findupdates_run_id) && '0' || '1' }}
       FINDUPDATES_AI_ENABLED: "false"
       FINDUPDATES_AI_PROVIDER: offline
       ORCHESTRATOR_AI_PROVIDER: ${{ github.event.inputs.ai_provider || vars.ORCHESTRATOR_AI_PROVIDER || 'agent' }}
@@ -57,7 +58,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Require ORCHESTRATOR_PAT
-        continue-on-error: true
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
@@ -66,11 +66,10 @@ jobs:
             exit 1
           fi
           echo "This run lives in defrances/Orchestrator."
-          echo "It downloads findupdates-report-json from FindUpdates run ${FU_RUN_ID:-<missing>}."
+          echo "It downloads findupdates-report-json from FindUpdates run ${FU_RUN_ID:-<latest>}."
           echo "It does not start FindUpdates and does not create GitHub Issues."
 
       - name: Checkout DesktopApplication main
-        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: defrances/DesktopApplication
@@ -80,8 +79,16 @@ jobs:
           fetch-depth: 0
 
       - name: Inventory DesktopApplication main
-        continue-on-error: true
         run: python3 scripts/inventory-desktop-application.py
+
+      - name: Copy PDLC corpus into inputs
+        run: |
+          set -euo pipefail
+          mkdir -p inputs
+          cp workspace/DesktopApplication/docs/architecture.md inputs/architecture.md
+          cp workspace/DesktopApplication/docs/mds2.md inputs/mds2.md
+          cp workspace/DesktopApplication/docs/test-plan.md inputs/test-plan.md
+          cp workspace/DesktopApplication/docs/vulnerability-report.md inputs/vulnerability-report.md
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -98,7 +105,6 @@ jobs:
         run: npm install -g @github/copilot
 
       - name: Download findupdates-report-json
-        id: report
         continue-on-error: true
         run: bash scripts/download-findupdates-report.sh
 
@@ -132,7 +138,6 @@ jobs:
           fi
 
       - name: Analyze vendor updates
-        id: analyze
         continue-on-error: true
         if: hashFiles('inputs/report.json') != ''
         env:
@@ -145,9 +150,53 @@ jobs:
           unset COPILOT_GITHUB_TOKEN
           python3 scripts/run-ai-analyze.py --task vendor-impact --provider "${ORCHESTRATOR_AI_PROVIDER}"
 
+      - name: Analyze PDLC corpus
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+        run: |
+          set -euo pipefail
+          mkdir -p pdlc-out
+          unset COPILOT_GITHUB_TOKEN
+          python3 scripts/run-ai-analyze.py --task pdlc --provider "${ORCHESTRATOR_AI_PROVIDER}"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Run smoke and regression tests
+        working-directory: workspace/DesktopApplication
+        run: |
+          set -euo pipefail
+          mkdir -p ../../artifacts
+          dotnet test tests/DesktopApplication.Tests/DesktopApplication.Tests.csproj \
+            -c Release --verbosity normal \
+            --filter "Category=Smoke|Category=Regression" \
+            | tee ../../artifacts/TEST_RESULTS.md
+
+      - name: Publish win-x64
+        working-directory: workspace/DesktopApplication
+        run: >
+          dotnet publish src/DesktopApplication/DesktopApplication.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:EnableWindowsTargeting=true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o ../../artifacts/app
+
       - name: Assemble Windows patch bundle
         if: hashFiles('inputs/report.json') != ''
         run: python3 scripts/assemble-windows-patch-bundle.py
+
+      - name: Assemble PDLC release package
+        run: python3 scripts/assemble-pdlc-release.py
 
       - name: Upload analysis artifacts
         if: always()
@@ -157,6 +206,7 @@ jobs:
           path: |
             inputs/report.json
             issues-out/**
+            pdlc-out/**
             workspace/desktop-application-inventory.md
           if-no-files-found: warn
           retention-days: 14
@@ -167,6 +217,18 @@ jobs:
         with:
           name: windows-patch-bundle
           path: artifacts/windows-bundle/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload PDLC release
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdlc-release
+          path: |
+            pdlc-out/**
+            artifacts/release/**
+            artifacts/windows-bundle/**
+            artifacts/TEST_RESULTS.md
           if-no-files-found: error
           retention-days: 14
 
