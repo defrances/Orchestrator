@@ -1,0 +1,168 @@
+name: PDLC patch and release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release package version
+        required: false
+        default: "1.1.0"
+      apply_tls_patch:
+        description: Apply the TLS certificate-validation patch before tests
+        required: false
+        default: true
+        type: boolean
+      ai_provider:
+        description: AI provider for analysis (agent, copilot, or offline)
+        required: false
+        default: agent
+        type: choice
+        options:
+          - agent
+          - copilot
+          - offline
+
+permissions:
+  contents: read
+  actions: read
+  copilot-requests: write
+
+concurrency:
+  group: pdlc-desktop-application
+  cancel-in-progress: false
+
+jobs:
+  pdlc:
+    name: Analyze, patch, test, package
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APP_REPO: defrances/DesktopApplication
+      GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+      ORCHESTRATOR_AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'agent' }}
+      AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+      COPILOT_AUTO_UPDATE: "false"
+    steps:
+      - name: Checkout Orchestrator
+        uses: actions/checkout@v4
+
+      - name: Checkout DesktopApplication main
+        uses: actions/checkout@v4
+        with:
+          repository: defrances/DesktopApplication
+          ref: main
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
+          path: workspace/DesktopApplication
+          fetch-depth: 0
+
+      - name: Inventory DesktopApplication main
+        run: python3 scripts/inventory-desktop-application.py
+
+      - name: Copy PDLC corpus into inputs
+        run: |
+          set -euo pipefail
+          mkdir -p inputs
+          cp workspace/DesktopApplication/docs/architecture.md inputs/architecture.md
+          cp workspace/DesktopApplication/docs/mds2.md inputs/mds2.md
+          cp workspace/DesktopApplication/docs/test-plan.md inputs/test-plan.md
+          cp workspace/DesktopApplication/docs/vulnerability-report.md inputs/vulnerability-report.md
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install analysis SDK
+        if: env.ORCHESTRATOR_AI_PROVIDER == 'agent'
+        run: python3 scripts/install-analysis-sdk.py
+
+      - name: Install Copilot CLI
+        if: env.ORCHESTRATOR_AI_PROVIDER == 'copilot'
+        continue-on-error: true
+        run: npm install -g @github/copilot
+
+      - name: Analyze PDLC corpus
+        id: analyze
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+        run: |
+          set -euo pipefail
+          mkdir -p pdlc-out
+          unset COPILOT_GITHUB_TOKEN
+          python3 scripts/run-ai-analyze.py --task pdlc --provider "${ORCHESTRATOR_AI_PROVIDER}"
+
+      - name: Apply TLS patch
+        if: ${{ github.event.inputs.apply_tls_patch != 'false' }}
+        run: python3 scripts/apply-tls-patch.py
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Run smoke and regression tests
+        working-directory: workspace/DesktopApplication
+        run: |
+          set -euo pipefail
+          mkdir -p ../../artifacts
+          # Core tests are net9.0; do not restore the WPF WinExe on Ubuntu.
+          dotnet test tests/DesktopApplication.Tests/DesktopApplication.Tests.csproj \
+            -c Release --verbosity normal \
+            --filter "Category=Smoke|Category=Regression" \
+            | tee ../../artifacts/TEST_RESULTS.md
+
+      - name: Publish win-x64
+        working-directory: workspace/DesktopApplication
+        run: >
+          dotnet publish src/DesktopApplication/DesktopApplication.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:EnableWindowsTargeting=true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o ../../artifacts/app
+
+      - name: Download latest FindUpdates station report
+        continue-on-error: true
+        env:
+          FINDUPDATES_REPO: defrances/FindUpdates
+          FU_RESOLVE_LATEST: "1"
+        run: bash scripts/download-findupdates-report.sh
+
+      - name: Assemble Windows patch bundle
+        if: hashFiles('inputs/report.json') != ''
+        env:
+          FU_SOURCE: latest-detect
+        run: python3 scripts/assemble-windows-patch-bundle.py
+
+      - name: Assemble release package
+        run: |
+          echo "${{ github.event.inputs.version }}" > VERSION
+          python3 scripts/assemble-pdlc-release.py
+
+      - name: Upload PDLC analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdlc-analysis
+          path: pdlc-out/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload PDLC release
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdlc-release
+          path: |
+            pdlc-out/**
+            artifacts/release/**
+            artifacts/windows-bundle/**
+            artifacts/TEST_RESULTS.md
+          if-no-files-found: error
+          retention-days: 14

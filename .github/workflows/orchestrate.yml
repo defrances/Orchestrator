@@ -1,0 +1,184 @@
+name: Orchestrate vendor impact analysis
+
+on:
+  repository_dispatch:
+    types: [findupdates-complete]
+  workflow_dispatch:
+    inputs:
+      findupdates_run_id:
+        description: FindUpdates Actions run id that uploaded findupdates-report-json
+        required: true
+      source:
+        description: FindUpdates source recorded on that run (live or fixtures)
+        required: false
+        default: live
+      ai_provider:
+        description: AI provider for analysis (agent, copilot, or offline)
+        required: false
+        default: agent
+        type: choice
+        options:
+          - agent
+          - copilot
+          - offline
+
+permissions:
+  contents: read
+  actions: read
+  copilot-requests: write
+
+concurrency:
+  group: orchestrate-desktop-application
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    name: Analyze report and email results
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FINDUPDATES_REPO: defrances/FindUpdates
+      APP_REPO: defrances/DesktopApplication
+      GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
+      FU_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.findupdates_run_id || '' }}
+      FU_SOURCE: ${{ github.event.client_payload.source || github.event.inputs.source || '' }}
+      FU_CONCLUSION: ${{ github.event.client_payload.conclusion || '' }}
+      FU_HTML_URL: ${{ github.event.client_payload.html_url || '' }}
+      FINDUPDATES_AI_ENABLED: "false"
+      FINDUPDATES_AI_PROVIDER: offline
+      ORCHESTRATOR_AI_PROVIDER: ${{ github.event.inputs.ai_provider || vars.ORCHESTRATOR_AI_PROVIDER || 'agent' }}
+      AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+      COPILOT_AUTO_UPDATE: "false"
+    steps:
+      - name: Checkout Orchestrator
+        uses: actions/checkout@v4
+
+      - name: Require ORCHESTRATOR_PAT
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "ORCHESTRATOR_PAT is not configured in Orchestrator secrets." >&2
+            echo "https://github.com/defrances/Orchestrator/settings/secrets/actions" >&2
+            exit 1
+          fi
+          echo "This run lives in defrances/Orchestrator."
+          echo "It downloads findupdates-report-json from FindUpdates run ${FU_RUN_ID:-<missing>}."
+          echo "It does not start FindUpdates and does not create GitHub Issues."
+
+      - name: Checkout DesktopApplication main
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: defrances/DesktopApplication
+          ref: main
+          token: ${{ secrets.ORCHESTRATOR_PAT }}
+          path: workspace/DesktopApplication
+          fetch-depth: 0
+
+      - name: Inventory DesktopApplication main
+        continue-on-error: true
+        run: python3 scripts/inventory-desktop-application.py
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install analysis SDK
+        if: env.ORCHESTRATOR_AI_PROVIDER == 'agent'
+        run: python3 scripts/install-analysis-sdk.py
+
+      - name: Install Copilot CLI
+        if: env.ORCHESTRATOR_AI_PROVIDER == 'copilot'
+        continue-on-error: true
+        run: npm install -g @github/copilot
+
+      - name: Download findupdates-report-json
+        id: report
+        continue-on-error: true
+        run: bash scripts/download-findupdates-report.sh
+
+      - name: Download latest DesktopApplication SBOM
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p workspace/sbom
+          run_id="$(
+            gh run list \
+              --repo "${APP_REPO}" \
+              --workflow ci.yml \
+              --branch main \
+              --status success \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId // empty'
+          )"
+          if [ -z "${run_id}" ]; then
+            echo "No successful DesktopApplication CI run found for SBOM."
+            exit 0
+          fi
+          gh run download "${run_id}" \
+            --repo "${APP_REPO}" \
+            --name sbom \
+            --dir workspace/sbom
+          if [ -f workspace/sbom/DesktopApplication.sbom.spdx.json ]; then
+            mkdir -p workspace/DesktopApplication/artifacts
+            cp workspace/sbom/DesktopApplication.sbom.spdx.json \
+              workspace/DesktopApplication/artifacts/DesktopApplication.sbom.spdx.json
+          fi
+
+      - name: Analyze vendor updates
+        id: analyze
+        continue-on-error: true
+        if: hashFiles('inputs/report.json') != ''
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+        run: |
+          set -euo pipefail
+          mkdir -p issues-out
+          unset COPILOT_GITHUB_TOKEN
+          python3 scripts/run-ai-analyze.py --task vendor-impact --provider "${ORCHESTRATOR_AI_PROVIDER}"
+
+      - name: Assemble Windows patch bundle
+        if: hashFiles('inputs/report.json') != ''
+        run: python3 scripts/assemble-windows-patch-bundle.py
+
+      - name: Upload analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestrator-analysis
+          path: |
+            inputs/report.json
+            issues-out/**
+            workspace/desktop-application-inventory.md
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Windows patch bundle
+        if: hashFiles('artifacts/windows-bundle/*.zip') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-patch-bundle
+          path: artifacts/windows-bundle/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Email results
+        if: always()
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: "587"
+          MAIL_FROM: andrey02061987@gmail.com
+          MAIL_TO: andrey02061987@gmail.com
+          ORCH_CONCLUSION: ${{ job.status }}
+          ORCH_HTML_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_JSON: inputs/report.json
+          ISSUES_OUT_DIR: issues-out
+          DA_CHECKOUT: workspace/DesktopApplication
+        run: python3 scripts/send-results-email.py
