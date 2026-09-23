@@ -54,7 +54,7 @@ def main() -> int:
     notes = [
         f"# DesktopApplication {version}",
         "",
-        f"Patched tree from DesktopApplication `{sha}`.",
+        f"Tree from DesktopApplication `{sha}`.",
         "",
         "This zip is the application patch/release package.",
         "It does not contain Windows OS KBs.",

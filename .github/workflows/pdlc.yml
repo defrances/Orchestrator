@@ -7,11 +7,6 @@ on:
         description: Release package version
         required: false
         default: "1.1.0"
-      apply_tls_patch:
-        description: Apply the TLS certificate-validation patch before tests
-        required: false
-        default: true
-        type: boolean
       ai_provider:
         description: AI provider for analysis (agent, copilot, or offline)
         required: false
@@ -33,7 +28,7 @@ concurrency:
 
 jobs:
   pdlc:
-    name: Analyze, patch, test, package
+    name: Analyze, test, package
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -92,10 +87,6 @@ jobs:
           mkdir -p pdlc-out
           unset COPILOT_GITHUB_TOKEN
           python3 scripts/run-ai-analyze.py --task pdlc --provider "${ORCHESTRATOR_AI_PROVIDER}"
-
-      - name: Apply TLS patch
-        if: ${{ github.event.inputs.apply_tls_patch != 'false' }}
-        run: python3 scripts/apply-tls-patch.py
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4

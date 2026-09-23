@@ -44,7 +44,7 @@ sequenceDiagram
 | --- | --- | --- |
 | [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload `report.json`, notify this repo |
 | [Orchestrate](.github/workflows/orchestrate.yml) | Orchestrator | Download report, AI analysis, Windows KB bundle, always email |
-| [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Product corpus → countermeasures → TLS patch → tests → app zip + Windows KB bundle |
+| [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Product corpus → countermeasures → tests → app zip + Windows KB bundle |
 | [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM (does not start Orchestrator) |
 | [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | DesktopApplication | Versioned win-x64 zip from this repo |
 
@@ -95,10 +95,11 @@ Actions → **PDLC patch and release** → **Run workflow** (`.github/workflows/
 That run:
 
 1. Reads the PDLC corpus and scores countermeasures (`scripts/run-ai-analyze.py`, default provider `agent`)
-2. Applies the TLS certificate-validation patch in the checkout (`scripts/apply-tls-patch.py`)
-3. Runs DesktopApplication Smoke + Regression tests
-4. Publishes a self-contained win-x64 exe and zips `pdlc-release` (`PDLC_REPORT.md`, `RELEASE_NOTES.md`, `TEST_RESULTS.md`, exe)
-5. If a FindUpdates `station_report` is available, also builds the **Windows patch bundle** (same format as Orchestrate) and includes it in `pdlc-release`
+2. Runs DesktopApplication Smoke + Regression tests against `main` as-is
+3. Publishes a self-contained win-x64 exe and zips `pdlc-release` (`PDLC_REPORT.md`, `RELEASE_NOTES.md`, `TEST_RESULTS.md`, exe)
+4. If a FindUpdates `station_report` is available, also builds the **Windows patch bundle** (same format as Orchestrate) and includes it in `pdlc-release`
+
+Orchestrator does not apply product code patches. It scores whatever is already on DesktopApplication `main` and packages that tree.
 
 Host OS KBs are **bundled as a deployable manifest** (WBS item 3), not baked into the client exe. Microsoft installers are not redistributed inside the zip.
 
