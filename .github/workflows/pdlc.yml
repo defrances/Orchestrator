@@ -3,10 +3,6 @@ name: PDLC patch and release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Release package version
-        required: false
-        default: "1.1.0"
       ai_provider:
         description: AI provider for analysis (agent, copilot, or offline)
         required: false
@@ -136,9 +132,7 @@ jobs:
         run: python3 scripts/assemble-windows-patch-bundle.py
 
       - name: Assemble release package
-        run: |
-          echo "${{ github.event.inputs.version }}" > VERSION
-          python3 scripts/assemble-pdlc-release.py
+        run: python3 scripts/assemble-pdlc-release.py
 
       - name: Upload PDLC analysis
         if: always()

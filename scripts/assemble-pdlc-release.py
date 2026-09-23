@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +15,12 @@ RELEASE_DIR = Path("artifacts/release")
 REPORT = Path("pdlc-out/PDLC_REPORT.md")
 
 
+def release_label() -> str:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_id = (os.environ.get("GITHUB_RUN_ID") or "").strip()
+    return f"{stamp}-{run_id}" if run_id else stamp
+
+
 def main() -> int:
     if not ANALYSIS.exists():
         raise SystemExit(f"missing {ANALYSIS}")
@@ -21,7 +28,7 @@ def main() -> int:
     findings = data.get("findings") or []
     advice = data.get("os_kb_advice") or []
     sha = data.get("sha") or "unknown"
-    version = Path("VERSION").read_text(encoding="utf-8").strip() if Path("VERSION").exists() else "1.1.0"
+    version = release_label()
 
     lines = [
         "# PDLC report",
