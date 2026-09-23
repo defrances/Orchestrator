@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from pathlib import Path
 
-DEFAULT_MAIL = "andrey02061987@gmail.com"
 FINDUPDATES_REPO = os.environ.get("FINDUPDATES_REPO", "defrances/FindUpdates")
 NO_CLUSTER_SUBJECT = "Orchestrator: no vendor-update clusters"
 NO_CLUSTER_BODY = (
@@ -283,12 +282,12 @@ def build_messages(
 
 
 def send_mail(mail: Mail) -> None:
-    username = _env("SMTP_USERNAME", DEFAULT_MAIL)
+    username = _env("SMTP_USERNAME")
     password = _env("SMTP_PASSWORD")
     host = _env("SMTP_HOST", "smtp.gmail.com")
     port = int(_env("SMTP_PORT", "587") or "587")
-    mail_from = _env("MAIL_FROM", DEFAULT_MAIL)
-    mail_to = _env("MAIL_TO", DEFAULT_MAIL)
+    mail_from = _env("MAIL_FROM") or username
+    mail_to = _env("MAIL_TO") or username
     _never_log_secret(password)
     if not username or not password:
         raise SystemExit(

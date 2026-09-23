@@ -7,8 +7,8 @@ Cross-repository control plane for DesktopApplication.
 1. FindUpdates `detect.yml` (schedule or `workflow_dispatch`) uploads `findupdates-report-json`
 2. FindUpdates sends `repository_dispatch` (`findupdates-complete`) with the FindUpdates **run id**
 3. [This workflow](https://github.com/defrances/Orchestrator/actions) downloads `report.json`, checks out [DesktopApplication `main`](https://github.com/defrances/DesktopApplication/tree/main), and runs the Copilot skill `analyze-vendor-update-impact` (or the deterministic fallback)
-4. Results are **always emailed** to `andrey02061987@gmail.com`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). In the Updates table, only **Package** links to that row's `official_url` from FindUpdates when the URL is `https://`. Overflow uses the summary payload. If there are no clusters, one status email is sent.
-5. The same run builds a **Windows patch bundle** (`windows-patch-bundle`): one zip of host KBs grouped for deploy (manifest, per-KB / per-station JSON, `APPLY.ps1`). Candidate rows are the deploy set; HOLD/BLOCK stay in the bundle as do-not-install. Official `.msu`/`.cab` files are not copied in — `APPLY.ps1` opens vendor URLs. This is WBS item 3 (Linda: patches collected into a bundle).
+4. Results are **always emailed** to the address in `SMTP_USERNAME`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). In the Updates table, only **Package** links to that row's `official_url` from FindUpdates when the URL is `https://`. Overflow uses the summary payload. If there are no clusters, one status email is sent.
+5. The same run builds a **Windows patch bundle** (`windows-patch-bundle`): one zip of host KBs grouped for deploy (manifest, per-KB / per-station JSON, `APPLY.ps1`). Candidate rows are the deploy set; HOLD/BLOCK stay in the bundle as do-not-install. Official `.msu`/`.cab` files are not copied in — `APPLY.ps1` opens vendor URLs. This is the host patch-package step of the PDLC WBS.
 6. GitHub Issues are **not** created
 
 The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
@@ -36,7 +36,7 @@ sequenceDiagram
 | Daily / manual detect | FindUpdates | https://github.com/defrances/FindUpdates/actions/workflows/detect.yml |
 | Orchestrate (this pipeline) | Orchestrator | https://github.com/defrances/Orchestrator/actions |
 | Build, test, SBOM | DesktopApplication | https://github.com/defrances/DesktopApplication/actions |
-| Results email | Gmail | From and to `andrey02061987@gmail.com` |
+| Results email | Gmail | From and to the `SMTP_USERNAME` secret |
 
 ## Workflows
 
@@ -81,10 +81,10 @@ Create a Gmail [App Password](https://support.google.com/accounts/answer/185833)
 
 | Secret | Value |
 | --- | --- |
-| `SMTP_USERNAME` | `andrey02061987@gmail.com` |
+| `SMTP_USERNAME` | Gmail address used as SMTP login, From, and To |
 | `SMTP_PASSWORD` | Gmail App Password for Mail |
 
-From and To are `andrey02061987@gmail.com`. The password is never written to logs or artifacts. The email step runs with `if: always()`. Each cluster is a separate message (`multipart/alternative` markdown + HTML). Subject is the Issue title.
+From and To come from `SMTP_USERNAME`. The password is never written to logs or artifacts. The email step runs with `if: always()`. Each cluster is a separate message (`multipart/alternative` markdown + HTML). Subject is the Issue title.
 
 ## Product PDLC (separate from vendor-update email)
 

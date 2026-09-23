@@ -174,8 +174,8 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_HOST: smtp.gmail.com
           SMTP_PORT: "587"
-          MAIL_FROM: andrey02061987@gmail.com
-          MAIL_TO: andrey02061987@gmail.com
+          MAIL_FROM: ${{ secrets.SMTP_USERNAME }}
+          MAIL_TO: ${{ secrets.SMTP_USERNAME }}
           ORCH_CONCLUSION: ${{ job.status }}
           ORCH_HTML_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REPORT_JSON: inputs/report.json

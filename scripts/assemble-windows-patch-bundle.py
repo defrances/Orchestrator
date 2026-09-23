@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a Windows patch bundle from a FindUpdates station_report.
 
-The zip is a deployable *bundle* of host KBs (Linda's wording): one manifest,
+The zip is a deployable *bundle* of host KBs: one manifest,
 per-KB descriptors, station lists, and APPLY.ps1. Official Microsoft/Intel
 binaries are not redistributed; APPLY.ps1 opens the vendor URL or prints the
 catalog id. HOLD/BLOCK rows stay out of the deploy set.
@@ -155,9 +155,9 @@ def _readme(manifest: dict) -> str:
     lines = [
         "# Windows patch bundle",
         "",
-        "This is the deployable **host patch bundle** for WBS item 3",
-        "(`Create a patch package which needs to be deployed`): Windows KBs",
-        "grouped the way Linda described — one bundle, not a client exe.",
+        "This is the deployable **host patch bundle** for the PDLC WBS",
+        "patch-package step: Windows KBs grouped into one bundle,",
+        "not baked into the client exe.",
         "",
         f"- Bundle id: `{manifest['bundle_id']}`",
         f"- Source: `{manifest.get('source') or 'unknown'}`",
