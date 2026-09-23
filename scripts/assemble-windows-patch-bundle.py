@@ -124,8 +124,28 @@ def _group_packages(items: list[dict]) -> list[dict]:
     return sorted(buckets.values(), key=lambda item: (not item["include_in_deploy"], item["kb"]))
 
 
-def _stations(items: list[dict]) -> list[dict]:
+def _known_station_ids(report: dict, items: list[dict]) -> list[str]:
+    raw = report.get("stations") or []
+    ids = [str(item).strip() for item in raw if str(item).strip()]
+    for row in items:
+        device = str(row.get("device_id") or "").strip()
+        if device and device not in ids:
+            ids.append(device)
+    return sorted(ids)
+
+
+def _stations(items: list[dict], known_ids: list[str] | None = None) -> list[dict]:
     by_device: dict[str, dict] = {}
+    for device in known_ids or []:
+        by_device[device] = {
+            "device_id": device,
+            "model": "",
+            "device_role": "",
+            "os_product": "",
+            "os_build": None,
+            "deployment_group": "",
+            "packages": [],
+        }
     for row in items:
         device = str(row.get("device_id") or "").strip()
         if not device:
@@ -134,14 +154,24 @@ def _stations(items: list[dict]) -> list[dict]:
             device,
             {
                 "device_id": device,
-                "model": str(row.get("model") or ""),
-                "device_role": str(row.get("device_role") or ""),
-                "os_product": str(row.get("os_product") or ""),
-                "os_build": row.get("os_build"),
-                "deployment_group": str(row.get("deployment_group") or ""),
+                "model": "",
+                "device_role": "",
+                "os_product": "",
+                "os_build": None,
+                "deployment_group": "",
                 "packages": [],
             },
         )
+        if not slot["model"]:
+            slot["model"] = str(row.get("model") or "")
+        if not slot["device_role"]:
+            slot["device_role"] = str(row.get("device_role") or "")
+        if not slot["os_product"]:
+            slot["os_product"] = str(row.get("os_product") or "")
+        if slot["os_build"] is None and row.get("os_build") is not None:
+            slot["os_build"] = row.get("os_build")
+        if not slot["deployment_group"]:
+            slot["deployment_group"] = str(row.get("deployment_group") or "")
         kb = str(row.get("package") or "").strip()
         action = str(row.get("action") or "")
         if kb:
@@ -208,6 +238,13 @@ def _readme(manifest: dict) -> str:
             lines.append(f"- {kb} — `{pkg['action']}` — {pkg['title']}")
     else:
         lines.append("- (none)")
+    lines.extend(["", "## Stations", ""])
+    station_ids = list(manifest.get("stations") or [])
+    if station_ids:
+        for device_id in station_ids:
+            lines.append(f"- `{device_id}`")
+    else:
+        lines.append("- (none)")
     lines.append("")
     return "\n".join(lines)
 
@@ -216,7 +253,7 @@ def main() -> int:
     report = _load_report(REPORT)
     items = _items(report)
     packages = _group_packages(items)
-    stations = _stations(items)
+    stations = _stations(items, _known_station_ids(report, items))
     now = datetime.now(timezone.utc)
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     source = FU_SOURCE or str(report.get("source") or "unknown")

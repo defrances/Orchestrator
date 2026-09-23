@@ -61,6 +61,11 @@ REPORT = {
             "listed": True,
         },
     ],
+    "stations": [
+        "SYNTHETIC-CT-IMG-01",
+        "SYNTHETIC-LAB-24H2-01",
+        "SYNTHETIC-MR-IMG-01",
+    ],
 }
 
 
@@ -96,6 +101,10 @@ class AssembleWindowsPatchBundleTests(unittest.TestCase):
             self.assertIn("README.md", names)
             self.assertTrue(any(name.startswith("packages/KB5060001") for name in names))
             self.assertIn("stations/SYNTHETIC-CT-IMG-01.json", names)
+            self.assertIn("stations/SYNTHETIC-LAB-24H2-01.json", names)
+            self.assertIn("stations/SYNTHETIC-MR-IMG-01.json", names)
+            self.assertIn("`SYNTHETIC-CT-IMG-01`", readme)
+            self.assertIn("`SYNTHETIC-LAB-24H2-01`", readme)
             self.assertIn(
                 "[KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345)",
                 readme,
