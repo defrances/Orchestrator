@@ -80,6 +80,16 @@ class MarkdownHtmlTests(unittest.TestCase):
         self.assertIn("<hr>", html)
         self.assertIn("<p>Done.</p>", html)
 
+    def test_bare_https_urls_become_anchors(self) -> None:
+        html = mail.markdown_to_html(
+            "- FindUpdates: https://github.com/defrances/FindUpdates/actions/runs/1"
+        )
+        self.assertIn(
+            '<a href="https://github.com/defrances/FindUpdates/actions/runs/1">'
+            "https://github.com/defrances/FindUpdates/actions/runs/1</a>",
+            html,
+        )
+
 
 class PayloadEmailTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -91,6 +101,14 @@ class PayloadEmailTests(unittest.TestCase):
             "https://github.com/defrances/Orchestrator/actions/runs/1"
         )
         os.environ["DA_CHECKOUT"] = str(ROOT)
+        self._bundle_tmp = tempfile.TemporaryDirectory()
+        os.environ["BUNDLE_DIR"] = self._bundle_tmp.name
+        os.environ.pop("BUNDLE_README", None)
+
+    def tearDown(self) -> None:
+        self._bundle_tmp.cleanup()
+        os.environ.pop("BUNDLE_DIR", None)
+        os.environ.pop("BUNDLE_README", None)
 
     def _write_json(self, directory: Path, name: str, payload: object) -> None:
         (directory / name).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -236,6 +254,47 @@ class PayloadEmailTests(unittest.TestCase):
             self.assertIn("SUBJECT: Cluster B", output)
             self.assertIn("<table>", mail.markdown_to_html(CLUSTER_BODY))
             self.assertIn("sent=2 failed=0", output)
+
+    def test_bundle_readme_is_an_extra_email_with_clickable_links(self) -> None:
+        readme = """# Windows patch bundle
+
+- Bundle id: `windows-patch-bundle-live-20260923T180458Z`
+- FindUpdates run: [35341770186](https://github.com/defrances/FindUpdates/actions/runs/35341770186)
+
+## Deploy set
+
+- [KB5122871](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940) — Schannel RCE — SYNTHETIC-W11-24H2-01
+"""
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            self._write_json(
+                directory,
+                "01.json",
+                {"title": "Cluster A", "body": "## Updates in this cluster\n\nA"},
+            )
+            bundle_dir = Path(self._bundle_tmp.name) / "windows-patch-bundle-live-20260923T180458Z"
+            bundle_dir.mkdir()
+            (bundle_dir / "README.md").write_text(readme, encoding="utf-8")
+            messages = mail.build_messages(issues_dir=directory, app_dir=ROOT)
+            self.assertEqual(len(messages), 2)
+            self.assertEqual(messages[0].subject, "Cluster A")
+            self.assertEqual(
+                messages[1].subject,
+                "Windows patch bundle `windows-patch-bundle-live-20260923T180458Z`",
+            )
+            self.assertIn("## Deploy set", messages[1].plain)
+            self.assertIn(
+                '<a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-72940">KB5122871</a>',
+                messages[1].html,
+            )
+            self.assertIn(
+                '<a href="https://github.com/defrances/FindUpdates/actions/runs/35341770186">35341770186</a>',
+                messages[1].html,
+            )
+            self.assertIn(
+                '<a href="https://github.com/defrances/Orchestrator/actions/runs/1">',
+                messages[1].html,
+            )
 
 
 FALLBACK = ROOT / "scripts" / "fallback-analyze.py"

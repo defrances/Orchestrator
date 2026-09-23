@@ -245,5 +245,6 @@ jobs:
           ORCH_HTML_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REPORT_JSON: inputs/report.json
           ISSUES_OUT_DIR: issues-out
+          BUNDLE_DIR: artifacts/windows-bundle
           DA_CHECKOUT: workspace/DesktopApplication
         run: python3 scripts/send-results-email.py

@@ -91,12 +91,22 @@ def run_footer(app_dir: Path | None = None) -> str:
         fu_url = f"https://github.com/{FINDUPDATES_REPO}/actions/runs/{fu_run}"
     orch_url = _env("ORCH_HTML_URL") or "(none)"
     sha = desktop_sha(app_dir or Path(_env("DA_CHECKOUT", "workspace/DesktopApplication")))
+    fu_line = (
+        f"- FindUpdates: [{fu_run}]({fu_url})"
+        if fu_url.startswith("https://")
+        else f"- FindUpdates: {fu_url or '(none)'}"
+    )
+    orch_line = (
+        f"- Orchestrator: [{orch_url}]({orch_url})"
+        if orch_url.startswith("https://")
+        else f"- Orchestrator: {orch_url}"
+    )
     return "\n".join(
         [
             f"DesktopApplication `main`: `{sha}`",
             "",
-            f"- FindUpdates: {fu_url or '(none)'}",
-            f"- Orchestrator: {orch_url}",
+            fu_line,
+            orch_line,
             "- Windows patch bundle artifact: `windows-patch-bundle` (KB manifest + APPLY.ps1, not .msu files)",
             "",
             "This email is not an authorization to install, approve, or deploy.",
@@ -110,6 +120,29 @@ def attach_footer(body: str, footer: str) -> str:
 
 
 _HTTPS_LINK = re.compile(r"\[([^\]]+)\]\((https://[^)\s]+)\)")
+_BARE_HTTPS = re.compile(r"https://[^\s<>\")\]]+")
+
+
+def _bold_and_code(text: str) -> str:
+    escaped = html.escape(text)
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+
+
+def _autolink_bare(text: str) -> str:
+    pieces: list[str] = []
+    pos = 0
+    for match in _BARE_HTTPS.finditer(text):
+        pieces.append(_bold_and_code(text[pos : match.start()]))
+        raw = match.group(0)
+        url = raw.rstrip(".,;:")
+        trail = raw[len(url) :]
+        href = html.escape(url, quote=True)
+        pieces.append(f'<a href="{href}">{html.escape(url)}</a>')
+        if trail:
+            pieces.append(_bold_and_code(trail))
+        pos = match.end()
+    pieces.append(_bold_and_code(text[pos:]))
+    return "".join(pieces)
 
 
 def _inline_no_links(text: str) -> str:
@@ -119,9 +152,7 @@ def _inline_no_links(text: str) -> str:
         if len(part) >= 2 and part.startswith("`") and part.endswith("`"):
             rendered.append(f"<code>{html.escape(part[1:-1])}</code>")
             continue
-        escaped = html.escape(part)
-        escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
-        rendered.append(escaped)
+        rendered.append(_autolink_bare(part))
     return "".join(rendered)
 
 
@@ -264,6 +295,25 @@ def build_mail(subject: str, body: str, footer: str) -> Mail:
     return Mail(subject=subject, plain=plain, html=markdown_to_html(plain))
 
 
+def load_bundle_readme() -> str:
+    explicit = _env("BUNDLE_README")
+    if explicit:
+        path = Path(explicit)
+        return path.read_text(encoding="utf-8") if path.is_file() else ""
+    root = Path(_env("BUNDLE_DIR", "artifacts/windows-bundle"))
+    if not root.is_dir():
+        return ""
+    found = sorted(root.glob("**/README.md"), key=lambda item: item.stat().st_mtime)
+    return found[-1].read_text(encoding="utf-8") if found else ""
+
+
+def bundle_subject(readme: str) -> str:
+    match = re.search(r"Bundle id:\s*`([^`]+)`", readme)
+    if match:
+        return f"Windows patch bundle `{match.group(1)}`"
+    return "Windows patch bundle"
+
+
 def build_messages(
     issues_dir: Path | None = None,
     app_dir: Path | None = None,
@@ -271,13 +321,17 @@ def build_messages(
     directory = issues_dir or Path(_env("ISSUES_OUT_DIR", "issues-out"))
     footer = run_footer(app_dir)
     payloads = load_issue_payloads(directory)
-    if not payloads:
-        return [build_mail(NO_CLUSTER_SUBJECT, NO_CLUSTER_BODY, footer)]
     messages: list[Mail] = []
-    for item in payloads:
-        title = str(item.get("title") or "").strip()
-        body = str(item.get("body") or "").strip()
-        messages.append(build_mail(title, body, footer))
+    if payloads:
+        for item in payloads:
+            title = str(item.get("title") or "").strip()
+            body = str(item.get("body") or "").strip()
+            messages.append(build_mail(title, body, footer))
+    else:
+        messages.append(build_mail(NO_CLUSTER_SUBJECT, NO_CLUSTER_BODY, footer))
+    readme = load_bundle_readme()
+    if readme.strip():
+        messages.append(build_mail(bundle_subject(readme), readme, footer))
     return messages
 
 

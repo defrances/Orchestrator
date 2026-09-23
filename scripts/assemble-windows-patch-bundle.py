@@ -151,7 +151,19 @@ def _stations(items: list[dict]) -> list[dict]:
     return sorted(by_device.values(), key=lambda item: item["device_id"])
 
 
+def _https_link(label: str, url: object) -> str:
+    href = str(url or "").strip()
+    if href.startswith("https://"):
+        return f"[{label}]({href})"
+    return f"`{label}`"
+
+
 def _readme(manifest: dict) -> str:
+    run_id = str(manifest.get("findupdates_run_id") or "").strip()
+    run_url = str(manifest.get("findupdates_html_url") or "").strip()
+    if not run_url and run_id:
+        run_url = f"https://github.com/defrances/FindUpdates/actions/runs/{run_id}"
+    run_cell = _https_link(run_id or "n/a", run_url)
     lines = [
         "# Windows patch bundle",
         "",
@@ -161,7 +173,7 @@ def _readme(manifest: dict) -> str:
         "",
         f"- Bundle id: `{manifest['bundle_id']}`",
         f"- Source: `{manifest.get('source') or 'unknown'}`",
-        f"- FindUpdates run: `{manifest.get('findupdates_run_id') or 'n/a'}`",
+        f"- FindUpdates run: {run_cell}",
         f"- Authorization: `{manifest['authorization']}`",
         "",
         "## Contents",
@@ -174,8 +186,8 @@ def _readme(manifest: dict) -> str:
         "| `APPLY.ps1` | Inventory (default) or open official URLs (`-Apply`) |",
         "",
         "Microsoft `.msu` / `.cab` files are **not** copied into this zip.",
-        "The bundle points at official URLs. HOLD/BLOCK (`do_not_install`)",
-        "stay in the manifest with `include_in_deploy: false`.",
+        "Each KB below links to its official vendor page when the URL is `https://`.",
+        "HOLD/BLOCK (`do_not_install`) stay in the manifest with `include_in_deploy: false`.",
         "",
         "## Deploy set",
         "",
@@ -185,13 +197,15 @@ def _readme(manifest: dict) -> str:
     if deploy:
         for pkg in deploy:
             stations = ", ".join(pkg["stations"]) or "(none)"
-            lines.append(f"- `{pkg['kb']}` — {pkg['title']} — {stations}")
+            kb = _https_link(str(pkg["kb"]), pkg.get("official_url"))
+            lines.append(f"- {kb} — {pkg['title']} — {stations}")
     else:
         lines.append("- (no `candidate_for_validation` rows)")
     lines.extend(["", "## Held / do not install", ""])
     if hold:
         for pkg in hold:
-            lines.append(f"- `{pkg['kb']}` — `{pkg['action']}`")
+            kb = _https_link(str(pkg["kb"]), pkg.get("official_url"))
+            lines.append(f"- {kb} — `{pkg['action']}` — {pkg['title']}")
     else:
         lines.append("- (none)")
     lines.append("")

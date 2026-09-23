@@ -90,11 +90,18 @@ class AssembleWindowsPatchBundleTests(unittest.TestCase):
             self.assertEqual(len(zips), 1)
             with zipfile.ZipFile(zips[0]) as archive:
                 names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
             self.assertIn("BUNDLE_MANIFEST.json", names)
             self.assertIn("APPLY.ps1", names)
             self.assertIn("README.md", names)
             self.assertTrue(any(name.startswith("packages/KB5060001") for name in names))
             self.assertIn("stations/SYNTHETIC-CT-IMG-01.json", names)
+            self.assertIn(
+                "[KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345)",
+                readme,
+            )
+            self.assertIn("[KB5099999](https://msrc.microsoft.com/update-guide)", readme)
+            self.assertIn("[123](https://example.test/fu)", readme)
 
 
 if __name__ == "__main__":
