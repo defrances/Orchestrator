@@ -69,11 +69,11 @@ Analysis steps pick a provider with **`ai_provider`** (`agent`, `copilot`, `offl
 
 | Provider | Secret / token | What runs |
 | --- | --- | --- |
-| `agent` | `AGENT_API_KEY` | Local analysis SDK (`scripts/run-ai-analyze.py`) |
+| `agent` | `AGENT_API_KEY` plus repo variables `AGENT_SDK_PACKAGE` / `AGENT_SDK_MODULE` | Local analysis SDK (`scripts/run-ai-analyze.py`) |
 | `copilot` | `GITHUB_TOKEN` (`copilot-requests: write`) or `COPILOT_GITHUB_TOKEN` | GitHub Copilot CLI |
 | `offline` | none | Deterministic fallback scripts |
 
-If the selected live provider fails, the same script falls back to offline analysis so email / PDLC still complete. Optional repo variable **`ORCHESTRATOR_AI_PROVIDER`** sets the default for scheduled `repository_dispatch` (no workflow input).
+If the selected live provider fails, the same script falls back to offline analysis so email / PDLC still complete. Optional repo variable **`ORCHESTRATOR_AI_PROVIDER`** sets the default for scheduled `repository_dispatch` (no workflow input). For `agent`, also set repository variables **`AGENT_SDK_PACKAGE`** and **`AGENT_SDK_MODULE`** (optional **`AGENT_MODEL`**). Those values stay in GitHub settings, not in this repository.
 
 ### Gmail SMTP (required for the results email)
 

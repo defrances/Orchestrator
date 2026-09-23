@@ -48,6 +48,9 @@ jobs:
       FINDUPDATES_AI_PROVIDER: offline
       ORCHESTRATOR_AI_PROVIDER: ${{ github.event.inputs.ai_provider || vars.ORCHESTRATOR_AI_PROVIDER || 'agent' }}
       AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+      AGENT_SDK_PACKAGE: ${{ vars.AGENT_SDK_PACKAGE }}
+      AGENT_SDK_MODULE: ${{ vars.AGENT_SDK_MODULE }}
+      AGENT_MODEL: ${{ vars.AGENT_MODEL }}
       COPILOT_AUTO_UPDATE: "false"
     steps:
       - name: Checkout Orchestrator

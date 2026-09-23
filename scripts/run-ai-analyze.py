@@ -60,19 +60,22 @@ def run_agent(prompt: str) -> int:
     if not api_key:
         raise RuntimeError("AGENT_API_KEY is not set")
     print("provider=agent", flush=True)
-    sdk = importlib.import_module("cur" + "sor_sdk")
+    module = os.environ.get("AGENT_SDK_MODULE", "").strip()
+    if not module:
+        raise RuntimeError("AGENT_SDK_MODULE is not set")
+    sdk = importlib.import_module(module)
     skill_path = PDLC_SKILL if "analyze-pdlc-release" in prompt else VENDOR_SKILL
     skill_text = skill_path.read_text(encoding="utf-8") if skill_path.exists() else ""
     full_prompt = "\n\n".join(part for part in (skill_text, prompt) if part)
+    options = {
+        "api_key": api_key,
+        "local": sdk.LocalAgentOptions(cwd=str(ROOT)),
+    }
+    model = os.environ.get("AGENT_MODEL", "").strip()
+    if model:
+        options["model"] = model
     try:
-        result = sdk.Agent.prompt(
-            full_prompt,
-            sdk.AgentOptions(
-                api_key=api_key,
-                model=os.environ.get("AGENT_MODEL") or "composer-2.5",
-                local=sdk.LocalAgentOptions(cwd=str(ROOT)),
-            ),
-        )
+        result = sdk.Agent.prompt(full_prompt, sdk.AgentOptions(**options))
     except Exception as exc:
         print(f"agent startup failed: {exc}", file=sys.stderr, flush=True)
         return 1
