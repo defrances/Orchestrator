@@ -1,16 +1,18 @@
 # Orchestrator
 
-Cross-repository control plane for DesktopApplication.
+Control plane for [DesktopApplication](https://github.com/defrances/DesktopApplication). This repository does **not** start [FindUpdates](https://github.com/defrances/FindUpdates). Detect notifies here after it uploads `findupdates-report-json`.
 
-[FindUpdates](https://github.com/defrances/FindUpdates) runs **once per day** (and manually). After that job finishes it notifies **this** repository and points at the `findupdates-report-json` artifact. This repository never starts FindUpdates (that would loop).
+One workflow, [Vendor impact and PDLC](.github/workflows/orchestrate.yml), runs after `findupdates-complete` (or from **Run workflow**):
 
-1. FindUpdates `detect.yml` (schedule or `workflow_dispatch`) uploads `findupdates-report-json`
-2. FindUpdates sends `repository_dispatch` (`findupdates-complete`) with the FindUpdates **run id**
-3. One Orchestrator workflow [Vendor impact and PDLC](.github/workflows/orchestrate.yml) starts: vendor analysis, email, product tests, app zip, and one Windows KB bundle from that `run_id`
-4. Results are emailed to the address in `SMTP_USERNAME`: **one email per cluster**, with the same title and sections as the former GitHub Issues (`Updates in this cluster`, Workstation, Evidence, Risk, How this can affect, Recent code, Recommended action). In the Updates table, only **Package** links to that row's `official_url` from FindUpdates when the URL is `https://`. Overflow uses the summary payload. If there are no clusters, one status email is sent.
-5. Official `.msu`/`.cab` files are not copied in — `APPLY.ps1` opens vendor URLs. GitHub Issues are **not** created
+1. Checkout DesktopApplication `main` and copy `docs/` into `inputs/`
+2. Score **vendor impact** (station KB rows vs code/SBOM on `main`)
+3. Score **product PDLC** (docs corpus vs `main`; station KBs are not product findings)
+4. Run Smoke + Regression on that tree (release gate, not a product patch)
+5. Publish the self-contained win-x64 exe
+6. Assemble one **Windows patch bundle** from the matching FindUpdates `station_report`
+7. Email results
 
-The analysis is advisory only. It is not an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
+Orchestrator does not apply product code patches and does not create GitHub Issues. Analysis is advisory. HOLD and BLOCK stay HOLD and BLOCK. Official `.msu` / `.cab` files are not copied into the zip.
 
 ```mermaid
 sequenceDiagram
@@ -18,114 +20,125 @@ sequenceDiagram
   participant Orch as Orchestrator
   participant DA as DesktopApplication
   participant Mail as GmailSMTP
-  FU->>FU: daily cron or workflow_dispatch
-  FU->>FU: detect.yml live, upload findupdates-report-json
+  FU->>FU: detect.yml live or fixtures
+  FU->>FU: upload findupdates-report-json
   FU->>Orch: repository_dispatch findupdates-complete plus run_id
-  Note over Orch: one workflow Vendor impact and PDLC
-  Orch->>FU: download artifact findupdates-report-json
+  Note over Orch: Vendor impact and PDLC
+  Orch->>FU: download findupdates-report-json
   Orch->>DA: checkout main
-  Orch->>Orch: vendor analysis and PDLC corpus
-  Orch->>Mail: vendor email one per cluster
-  Orch->>Orch: app zip plus one Windows KB bundle
+  Orch->>Orch: vendor analysis and PDLC
+  Orch->>Orch: tests, app zip, Windows KB bundle
+  Orch->>Mail: cluster emails plus bundle README
 ```
 
-## Where each run appears
+## Two analyses
 
-| Step | Repository | Actions URL |
-| --- | --- | --- |
-| Daily / manual detect | FindUpdates | https://github.com/defrances/FindUpdates/actions/workflows/detect.yml |
-| Orchestrate (this pipeline) | Orchestrator | https://github.com/defrances/Orchestrator/actions |
-| Build, test, SBOM | DesktopApplication | https://github.com/defrances/DesktopApplication/actions |
-| Results email | Gmail | From and to the `SMTP_USERNAME` secret |
+| Analysis | Input | Question | Output |
+| --- | --- | --- | --- |
+| Vendor impact | `inputs/report.json` + DesktopApplication `main` + optional SBOM | Does this host KB couple to a **file on main**? | `issues-out/` → one email per cluster |
+| Product PDLC | `docs/architecture.md`, `mds2.md`, `test-plan.md`, `vulnerability-report.md` + `main` | Is each product finding's countermeasure present / absent / partial? | `pdlc-out/analysis.json` |
 
-## Workflows
+Vendor impact is **not** “the CVE is Critical”. A row is in scope only if a path on `main` would feel the change (`InsecureVendorBulletinClient`, WPF/`app.manifest`, `NoteStore`, self-contained publish). Scores:
 
-| Workflow | Repository | Role |
-| --- | --- | --- |
-| [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload `report.json`, notify this repo |
-| [Vendor impact and PDLC](.github/workflows/orchestrate.yml) | Orchestrator | One run: vendor email, tests, app zip, Windows KB bundle |
-| [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Manual product-only package if you do not want the vendor email |
-| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM (does not start Orchestrator) |
-| [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | DesktopApplication | Versioned win-x64 zip from this repo |
+| Field | Meaning |
+| --- | --- |
+| `required_for_app` | App fails without this KB (`required` only with a cited loader) |
+| `install_risk` | Risk **if the KB is installed** |
+| `skip_risk` | Risk **if the KB is skipped** |
+| `compatibility` | Current `main` vs the proposed host bits |
 
-## Secrets
+Self-contained publish means an OS .NET KB almost never patches the bundled runtime (`os-dotnet` → `not_required`, `skip_risk: no_app_impact`). Rows that share workstation + `cluster_key` + the same four scores become **one** email. Cap 8 cluster files.
+
+Product PDLC uses the docs as the finding list. Those files can lag `main` (for example VR-TLS-001 still marked open after the TLS callback was tightened). Station KB rows are not product vulnerabilities.
+
+## Email
+
+`SMTP_USERNAME` / `SMTP_PASSWORD` (Gmail App Password). From and To are that address.
+
+| Message | When |
+| --- | --- |
+| One mail per vendor cluster | `issues-out/*.json` with title + body (markdown + HTML) |
+| One status mail | No clusters |
+| One Windows patch bundle mail | After the bundle README exists |
+
+The bundle mail body is `artifacts/windows-bundle/**/README.md`. HTTPS markdown links and bare `https://` URLs become clickable `<a href>`. Footer links FindUpdates and Orchestrator runs.
+
+## Windows patch bundle
+
+WBS host-patch package: manifest + per-KB JSON + per-station JSON + `APPLY.ps1` + README. Microsoft installers are **not** inside the zip. `APPLY.ps1` inventories by default and only opens official URLs with `-Apply`.
+
+`report.json` lists **all catalog stations**. Deploy rows are `candidate_for_validation` after FindUpdates SKU match (ProductID / CPE). Two 24H2 stations share ProductID `12390` and therefore the same 24H2 KBs.
+
+## AI provider and model
+
+Form fields on **Run workflow**, or repo variables on FindUpdates dispatch.
+
+| Provider | Secret / token | Model field | Default model |
+| --- | --- | --- | --- |
+| `agent` (default) | `AGENT_API_KEY` plus vars `AGENT_SDK_PACKAGE` / `AGENT_SDK_MODULE` | `agent_model` / `AGENT_MODEL` | `composer-2.5` |
+| `copilot` | `GITHUB_TOKEN` (`copilot-requests: write`) or `COPILOT_GITHUB_TOKEN` | `copilot_model` / `COPILOT_MODEL` | `claude-haiku-4.5` |
+| `offline` | none | ignored | deterministic `fallback-*.py` |
+
+A failed live provider falls back to offline so email and PDLC still finish. Package and module names stay in GitHub settings, not in this repository. `scripts/run-ai-analyze.py` loads the skill text and calls the selected provider.
+
+Skills (same for every provider):
+
+- [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/) → `issues-out/`
+- [`.github/skills/analyze-pdlc-release/`](.github/skills/analyze-pdlc-release/) → `pdlc-out/analysis.json`
+
+## Secrets and variables
 
 ### `ORCHESTRATOR_PAT`
 
-Fine-grained PAT (or classic `repo` PAT) stored in:
+Fine-grained PAT (or classic `repo` PAT):
 
 - [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions) — download FindUpdates artifacts, checkout DesktopApplication
 - [FindUpdates secrets](https://github.com/defrances/FindUpdates/settings/secrets/actions) — `repository_dispatch` into this repo
 
 | Repository | Permissions |
 | --- | --- |
-| `defrances/Orchestrator` | Contents: **Read and write** (`repository_dispatch` from FindUpdates) |
-| `defrances/FindUpdates` | Actions: **Read** (download `findupdates-report-json`) |
-| `defrances/DesktopApplication` | Contents: read, Actions: read (checkout `main`, optional SBOM artifact) |
+| `defrances/Orchestrator` | Contents: **Read and write** |
+| `defrances/FindUpdates` | Actions: **Read** |
+| `defrances/DesktopApplication` | Contents: read, Actions: read |
 
-This PAT does **not** need Actions write on FindUpdates or Issues write on DesktopApplication. `GITHUB_TOKEN` cannot start workflows in another repository.
+`GITHUB_TOKEN` cannot start workflows in another repository. This PAT does not need Issues write.
 
-Analysis steps pick a provider with **`ai_provider`** (`agent`, `copilot`, `offline`). Default is `agent`.
+### Mail and analysis
 
-| Provider | Secret / token | What runs |
+| Name | Where | Role |
 | --- | --- | --- |
-| `agent` | `AGENT_API_KEY` plus repo variables `AGENT_SDK_PACKAGE` / `AGENT_SDK_MODULE` | Local analysis SDK (`scripts/run-ai-analyze.py`) |
-| `copilot` | `GITHUB_TOKEN` (`copilot-requests: write`) or `COPILOT_GITHUB_TOKEN` | GitHub Copilot CLI |
-| `offline` | none | Deterministic fallback scripts |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | Orchestrator secrets | Gmail login, From, To |
+| `AGENT_API_KEY` | Orchestrator secrets | Live `agent` provider |
+| `ORCHESTRATOR_AI_PROVIDER` | optional repo variable | Default provider on dispatch |
+| `AGENT_SDK_PACKAGE` / `AGENT_SDK_MODULE` | repo variables | Analysis SDK install (settings only) |
+| `AGENT_MODEL` / `COPILOT_MODEL` | repo variables | Dispatch defaults |
 
-If the selected live provider fails, the same script falls back to offline analysis so email / PDLC still complete. Optional repo variable **`ORCHESTRATOR_AI_PROVIDER`** sets the default for scheduled `repository_dispatch` (no workflow input). Model is chosen **per provider**: form fields `agent_model` / `copilot_model` on a manual run, or repository variables **`AGENT_MODEL`** / **`COPILOT_MODEL`** on FindUpdates dispatch. Built-in defaults are `composer-2.5` (agent) and `claude-haiku-4.5` (copilot). Offline ignores both. For `agent`, also set **`AGENT_SDK_PACKAGE`** and **`AGENT_SDK_MODULE`**. Those values stay in GitHub settings, not in this repository.
+## Manual runs
 
-### Gmail SMTP (required for the results email)
+**Vendor impact and PDLC** (same as FindUpdates notify):
 
-Create a Gmail [App Password](https://support.google.com/accounts/answer/185833) (2FA required). A normal Gmail password is rejected. Store in [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions):
+- `findupdates_run_id` — FindUpdates run that uploaded `findupdates-report-json`
+- `source` — `live` or `fixtures`
+- `ai_provider` — `agent` / `copilot` / `offline`
+- `agent_model` — ignored unless provider is `agent`
+- `copilot_model` — ignored unless provider is `copilot`
 
-| Secret | Value |
+**PDLC patch and release** is a product-only rerun (same scoring, tests, zip, optional bundle). Prefer the combined workflow after detect.
+
+## Artifacts (14 days)
+
+| Artifact | Contents |
 | --- | --- |
-| `SMTP_USERNAME` | Gmail address used as SMTP login, From, and To |
-| `SMTP_PASSWORD` | Gmail App Password for Mail |
+| `orchestrator-analysis` | `inputs/report.json`, `issues-out/`, `pdlc-out/`, inventory |
+| `windows-patch-bundle` | KB manifest zip + README + `APPLY.ps1` |
+| `pdlc-release` | `PDLC_REPORT.md`, analysis, exe, tests, bundle copy |
 
-From and To come from `SMTP_USERNAME`. The password is never written to logs or artifacts. The email step runs with `if: always()`. Each cluster is a separate message (`multipart/alternative` markdown + HTML). Subject is the Issue title.
+## Related workflows
 
-## Product PDLC (same run as the vendor email)
-
-[FindUpdates](https://github.com/defrances/FindUpdates) `detect.yml` starts **Vendor impact and PDLC** once. Station reports are **not** the product vulnerability input. Product scoring uses DesktopApplication `docs/` plus `main`. The dispatch `run_id` attaches the matching Windows KB bundle in that same run.
-
-A product-only rerun is still available: Actions → **PDLC patch and release** → **Run workflow**.
-
-That run:
-
-1. Reads the PDLC corpus and scores countermeasures (`scripts/run-ai-analyze.py`, default provider `agent`)
-2. Runs DesktopApplication Smoke + Regression tests against `main` as-is
-3. Publishes a self-contained win-x64 exe and zips `pdlc-release` (`PDLC_REPORT.md`, `RELEASE_NOTES.md`, `TEST_RESULTS.md`, exe)
-4. If a FindUpdates `station_report` is available, also builds the **Windows patch bundle** (same format as Orchestrate) and includes it in `pdlc-release`
-
-Orchestrator does not apply product code patches. It scores whatever is already on DesktopApplication `main` and packages that tree.
-
-Host OS KBs are **bundled as a deployable manifest** (WBS item 3), not baked into the client exe. Microsoft installers are not redistributed inside the zip.
-
-## Manual run
-
-Actions → **Vendor impact and PDLC** → **Run workflow**.
-
-Inputs:
-
-- `findupdates_run_id` — FindUpdates Actions run that uploaded `findupdates-report-json`
-- `source` — optional (`live` or `fixtures`) recorded in the email footer
-- `ai_provider` — `agent` (default), `copilot`, or `offline`
-- `agent_model` — used when `ai_provider` is `agent` (default `composer-2.5`)
-- `copilot_model` — used when `ai_provider` is `copilot` (default `claude-haiku-4.5`)
-
-## Copilot skill
-
-[`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/)
-
-Skills stay the same regardless of provider:
-
-- [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/) → `issues-out/` then email
-- [`.github/skills/analyze-pdlc-release/`](.github/skills/analyze-pdlc-release/) → `pdlc-out/analysis.json`
-
-`scripts/run-ai-analyze.py` loads the skill text and calls the selected provider.
-
-## Artifacts
-
-Orchestrator uploads `orchestrator-analysis` (`inputs/report.json` and `issues-out/**`) and `windows-patch-bundle` (KB manifest zip), retained 14 days. The live detect artifacts stay on the FindUpdates run. Each email links to that FindUpdates run and names the bundle artifact.
+| Workflow | Repository | Role |
+| --- | --- | --- |
+| [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload report, notify this repo |
+| [Vendor impact and PDLC](.github/workflows/orchestrate.yml) | Orchestrator | One follow-through run |
+| [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Manual product-only package |
+| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM |
+| [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | DesktopApplication | Versioned win-x64 zip from that repo |
