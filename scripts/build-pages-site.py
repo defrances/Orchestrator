@@ -112,17 +112,68 @@ def parse_test_results(text: str) -> dict[str, object]:
 
 SCORE_FIELDS = (
     ("required_for_app", "Required for app"),
-    ("install_risk", "Install risk"),
-    ("skip_risk", "Skip risk"),
+    ("install_risk", "If we install"),
+    ("skip_risk", "If we skip"),
     ("compatibility", "Compatibility"),
 )
+
+SCORE_VALUE_LABELS = {
+    "required": "Required",
+    "not_required": "Not required",
+    "breaks_app": "App may stop working",
+    "may_break_app": "App may break",
+    "compatible": "Compatible with the app",
+    "app_will_fail": "App will fail",
+    "stays_vulnerable": "Station stays exposed",
+    "no_app_impact": "No effect on the app",
+    "incompatible": "Not compatible",
+}
+
+CHART_RISK_LABELS = {
+    "stays_vulnerable": "Skip: still exposed",
+    "may_break_app": "Install: may break",
+    "no_app_impact": "Skip: no app effect",
+    "compatible": "Install: compatible",
+}
+
+RISK_HINTS = {
+    "stays_vulnerable": "If we do not install this KB, the station stays exposed on that host path.",
+    "may_break_app": "If we install this KB, the app on main may break.",
+    "no_app_impact": "If we skip this KB, the app on main does not change.",
+    "compatible": "If we install this KB, the app on main should still run.",
+}
+
+SCORE_FIELD_HINTS = {
+    "required_for_app": "Does the product on main need this KB to keep working?",
+    "install_risk": "What happens to the app if we put the KB on the station?",
+    "skip_risk": "What happens if we leave the KB off the station?",
+    "compatibility": "Does current main work with these vendor bits?",
+}
 
 
 def score_label(value: object) -> str:
     text = str(value or "").strip()
     if not text:
         return "—"
-    return text.replace("_", " ")
+    return SCORE_VALUE_LABELS.get(text, text.replace("_", " "))
+
+
+def chart_risk_label(key: str) -> str:
+    return CHART_RISK_LABELS.get(key, key.replace("_", " "))
+
+
+def risk_chart_caption(counts: dict[str, int] | None) -> str:
+    item = counts or {}
+    exposed = int(item.get("stays_vulnerable") or 0)
+    may_break = int(item.get("may_break_app") or 0)
+    no_effect = int(item.get("no_app_impact") or 0)
+    compatible = int(item.get("compatible") or 0)
+    return (
+        f"{exposed} stay exposed if we skip the KB. "
+        f"{may_break} may break the app if we install. "
+        f"{no_effect} do not affect the app. "
+        f"{compatible} look compatible if installed."
+    )
 
 
 def score_rows(cluster: dict[str, object] | None) -> list[tuple[str, str]]:
@@ -806,8 +857,44 @@ select { display: block; margin-top: 0.35rem; min-width: 22rem; max-width: 100%;
 .card .sub { margin: 0 0 0.55rem; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
 .score-list { margin: 0; display: grid; gap: 0.35rem 0.7rem; }
 .score-list div { display: grid; grid-template-columns: minmax(7rem, 40%) 1fr; gap: 0.35rem; align-items: baseline; }
-.score-list dt { margin: 0; color: var(--muted); font-size: 0.75rem; }
+.score-list dt { margin: 0; color: var(--muted); font-size: 0.75rem; display: flex; align-items: center; gap: 0.3rem; }
 .score-list dd { margin: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+.info { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
+.info-mark {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #1565c0;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1rem;
+  text-align: center;
+  cursor: help;
+}
+.info .tip {
+  display: none;
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  top: 1.25rem;
+  width: 15rem;
+  padding: 0.45rem 0.55rem;
+  background: #111;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: normal;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.info:hover .tip, .info:focus .tip, .info:focus-within .tip { display: block; }
+.risk-rows { display: grid; gap: 0.4rem; }
+.risk-row { display: grid; grid-template-columns: minmax(7.5rem, 42%) 1fr auto; gap: 0.4rem; align-items: center; }
+.risk-lab { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--muted); }
+.risk-track { background: #eef1f4; height: 16px; }
+.risk-bar { display: block; height: 16px; min-width: 0; }
+.risk-n { font-size: 0.8rem; min-width: 1.2rem; text-align: right; }
 .tag { display: inline-block; padding: 0.1rem 0.4rem; border: 1px solid var(--line); font-size: 0.75rem; text-transform: uppercase; }
 .tag.absent, .tag.failed { border-color: var(--red); color: var(--red); }
 .tag.present, .tag.passed { border-color: #111; }
@@ -1001,10 +1088,10 @@ APP_JS = r"""(function () {
     var svg = '<svg viewBox="0 0 300 ' + h + '" class="chart">';
     rows.forEach(function (row, i) {
       var y = 6 + i * 28;
-      var bw = row.value ? Math.max(row.value / max * 150, 4) : 0;
+      var bw = row.value ? Math.max(row.value / max * 120, 4) : 0;
       svg += '<text x="0" y="' + (y + 13) + '" class="chart-lab">' + esc(row.label) + "</text>";
-      if (bw) svg += '<rect x="110" y="' + y + '" width="' + bw + '" height="16" fill="' + row.color + '"/>';
-      svg += '<text x="' + (118 + bw) + '" y="' + (y + 13) + '" class="chart-n">' + row.value + "</text>";
+      if (bw) svg += '<rect x="148" y="' + y + '" width="' + bw + '" height="16" fill="' + row.color + '"/>';
+      svg += '<text x="' + (156 + bw) + '" y="' + (y + 13) + '" class="chart-n">' + row.value + "</text>";
     });
     return svg + "</svg>";
   }
@@ -1157,24 +1244,86 @@ APP_JS = r"""(function () {
     return COUNTERMEASURE_MEANING[key] || "Status is not present, absent, or partial.";
   }
 
+  var SCORE_VALUE_LABELS = {
+    required: "Required",
+    not_required: "Not required",
+    breaks_app: "App may stop working",
+    may_break_app: "App may break",
+    compatible: "Compatible with the app",
+    app_will_fail: "App will fail",
+    stays_vulnerable: "Station stays exposed",
+    no_app_impact: "No effect on the app",
+    incompatible: "Not compatible"
+  };
+  var CHART_RISK_LABELS = {
+    stays_vulnerable: "Skip: still exposed",
+    may_break_app: "Install: may break",
+    no_app_impact: "Skip: no app effect",
+    compatible: "Install: compatible"
+  };
+  var RISK_HINTS = {
+    stays_vulnerable: "If we do not install this KB, the station stays exposed on that host path.",
+    may_break_app: "If we install this KB, the app on main may break.",
+    no_app_impact: "If we skip this KB, the app on main does not change.",
+    compatible: "If we install this KB, the app on main should still run."
+  };
+  var SCORE_FIELD_HINTS = {
+    required_for_app: "Does the product on main need this KB to keep working?",
+    install_risk: "What happens to the app if we put the KB on the station?",
+    skip_risk: "What happens if we leave the KB off the station?",
+    compatibility: "Does current main work with these vendor bits?"
+  };
+
+  function infoTip(text) {
+    return '<span class="info" tabindex="0"><span class="info-mark">i</span><span class="tip">' +
+      esc(text) + "</span></span>";
+  }
+
+  function labeledBars(rows) {
+    var max = 1;
+    rows.forEach(function (row) { if (row.value > max) max = row.value; });
+    var html = '<div class="risk-rows">';
+    rows.forEach(function (row) {
+      var width = row.value ? Math.max(row.value / max * 100, 8) : 0;
+      html += '<div class="risk-row"><span class="risk-lab">' + esc(row.label) +
+        (row.hint ? infoTip(row.hint) : "") +
+        '</span><span class="risk-track"><span class="risk-bar" style="width:' +
+        width + "%;background:" + row.color + '"></span></span><span class="risk-n">' +
+        row.value + "</span></div>";
+    });
+    return html + "</div>";
+  }
+
   function scoreLabel(value) {
     var text = String(value || "").trim();
-    return text ? text.replace(/_/g, " ") : "—";
+    if (!text) return "—";
+    return SCORE_VALUE_LABELS[text] || text.replace(/_/g, " ");
+  }
+
+  function chartRiskLabel(key) {
+    return CHART_RISK_LABELS[key] || String(key || "").replace(/_/g, " ");
+  }
+
+  function riskChartCaption(counts) {
+    return Number(counts.stays_vulnerable || 0) + " stay exposed if we skip the KB. " +
+      Number(counts.may_break_app || 0) + " may break the app if we install. " +
+      Number(counts.no_app_impact || 0) + " do not affect the app. " +
+      Number(counts.compatible || 0) + " look compatible if installed.";
   }
 
   function scoreRows(cluster) {
     return [
-      ["Required for app", scoreLabel(cluster && cluster.required_for_app)],
-      ["Install risk", scoreLabel(cluster && cluster.install_risk)],
-      ["Skip risk", scoreLabel(cluster && cluster.skip_risk)],
-      ["Compatibility", scoreLabel(cluster && cluster.compatibility)]
+      ["Required for app", scoreLabel(cluster && cluster.required_for_app), SCORE_FIELD_HINTS.required_for_app],
+      ["If we install", scoreLabel(cluster && cluster.install_risk), SCORE_FIELD_HINTS.install_risk],
+      ["If we skip", scoreLabel(cluster && cluster.skip_risk), SCORE_FIELD_HINTS.skip_risk],
+      ["Compatibility", scoreLabel(cluster && cluster.compatibility), SCORE_FIELD_HINTS.compatibility]
     ];
   }
 
   function scoreList(cluster) {
     var html = '<dl class="score-list">';
     scoreRows(cluster).forEach(function (row) {
-      html += "<div><dt>" + esc(row[0]) + "</dt><dd>" + esc(row[1]) + "</dd></div>";
+      html += "<div><dt>" + esc(row[0]) + infoTip(row[2]) + "</dt><dd>" + esc(row[1]) + "</dd></div>";
     });
     return html + "</dl>";
   }
@@ -1208,10 +1357,10 @@ APP_JS = r"""(function () {
     var points = trendPoints(allSnapshots());
     var parts = ['<section class="charts">'];
     parts.push('<article class="chart-card"><h3>Countermeasures</h3>');
-    parts.push(hbars([
-      { label: "present", value: findings.present, color: "#111111" },
-      { label: "partial", value: findings.partial, color: "#4d4d4d" },
-      { label: "absent", value: findings.absent, color: "#CC0000" }
+    parts.push(labeledBars([
+      { label: "present", value: findings.present, color: "#111111", hint: COUNTERMEASURE_MEANING.present },
+      { label: "partial", value: findings.partial, color: "#4d4d4d", hint: COUNTERMEASURE_MEANING.partial },
+      { label: "absent", value: findings.absent, color: "#CC0000", hint: COUNTERMEASURE_MEANING.absent }
     ]));
     parts.push('<p class="chart-cap">' + findings.absent + " absent of " + findings.total + " findings</p></article>");
     parts.push('<article class="chart-card"><h3>Host KB</h3>');
@@ -1236,15 +1385,15 @@ APP_JS = r"""(function () {
     parts.push('<p class="chart-cap">' + packages.deploy + " for lab check · " + packages.hold +
       " held · " + packages.deploy_critical + " critical in the lab set</p>");
     parts.push('<p class="chart-legend">Red critical · gray high · light other</p></article>');
-    parts.push('<article class="chart-card"><h3>Impact clusters</h3>');
-    parts.push(hbars([
-      { label: "stays_vulnerable", value: risks.stays_vulnerable, color: "#CC0000" },
-      { label: "may_break_app", value: risks.may_break_app, color: "#4d4d4d" },
-      { label: "no_app_impact", value: risks.no_app_impact, color: "#111111" },
-      { label: "compatible", value: risks.compatible, color: "#111111" }
+    parts.push('<article class="chart-card"><h3>Skip or install</h3>');
+    parts.push(labeledBars([
+      { label: chartRiskLabel("stays_vulnerable"), value: risks.stays_vulnerable, color: "#CC0000", hint: RISK_HINTS.stays_vulnerable },
+      { label: chartRiskLabel("may_break_app"), value: risks.may_break_app, color: "#4d4d4d", hint: RISK_HINTS.may_break_app },
+      { label: chartRiskLabel("no_app_impact"), value: risks.no_app_impact, color: "#111111", hint: RISK_HINTS.no_app_impact },
+      { label: chartRiskLabel("compatible"), value: risks.compatible, color: "#111111", hint: RISK_HINTS.compatible }
     ]));
-    parts.push('<p class="chart-cap">' + risks.stays_vulnerable + " stay vulnerable · " +
-      risks.may_break_app + " may break app</p></article>");
+    parts.push('<p class="chart-cap">' + esc(riskChartCaption(risks)) + "</p>");
+    parts.push('<p class="chart-legend">Skip = do not put the KB on. Install = put the KB on.</p></article>');
     parts.push("</section>");
     parts.push('<section class="chart-wide"><h3>90 days</h3>');
     parts.push('<p class="chart-cap">' + esc(trendCaption(points, run.run_id)) + "</p>");

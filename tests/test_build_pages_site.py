@@ -146,6 +146,11 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertNotIn("key: \"failed\"", app_js)
             self.assertIn("function scoreList", app_js)
             self.assertIn("Required for app", app_js)
+            self.assertIn("Skip: still exposed", app_js)
+            self.assertIn("stay exposed if we skip the KB", app_js)
+            self.assertIn("function infoTip", app_js)
+            self.assertIn("info-mark", app_js)
+            self.assertIn("station stays exposed on that host path", app_js)
             self.assertNotIn("required_for_app ", app_js)
             self.assertIn("function countermeasureMeaning", app_js)
             self.assertIn("Defense is in the product code on main.", app_js)
@@ -316,11 +321,17 @@ class BuildPagesSiteTests(unittest.TestCase):
         self.assertEqual(
             rows,
             [
-                ("Required for app", "not required"),
-                ("Install risk", "compatible"),
-                ("Skip risk", "stays vulnerable"),
-                ("Compatibility", "compatible"),
+                ("Required for app", "Not required"),
+                ("If we install", "Compatible with the app"),
+                ("If we skip", "Station stays exposed"),
+                ("Compatibility", "Compatible with the app"),
             ],
+        )
+        self.assertEqual(pages.chart_risk_label("stays_vulnerable"), "Skip: still exposed")
+        self.assertIn("station stays exposed", pages.RISK_HINTS["stays_vulnerable"])
+        self.assertIn(
+            "6 stay exposed if we skip the KB",
+            pages.risk_chart_caption({"stays_vulnerable": 6, "may_break_app": 0, "no_app_impact": 2, "compatible": 0}),
         )
         empty = pages.score_rows({})
         self.assertEqual(empty[0], ("Required for app", "—"))
