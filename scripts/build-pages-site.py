@@ -380,6 +380,76 @@ def bundle_summary(bundle: dict[str, object] | None, *, run_id: str = "") -> str
     )
 
 
+_MONTHS = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+)
+
+
+def _trend_stamp(value: object) -> tuple[str, str]:
+    raw = str(value or "")
+    day = raw[:10] if len(raw) >= 10 else ""
+    clock = raw[11:16] if len(raw) >= 16 else ""
+    return day, clock
+
+
+def trend_x_labels(points: list[dict[str, object]] | None) -> list[str]:
+    rows = list(points or [])
+    days = {_trend_stamp(item.get("created_at"))[0] for item in rows}
+    days.discard("")
+    same_day = len(days) <= 1
+    labels: list[str] = []
+    for item in rows:
+        day, clock = _trend_stamp(item.get("created_at"))
+        if same_day and clock:
+            labels.append(clock)
+            continue
+        if len(day) == 10:
+            labels.append(f"{int(day[8:10])} {_MONTHS[int(day[5:7]) - 1]}")
+            continue
+        labels.append(str(item.get("run_id") or "—")[-6:])
+    return labels
+
+
+def trend_is_flat(points: list[dict[str, object]] | None, key: str) -> bool:
+    values = [int(item.get(key) or 0) for item in (points or [])]
+    return len(values) > 1 and len(set(values)) == 1
+
+
+def trend_caption(points: list[dict[str, object]] | None, *, selected_id: str = "") -> str:
+    rows = list(points or [])
+    if not rows:
+        return "History will grow with later runs."
+    selected = next(
+        (item for item in rows if str(item.get("run_id")) == str(selected_id)),
+        rows[-1],
+    )
+    line = (
+        f"This run: {int(selected.get('absent') or 0)} still open · "
+        f"{int(selected.get('deploy') or 0)} KB for lab check."
+    )
+    if len(rows) < 2:
+        return f"{line} History will grow with later runs."
+    days = {_trend_stamp(item.get("created_at"))[0] for item in rows}
+    days.discard("")
+    extra = f" {len(rows)} runs in the last 90 days."
+    if len(days) <= 1:
+        extra += " Axis shows run time because these runs share one day."
+    if trend_is_flat(rows, "absent") and trend_is_flat(rows, "deploy"):
+        extra += " Counts did not change."
+    return line + extra
+
+
 def trend_points(snapshots: list[dict[str, object]] | None) -> list[dict[str, object]]:
     points: list[dict[str, object]] = []
     for item in snapshots or []:
@@ -762,8 +832,8 @@ a { color: inherit; }
 }
 .chart-wide { margin-bottom: 1.2rem; }
 .chart-card h3, .chart-wide h3 { margin: 0 0 0.45rem; font-size: 0.95rem; }
-.chart-cap { color: var(--muted); font-size: 0.8rem; margin: 0.45rem 0 0; }
-.chart-legend { color: var(--muted); font-size: 0.75rem; margin: 0.35rem 0 0; }
+.chart-cap { color: var(--muted); font-size: 0.8rem; margin: 0.45rem 0 0; line-height: 1.4; overflow-wrap: break-word; }
+.chart-legend { color: var(--muted); font-size: 0.75rem; margin: 0.7rem 0 0.2rem; line-height: 1.4; }
 svg.chart { width: 100%; height: auto; display: block; }
 svg.chart .chart-lab { font-size: 11px; fill: #4d4d4d; font-family: Arial, Helvetica, sans-serif; }
 svg.chart .chart-n { font-size: 11px; fill: #111; font-family: Arial, Helvetica, sans-serif; }
@@ -962,42 +1032,109 @@ APP_JS = r"""(function () {
     return svg + "</svg>";
   }
 
-  function trendSvg(points, selectedId) {
+  function trendXLabels(points) {
+    var days = {};
+    points.forEach(function (point) {
+      var day = String(point.created_at || "").slice(0, 10);
+      if (day) days[day] = 1;
+    });
+    var sameDay = Object.keys(days).length <= 1;
+    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return points.map(function (point) {
+      var raw = String(point.created_at || "");
+      if (sameDay && raw.length >= 16) return raw.slice(11, 16);
+      if (raw.length >= 10) {
+        return String(Number(raw.slice(8, 10))) + " " + months[Number(raw.slice(5, 7)) - 1];
+      }
+      return String(point.run_id || "").slice(-6);
+    });
+  }
+
+  function trendIsFlat(points, key) {
+    var seen = {};
+    var count = 0;
+    points.forEach(function (point) {
+      seen[String(Number(point[key] || 0))] = 1;
+      count += 1;
+    });
+    return count > 1 && Object.keys(seen).length === 1;
+  }
+
+  function trendCaption(points, selectedId) {
+    if (!points.length) return "History will grow with later runs.";
+    var selected = points[points.length - 1];
+    points.forEach(function (point) {
+      if (String(point.run_id) === String(selectedId)) selected = point;
+    });
+    var line = "This run: " + Number(selected.absent || 0) + " still open · " +
+      Number(selected.deploy || 0) + " KB for lab check.";
+    if (points.length < 2) return line + " History will grow with later runs.";
+    var days = {};
+    points.forEach(function (point) {
+      var day = String(point.created_at || "").slice(0, 10);
+      if (day) days[day] = 1;
+    });
+    var extra = " " + points.length + " runs in the last 90 days.";
+    if (Object.keys(days).length <= 1) {
+      extra += " Axis shows run time because these runs share one day.";
+    }
+    if (trendIsFlat(points, "absent") && trendIsFlat(points, "deploy")) {
+      extra += " Counts did not change.";
+    }
+    return line + extra;
+  }
+
+  function trendRow(points, selectedId, key, color) {
     var w = 1000;
-    var h = 190;
-    var padL = 36;
-    var padR = 12;
-    var padT = 14;
-    var padB = 30;
+    var h = 120;
+    var padL = 44;
+    var padR = 18;
+    var padT = 20;
+    var padB = 28;
     var innerW = w - padL - padR;
     var innerH = h - padT - padB;
-    var series = [
-      { key: "absent", color: "#CC0000" },
-      { key: "deploy", color: "#111111" }
-    ];
     var max = 1;
-    points.forEach(function (point) {
-      series.forEach(function (row) { if (Number(point[row.key]) > max) max = Number(point[row.key]); });
+    var selectedIndex = -1;
+    points.forEach(function (point, i) {
+      if (Number(point[key]) > max) max = Number(point[key]);
+      if (String(point.run_id) === String(selectedId)) selectedIndex = i;
     });
+    if (selectedIndex < 0) selectedIndex = points.length - 1;
+    var labels = trendXLabels(points);
     function xAt(i) {
       if (points.length === 1) return padL + innerW / 2;
       return padL + i * innerW / (points.length - 1);
     }
     function yAt(value) { return padT + innerH - (Number(value) / max) * innerH; }
+    function showLabel(i) {
+      if (points.length <= 8) return true;
+      if (i === 0 || i === points.length - 1 || i === selectedIndex) return true;
+      return i % Math.ceil(points.length / 7) === 0;
+    }
     var svg = '<svg viewBox="0 0 ' + w + " " + h + '" class="chart">';
-    series.forEach(function (row) {
-      var d = points.map(function (point, i) {
-        return (i ? "L" : "M") + xAt(i) + " " + yAt(point[row.key]);
-      }).join(" ");
-      svg += '<path d="' + d + '" fill="none" stroke="' + row.color + '" stroke-width="2"/>';
-      points.forEach(function (point, i) {
-        var r = String(point.run_id) === String(selectedId) ? 5 : 3;
-        svg += '<circle cx="' + xAt(i) + '" cy="' + yAt(point[row.key]) + '" r="' + r + '" fill="' + row.color + '"/>';
-      });
-    });
+    svg += '<text x="0" y="' + (padT + 4) + '" class="chart-lab">' + max + "</text>";
+    svg += '<text x="0" y="' + (padT + innerH + 4) + '" class="chart-lab">0</text>';
+    if (points.length) {
+      var sx = xAt(selectedIndex);
+      svg += '<line x1="' + sx + '" x2="' + sx + '" y1="' + padT + '" y2="' + (padT + innerH) +
+        '" stroke="#4d4d4d" stroke-dasharray="3 3"/>';
+    }
+    var d = points.map(function (point, i) {
+      return (i ? "L" : "M") + xAt(i) + " " + yAt(point[key]);
+    }).join(" ");
+    svg += '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2"/>';
     points.forEach(function (point, i) {
-      svg += '<text x="' + xAt(i) + '" y="' + (h - 8) + '" text-anchor="middle" class="chart-lab">' +
-        esc(String(point.created_at || "").slice(0, 10)) + "</text>";
+      var selected = i === selectedIndex;
+      svg += '<circle cx="' + xAt(i) + '" cy="' + yAt(point[key]) + '" r="' +
+        (selected ? 5 : 3) + '" fill="' + color + '"/>';
+      if (selected) {
+        svg += '<text x="' + xAt(i) + '" y="' + (yAt(point[key]) - 8) +
+          '" text-anchor="middle" class="chart-n">' + Number(point[key] || 0) + "</text>";
+      }
+      if (showLabel(i)) {
+        svg += '<text x="' + xAt(i) + '" y="' + (h - 8) + '" text-anchor="middle" class="chart-lab">' +
+          esc(labels[i] || "") + "</text>";
+      }
     });
     return svg + "</svg>";
   }
@@ -1110,13 +1247,11 @@ APP_JS = r"""(function () {
       risks.may_break_app + " may break app</p></article>");
     parts.push("</section>");
     parts.push('<section class="chart-wide"><h3>90 days</h3>');
-    parts.push(trendSvg(points, run.run_id));
-    parts.push('<p class="chart-legend">Red: still-open findings · black: KB for lab check</p>');
-    if (points.length < 2) {
-      parts.push('<p class="chart-cap">History will grow with later runs.</p>');
-    } else {
-      parts.push('<p class="chart-cap">' + points.length + " runs in the last 90 days. The larger dot is the run you selected.</p>");
-    }
+    parts.push('<p class="chart-cap">' + esc(trendCaption(points, run.run_id)) + "</p>");
+    parts.push('<p class="chart-legend">Still-open findings</p>');
+    parts.push(trendRow(points, run.run_id, "absent", "#CC0000"));
+    parts.push('<p class="chart-legend">KB for lab check</p>');
+    parts.push(trendRow(points, run.run_id, "deploy", "#111111"));
     parts.push("</section>");
     return parts.join("");
   }
@@ -1151,7 +1286,6 @@ APP_JS = r"""(function () {
       return;
     }
     var bundle = run.bundle || null;
-    var release = run.release || null;
     var findings = run.findings || [];
     var clusters = run.clusters || [];
     var parts = [];
@@ -1167,8 +1301,6 @@ APP_JS = r"""(function () {
         var href = run.sha_url || (run.sha ? "https://github.com/defrances/DesktopApplication/commit/" + run.sha : "");
         return href ? link(href, run.sha) : esc(run.sha);
       })()],
-      ["Conclusion", esc(run.conclusion)],
-      ["Workflow", esc(run.workflow)],
     ].forEach(function (row) {
       parts.push("<div><dt>" + esc(row[0]) + "</dt><dd>" + row[1] + "</dd></div>");
     });
@@ -1259,12 +1391,6 @@ APP_JS = r"""(function () {
       parts.push("</tbody></table></div>");
     }
 
-    parts.push("<h2>Release package</h2>");
-    if (!release || !release.zip_name) {
-      parts.push('<p class="empty">No win-x64 zip name recorded. The exe is not published on this page.</p>');
-    } else {
-      parts.push("<p>" + esc(release.zip_name) + " — exe is not offered here. Download the Actions artifact if needed.</p>");
-    }
     app.innerHTML = parts.join("");
     bindPackageSort();
     bindStationFilter();

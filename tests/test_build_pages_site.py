@@ -135,7 +135,10 @@ class BuildPagesSiteTests(unittest.TestCase):
             app_js = (out2 / "assets" / "app.js").read_text(encoding="utf-8")
             self.assertIn("function glance", app_js)
             self.assertIn("90 days", app_js)
-            self.assertIn("still-open findings", app_js)
+            self.assertIn("function trendRow", app_js)
+            self.assertIn("function trendCaption", app_js)
+            self.assertIn("Still-open findings", app_js)
+            self.assertIn("Counts did not change", app_js)
             self.assertNotIn("test failed", app_js)
             self.assertNotIn("key: \"failed\"", app_js)
             self.assertIn("function scoreList", app_js)
@@ -145,6 +148,10 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("Defense is in the current product code.", app_js)
             self.assertIn("No defense found. This finding is still open.", app_js)
             self.assertNotIn("Test gate", app_js)
+            self.assertNotIn("Release package", app_js)
+            self.assertNotIn("exe is not offered here", app_js)
+            self.assertNotIn('["Conclusion"', app_js)
+            self.assertNotIn('["Workflow"', app_js)
             self.assertIn("function applyStationFilter", app_js)
             self.assertIn("id=\"station-filter\"", app_js)
             data_js = (out2 / "assets" / "data.js").read_text(encoding="utf-8")
@@ -241,6 +248,24 @@ class BuildPagesSiteTests(unittest.TestCase):
         self.assertEqual(points[0]["absent"], 1)
         self.assertNotIn("failed", points[0])
         self.assertEqual(points[1]["deploy"], 2)
+
+    def test_trend_labels_use_time_when_runs_share_one_day(self) -> None:
+        same_day = [
+            {"run_id": "1", "created_at": "2026-09-25T18:01:00Z", "absent": 1, "deploy": 20},
+            {"run_id": "2", "created_at": "2026-09-25T18:40:00Z", "absent": 1, "deploy": 20},
+        ]
+        self.assertEqual(pages.trend_x_labels(same_day), ["18:01", "18:40"])
+        self.assertTrue(pages.trend_is_flat(same_day, "deploy"))
+        caption = pages.trend_caption(same_day, selected_id="2")
+        self.assertIn("This run: 1 still open · 20 KB for lab check.", caption)
+        self.assertIn("Axis shows run time", caption)
+        self.assertIn("Counts did not change.", caption)
+        mixed = [
+            {"run_id": "1", "created_at": "2026-09-23T10:00:00Z", "absent": 2, "deploy": 4},
+            {"run_id": "2", "created_at": "2026-09-25T18:40:00Z", "absent": 1, "deploy": 20},
+        ]
+        self.assertEqual(pages.trend_x_labels(mixed), ["23 Sep", "25 Sep"])
+        self.assertNotIn("Counts did not change.", pages.trend_caption(mixed, selected_id="2"))
 
     def test_countermeasure_meaning(self) -> None:
         self.assertEqual(
