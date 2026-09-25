@@ -135,6 +135,15 @@ class BuildPagesSiteTests(unittest.TestCase):
             app_js = (out2 / "assets" / "app.js").read_text(encoding="utf-8")
             self.assertIn("function glance", app_js)
             self.assertIn("90 days", app_js)
+            self.assertIn("still-open findings", app_js)
+            self.assertNotIn("test failed", app_js)
+            self.assertNotIn("key: \"failed\"", app_js)
+            self.assertIn("function scoreList", app_js)
+            self.assertIn("Required for app", app_js)
+            self.assertNotIn("required_for_app ", app_js)
+            self.assertIn("function countermeasureMeaning", app_js)
+            self.assertIn("Defense is in the current product code.", app_js)
+            self.assertIn("No defense found. This finding is still open.", app_js)
             data_js = (out2 / "assets" / "data.js").read_text(encoding="utf-8")
             self.assertIn('"10"', data_js)
             self.assertIn('"9"', data_js)
@@ -216,21 +225,82 @@ class BuildPagesSiteTests(unittest.TestCase):
                     "created_at": "2026-09-24T00:00:00Z",
                     "findings": findings,
                     "bundle": {"packages": packages},
-                    "tests": {"failed": 0},
                 },
                 {
                     "run_id": "1",
                     "created_at": "2026-09-23T00:00:00Z",
                     "findings": [{"countermeasure": "absent"}],
                     "bundle": {"packages": []},
-                    "tests": {"failed": 2},
                 },
             ]
         )
         self.assertEqual([row["run_id"] for row in points], ["1", "2"])
         self.assertEqual(points[0]["absent"], 1)
-        self.assertEqual(points[0]["failed"], 2)
+        self.assertNotIn("failed", points[0])
         self.assertEqual(points[1]["deploy"], 2)
+
+    def test_countermeasure_meaning(self) -> None:
+        self.assertEqual(
+            pages.countermeasure_meaning("PRESENT"),
+            "Defense is in the current product code.",
+        )
+        self.assertEqual(
+            pages.countermeasure_meaning("absent"),
+            "No defense found. This finding is still open.",
+        )
+        self.assertEqual(
+            pages.countermeasure_meaning("partial"),
+            "Some defense exists, but it is not complete.",
+        )
+
+    def test_score_rows_are_a_list(self) -> None:
+        rows = pages.score_rows(
+            {
+                "required_for_app": "not_required",
+                "install_risk": "compatible",
+                "skip_risk": "stays_vulnerable",
+                "compatibility": "compatible",
+            }
+        )
+        self.assertEqual(
+            rows,
+            [
+                ("Required for app", "not required"),
+                ("Install risk", "compatible"),
+                ("Skip risk", "stays vulnerable"),
+                ("Compatibility", "compatible"),
+            ],
+        )
+        empty = pages.score_rows({})
+        self.assertEqual(empty[0], ("Required for app", "—"))
+
+    def test_bundle_summary_follows_the_selected_run(self) -> None:
+        first = {
+            "generated": "2026-09-23T10:00:00Z",
+            "counts": {"stations": 7},
+            "packages": [
+                {"severity": "HIGH", "include_in_deploy": True, "stations": ["A"]},
+                {"severity": "LOW", "include_in_deploy": False, "stations": ["B"]},
+            ],
+        }
+        second = {
+            "generated": "2026-09-25T18:37:11Z",
+            "counts": {"stations": 3},
+            "packages": [
+                {"severity": "CRITICAL", "include_in_deploy": True, "stations": ["A"]},
+                {"severity": "HIGH", "include_in_deploy": True, "stations": ["B"]},
+                {"severity": "HIGH", "include_in_deploy": True, "stations": ["C"]},
+            ],
+        }
+        one = pages.bundle_summary(first, run_id="111")
+        two = pages.bundle_summary(second, run_id="222")
+        self.assertIn("This run (111)", one)
+        self.assertIn("1 for lab check", one)
+        self.assertIn("1 held", one)
+        self.assertIn("This run (222)", two)
+        self.assertIn("3 for lab check", two)
+        self.assertIn("0 held", two)
+        self.assertNotEqual(one, two)
 
     def test_skips_none_and_summary_issue_files(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

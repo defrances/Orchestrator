@@ -110,6 +110,26 @@ def parse_test_results(text: str) -> dict[str, object]:
     }
 
 
+SCORE_FIELDS = (
+    ("required_for_app", "Required for app"),
+    ("install_risk", "Install risk"),
+    ("skip_risk", "Skip risk"),
+    ("compatibility", "Compatibility"),
+)
+
+
+def score_label(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "—"
+    return text.replace("_", " ")
+
+
+def score_rows(cluster: dict[str, object] | None) -> list[tuple[str, str]]:
+    item = cluster or {}
+    return [(label, score_label(item.get(key))) for key, label in SCORE_FIELDS]
+
+
 def _cluster_from_issue(path: Path, payload: dict) -> dict[str, object] | None:
     if path.name in SKIP_ISSUE_NAMES:
         return None
@@ -241,6 +261,18 @@ def sort_packages(packages: list[dict[str, object]]) -> list[dict[str, object]]:
     )
 
 
+COUNTERMEASURE_MEANING = {
+    "present": "Defense is in the current product code.",
+    "absent": "No defense found. This finding is still open.",
+    "partial": "Some defense exists, but it is not complete.",
+}
+
+
+def countermeasure_meaning(status: object) -> str:
+    key = str(status or "").strip().lower()
+    return COUNTERMEASURE_MEANING.get(key, "Status is not present, absent, or partial.")
+
+
 def count_findings(findings: list[dict[str, object]] | None) -> dict[str, int]:
     counts = {"present": 0, "partial": 0, "absent": 0, "other": 0, "total": 0}
     for item in findings or []:
@@ -300,21 +332,51 @@ def count_risks(clusters: list[dict[str, object]] | None) -> dict[str, int]:
     return counts
 
 
+def station_count(bundle: dict[str, object] | None) -> int:
+    if not bundle:
+        return 0
+    counts = bundle.get("counts") if isinstance(bundle.get("counts"), dict) else {}
+    if counts.get("stations") not in (None, ""):
+        try:
+            return int(counts["stations"])
+        except (TypeError, ValueError):
+            pass
+    seen: set[str] = set()
+    for item in bundle.get("packages") or []:
+        if not isinstance(item, dict):
+            continue
+        for station in item.get("stations") or []:
+            seen.add(str(station))
+    return len(seen)
+
+
+def bundle_summary(bundle: dict[str, object] | None, *, run_id: str = "") -> str:
+    if not bundle:
+        return "No Windows host update pack on this run."
+    counted = count_packages(list(bundle.get("packages") or []))
+    when = str(bundle.get("generated") or "")[:10]
+    run = f"This run ({run_id})" if run_id else "This run"
+    date = f" from {when}" if when else ""
+    return (
+        f"{run} host Windows update pack{date}. "
+        f"{counted['deploy']} for lab check. "
+        f"{counted['hold']} held — do not install. "
+        f"Covers {station_count(bundle)} stations."
+    )
+
+
 def trend_points(snapshots: list[dict[str, object]] | None) -> list[dict[str, object]]:
     points: list[dict[str, object]] = []
     for item in snapshots or []:
         findings = count_findings(list(item.get("findings") or []))
         bundle = item.get("bundle") if isinstance(item.get("bundle"), dict) else {}
         packages = count_packages(list((bundle or {}).get("packages") or []))
-        tests = item.get("tests") if isinstance(item.get("tests"), dict) else {}
-        failed = tests.get("failed") if tests else None
         points.append(
             {
                 "run_id": item.get("run_id"),
                 "created_at": item.get("created_at"),
                 "absent": findings["absent"],
                 "deploy": packages["deploy"],
-                "failed": int(failed) if failed not in (None, "") else 0,
             }
         )
     points.sort(key=lambda row: str(row.get("created_at") or ""))
@@ -655,11 +717,16 @@ select { display: block; margin-top: 0.35rem; min-width: 22rem; max-width: 100%;
 .meta dt { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; }
 .meta dd { margin: 0.2rem 0 0; word-break: break-all; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.7rem; }
-.card h3 { margin: 0 0 0.45rem; font-size: 0.95rem; }
-.score { font-size: 0.85rem; color: var(--muted); }
+.card h3 { margin: 0 0 0.45rem; font-size: 0.95rem; overflow-wrap: anywhere; }
+.card .sub { margin: 0 0 0.55rem; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.score-list { margin: 0; display: grid; gap: 0.35rem 0.7rem; }
+.score-list div { display: grid; grid-template-columns: minmax(7rem, 40%) 1fr; gap: 0.35rem; align-items: baseline; }
+.score-list dt { margin: 0; color: var(--muted); font-size: 0.75rem; }
+.score-list dd { margin: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
 .tag { display: inline-block; padding: 0.1rem 0.4rem; border: 1px solid var(--line); font-size: 0.75rem; text-transform: uppercase; }
 .tag.absent, .tag.failed { border-color: var(--red); color: var(--red); }
 .tag.present, .tag.passed { border-color: #111; }
+.meaning { margin: 0.45rem 0 0; font-size: 0.85rem; }
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 th, td { text-align: left; padding: 0.4rem 0.35rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: normal; }
@@ -795,13 +862,11 @@ APP_JS = r"""(function () {
     return list.map(function (item) {
       var findings = countFindings(item.findings || []);
       var packages = countPackages(((item.bundle || {}).packages) || []);
-      var failed = item.tests && item.tests.failed;
       return {
         run_id: item.run_id,
         created_at: item.created_at,
         absent: findings.absent,
-        deploy: packages.deploy,
-        failed: failed === null || failed === undefined || failed === "" ? 0 : Number(failed)
+        deploy: packages.deploy
       };
     });
   }
@@ -855,8 +920,7 @@ APP_JS = r"""(function () {
     var innerH = h - padT - padB;
     var series = [
       { key: "absent", color: "#CC0000" },
-      { key: "deploy", color: "#111111" },
-      { key: "failed", color: "#4d4d4d" }
+      { key: "deploy", color: "#111111" }
     ];
     var max = 1;
     points.forEach(function (point) {
@@ -874,7 +938,7 @@ APP_JS = r"""(function () {
       }).join(" ");
       svg += '<path d="' + d + '" fill="none" stroke="' + row.color + '" stroke-width="2"/>';
       points.forEach(function (point, i) {
-        var r = point.run_id === selectedId ? 5 : 3;
+        var r = String(point.run_id) === String(selectedId) ? 5 : 3;
         svg += '<circle cx="' + xAt(i) + '" cy="' + yAt(point[row.key]) + '" r="' + r + '" fill="' + row.color + '"/>';
       });
     });
@@ -883,6 +947,68 @@ APP_JS = r"""(function () {
         esc(String(point.created_at || "").slice(0, 10)) + "</text>";
     });
     return svg + "</svg>";
+  }
+
+  function bundleDate(bundle) {
+    var raw = String((bundle && bundle.generated) || "");
+    if (raw.length >= 10) return raw.slice(0, 10);
+    var match = String((bundle && bundle.bundle_id) || "").match(/(\d{4})(\d{2})(\d{2})T/);
+    return match ? match[1] + "-" + match[2] + "-" + match[3] : "";
+  }
+
+  var COUNTERMEASURE_MEANING = {
+    present: "Defense is in the current product code.",
+    absent: "No defense found. This finding is still open.",
+    partial: "Some defense exists, but it is not complete."
+  };
+
+  function countermeasureMeaning(status) {
+    var key = String(status || "").trim().toLowerCase();
+    return COUNTERMEASURE_MEANING[key] || "Status is not present, absent, or partial.";
+  }
+
+  function scoreLabel(value) {
+    var text = String(value || "").trim();
+    return text ? text.replace(/_/g, " ") : "—";
+  }
+
+  function scoreRows(cluster) {
+    return [
+      ["Required for app", scoreLabel(cluster && cluster.required_for_app)],
+      ["Install risk", scoreLabel(cluster && cluster.install_risk)],
+      ["Skip risk", scoreLabel(cluster && cluster.skip_risk)],
+      ["Compatibility", scoreLabel(cluster && cluster.compatibility)]
+    ];
+  }
+
+  function scoreList(cluster) {
+    var html = '<dl class="score-list">';
+    scoreRows(cluster).forEach(function (row) {
+      html += "<div><dt>" + esc(row[0]) + "</dt><dd>" + esc(row[1]) + "</dd></div>";
+    });
+    return html + "</dl>";
+  }
+
+  function stationCount(bundle) {
+    if (bundle && bundle.counts && bundle.counts.stations !== undefined && bundle.counts.stations !== "") {
+      return bundle.counts.stations;
+    }
+    var seen = {};
+    ((bundle && bundle.packages) || []).forEach(function (item) {
+      (item.stations || []).forEach(function (id) { seen[id] = 1; });
+    });
+    return Object.keys(seen).length;
+  }
+
+  function bundleSummary(run) {
+    var bundle = run && run.bundle;
+    if (!bundle) return "No Windows host update pack on this run.";
+    var counted = countPackages(bundle.packages || []);
+    var when = bundleDate(bundle) || String((run && run.created_at) || "").slice(0, 10);
+    var runBit = run && run.run_id ? "This run (" + run.run_id + ")" : "This run";
+    return runBit + " host Windows update pack" + (when ? " from " + when : "") +
+      ". " + counted.deploy + " for lab check. " + counted.hold +
+      " held — do not install. Covers " + stationCount(bundle) + " stations.";
   }
 
   function glance(run) {
@@ -917,8 +1043,8 @@ APP_JS = r"""(function () {
         ]
       }
     ]));
-    parts.push('<p class="chart-cap">' + packages.deploy + " deploy · " + packages.hold + " hold · " +
-      packages.deploy_critical + " critical in deploy</p>");
+    parts.push('<p class="chart-cap">' + packages.deploy + " for lab check · " + packages.hold +
+      " held · " + packages.deploy_critical + " critical in the lab set</p>");
     parts.push('<p class="chart-legend">Red critical · gray high · light other</p></article>');
     parts.push('<article class="chart-card"><h3>Impact clusters</h3>');
     parts.push(hbars([
@@ -932,11 +1058,11 @@ APP_JS = r"""(function () {
     parts.push("</section>");
     parts.push('<section class="chart-wide"><h3>90 days</h3>');
     parts.push(trendSvg(points, run.run_id));
-    parts.push('<p class="chart-legend">Red absent findings · black deploy KB · gray test failed</p>');
+    parts.push('<p class="chart-legend">Red: still-open findings · black: KB for lab check</p>');
     if (points.length < 2) {
       parts.push('<p class="chart-cap">History will grow with later runs.</p>');
     } else {
-      parts.push('<p class="chart-cap">' + points.length + " runs in the last 90 days. Selected run is the larger dot.</p>");
+      parts.push('<p class="chart-cap">' + points.length + " runs in the last 90 days. The larger dot is the run you selected.</p>");
     }
     parts.push("</section>");
     return parts.join("");
@@ -998,19 +1124,13 @@ APP_JS = r"""(function () {
         parts.push(
           '<article class="card"><h3>' +
             esc(cluster.title) +
-            "</h3><p>" +
+            '</h3><p class="sub">' +
             esc(cluster.cluster_key) +
             " · " +
             esc(cluster.device_id) +
-            '</p><p class="score">required_for_app ' +
-            esc(cluster.required_for_app) +
-            " · install_risk " +
-            esc(cluster.install_risk) +
-            " · skip_risk " +
-            esc(cluster.skip_risk) +
-            " · compatibility " +
-            esc(cluster.compatibility) +
-            "</p></article>"
+            "</p>" +
+            scoreList(cluster) +
+            "</article>"
         );
       });
       parts.push("</div>");
@@ -1020,6 +1140,7 @@ APP_JS = r"""(function () {
     if (!findings.length) {
       parts.push('<p class="empty">No PDLC analysis.json on this run.</p>');
     } else {
+      parts.push('<p class="chart-cap">PRESENT: defense is in the current product code. ABSENT: no defense found. PARTIAL: incomplete defense.</p>');
       parts.push('<div class="cards">');
       findings.forEach(function (item) {
         parts.push(
@@ -1031,7 +1152,9 @@ APP_JS = r"""(function () {
             esc(item.countermeasure) +
             '">' +
             esc(item.countermeasure) +
-            "</span></article>"
+            '</span><p class="meaning">' +
+            esc(countermeasureMeaning(item.countermeasure)) +
+            "</p></article>"
         );
       });
       parts.push("</div>");
@@ -1041,18 +1164,10 @@ APP_JS = r"""(function () {
     if (!bundle) {
       parts.push('<p class="empty">No Windows patch bundle on this run.</p>');
     } else {
-      var counts = bundle.counts || {};
-      parts.push(
-        '<p>' +
-          esc(bundle.bundle_id) +
-          " · deploy " +
-          esc(counts.deploy) +
-          " · do_not_install " +
-          esc(counts.do_not_install) +
-          " · stations " +
-          esc(counts.stations) +
-          "</p>"
-      );
+      parts.push("<p>" + esc(bundleSummary(run)) + "</p>");
+      if (bundle.bundle_id) {
+        parts.push('<p class="chart-cap">Pack id ' + esc(bundle.bundle_id) + "</p>");
+      }
       parts.push('<div class="table-wrap"><table><thead><tr>');
       parts.push('<th class="' + sortClass("kb") + '" data-sort="kb">KB</th>');
       parts.push('<th class="' + sortClass("severity") + '" data-sort="severity">Severity</th>');
@@ -1105,8 +1220,9 @@ APP_JS = r"""(function () {
   }
 
   function show(runId) {
-    if (snapshots[runId]) {
-      render(snapshots[runId]);
+    var snap = snapshots[runId] || snapshots[String(runId)];
+    if (snap) {
+      render(snap);
       return;
     }
     fetch("data/history/" + encodeURIComponent(runId) + ".json")
