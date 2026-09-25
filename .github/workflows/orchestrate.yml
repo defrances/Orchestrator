@@ -270,3 +270,78 @@ jobs:
           BUNDLE_DIR: artifacts/windows-bundle
           DA_CHECKOUT: workspace/DesktopApplication
         run: python3 scripts/send-results-email.py
+
+  pages:
+    name: Publish GitHub Pages
+    needs: follow_through
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      actions: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout Orchestrator
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages history
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site-prev
+
+      - name: Download this run's artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          path: run-artifacts
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build site
+        env:
+          FU_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.findupdates_run_id || '' }}
+          FU_HTML_URL: ${{ github.event.client_payload.html_url || '' }}
+          ORCH_CONCLUSION: ${{ needs.follow_through.result }}
+        run: |
+          set -euo pipefail
+          python3 scripts/build-pages-site.py \
+            --workspace run-artifacts \
+            --history site-prev \
+            --out site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Persist snapshots on gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          work=gh-pages-push
+          rm -rf "${work}"
+          mkdir "${work}"
+          cp -a site/. "${work}/"
+          cd "${work}"
+          git init
+          git checkout -B gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Publish Orchestrator site snapshot ${GITHUB_RUN_ID}."
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin gh-pages

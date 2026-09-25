@@ -11,6 +11,7 @@ One workflow, [Vendor impact and PDLC](.github/workflows/orchestrate.yml), runs 
 5. Publish the self-contained win-x64 exe
 6. Assemble one **Windows patch bundle** from the matching FindUpdates `station_report`
 7. Email results
+8. Rebuild the GitHub Page from those files (script only, no AI)
 
 Orchestrator does not apply product code patches and does not create GitHub Issues. Analysis is advisory. HOLD and BLOCK stay HOLD and BLOCK. Official `.msu` / `.cab` files are not copied into the zip.
 
@@ -125,6 +126,22 @@ Fine-grained PAT (or classic `repo` PAT):
 
 **PDLC patch and release** is a product-only rerun (same scoring, tests, zip, optional bundle). Prefer the combined workflow after detect.
 
+## GitHub Pages
+
+[https://defrances.github.io/Orchestrator/](https://defrances.github.io/Orchestrator/) shows the **latest** follow-through run. A dropdown loads snapshots from the last **90 days**.
+
+`scripts/build-pages-site.py` builds the site from `issues-out/`, `pdlc-out/analysis.json`, `BUNDLE_MANIFEST.json`, and `TEST_RESULTS.md`. It does not call an analysis provider. Actions artifacts still expire in 14 days; the script copies a slim JSON snapshot onto `gh-pages` so history can outlive the artifact.
+
+The page is advisory. It does not host the exe or official `.msu` files. Enable **Settings → Pages → GitHub Actions** once.
+
+Local rebuild:
+
+```
+python scripts/build-pages-site.py --workspace <run-dir> --history <gh-pages-checkout> --out site
+```
+
+`--backfill` can pull any artifacts that are still alive on Actions (about 14 days).
+
 ## Artifacts (14 days)
 
 | Artifact | Contents |
@@ -138,7 +155,7 @@ Fine-grained PAT (or classic `repo` PAT):
 | Workflow | Repository | Role |
 | --- | --- | --- |
 | [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload report, notify this repo |
-| [Vendor impact and PDLC](.github/workflows/orchestrate.yml) | Orchestrator | One follow-through run |
+| [Vendor impact and PDLC](.github/workflows/orchestrate.yml) | Orchestrator | One follow-through run, then Pages |
 | [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Manual product-only package |
 | [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM |
 | [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | DesktopApplication | Versioned win-x64 zip from that repo |

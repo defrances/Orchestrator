@@ -3,6 +3,8 @@ issues-out/
 pdlc-out/
 artifacts/
 workspace/
+site/
+.pages-backfill/
 .DS_Store
 *.log
 __pycache__/
