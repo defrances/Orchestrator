@@ -183,6 +183,7 @@ def collect_bundle(workspace: Path) -> dict[str, object] | None:
                 "cve_ids": list(item.get("cve_ids") or []),
             }
         )
+    packages = sort_packages(packages)
     return {
         "bundle_id": str(payload.get("bundle_id") or ""),
         "generated": str(payload.get("generated") or ""),
@@ -191,6 +192,32 @@ def collect_bundle(workspace: Path) -> dict[str, object] | None:
         "counts": payload.get("counts") if isinstance(payload.get("counts"), dict) else {},
         "packages": packages,
     }
+
+
+_SEVERITY_RANK = {
+    "critical": 0,
+    "high": 1,
+    "important": 1,
+    "medium": 2,
+    "moderate": 2,
+    "low": 3,
+}
+
+
+def _kb_number(value: str) -> int:
+    digits = "".join(ch for ch in (value or "") if ch.isdigit())
+    return int(digits) if digits else 0
+
+
+def sort_packages(packages: list[dict[str, object]]) -> list[dict[str, object]]:
+    return sorted(
+        packages,
+        key=lambda item: (
+            _SEVERITY_RANK.get(str(item.get("severity") or "").lower(), 9),
+            0 if item.get("include_in_deploy") else 1,
+            _kb_number(str(item.get("kb") or "")),
+        ),
+    )
 
 
 def collect_release(workspace: Path) -> dict[str, object] | None:
@@ -535,6 +562,10 @@ select { display: block; margin-top: 0.35rem; min-width: 22rem; max-width: 100%;
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 th, td { text-align: left; padding: 0.4rem 0.35rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: normal; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+th.sort-asc::after { content: " \\25b2"; font-size: 0.7em; }
+th.sort-desc::after { content: " \\25bc"; font-size: 0.7em; }
 a { color: inherit; }
 .empty { color: var(--muted); }
 footer { color: var(--muted); font-size: 0.8rem; padding-bottom: 2rem; }
@@ -545,6 +576,9 @@ APP_JS = r"""(function () {
   var select = document.getElementById("run-select");
   var index = window.SITE_INDEX || { runs: [], latest: "" };
   var snapshots = window.SITE_SNAPSHOTS || {};
+  var currentRun = null;
+  var pkgSort = { key: "severity", dir: 1 };
+  var SEV = { critical: 0, high: 1, important: 1, medium: 2, moderate: 2, low: 3 };
 
   function text(value, fallback) {
     if (value === null || value === undefined || value === "") return fallback || "—";
@@ -562,7 +596,54 @@ APP_JS = r"""(function () {
     return '<a href="' + esc(href) + '">' + esc(label) + "</a>";
   }
 
+  function kbNumber(value) {
+    var digits = String(value || "").replace(/\D/g, "");
+    return digits ? parseInt(digits, 10) : 0;
+  }
+
+  function pkgValue(pkg, key) {
+    if (key === "kb") return kbNumber(pkg.kb);
+    if (key === "severity") {
+      var rank = SEV[String(pkg.severity || "").toLowerCase()];
+      return rank === undefined ? 9 : rank;
+    }
+    if (key === "deploy") return pkg.include_in_deploy ? 0 : 1;
+    if (key === "stations") return (pkg.stations || []).join(", ").toLowerCase();
+    return String(pkg[key] || "").toLowerCase();
+  }
+
+  function sortedPackages(packages) {
+    return (packages || []).slice().sort(function (a, b) {
+      var av = pkgValue(a, pkgSort.key);
+      var bv = pkgValue(b, pkgSort.key);
+      if (av < bv) return -pkgSort.dir;
+      if (av > bv) return pkgSort.dir;
+      return kbNumber(a.kb) - kbNumber(b.kb);
+    });
+  }
+
+  function sortClass(key) {
+    if (pkgSort.key !== key) return "sortable";
+    return "sortable " + (pkgSort.dir === 1 ? "sort-asc" : "sort-desc");
+  }
+
+  function bindPackageSort() {
+    var heads = app.querySelectorAll("th.sortable");
+    heads.forEach(function (th) {
+      th.addEventListener("click", function () {
+        var key = th.getAttribute("data-sort");
+        if (pkgSort.key === key) pkgSort.dir = -pkgSort.dir;
+        else {
+          pkgSort.key = key;
+          pkgSort.dir = 1;
+        }
+        if (currentRun) render(currentRun);
+      });
+    });
+  }
+
   function render(run) {
+    currentRun = run;
     if (!run) {
       app.innerHTML = '<p class="empty">No snapshot for this run.</p>';
       return;
@@ -656,8 +737,13 @@ APP_JS = r"""(function () {
           esc(counts.stations) +
           "</p>"
       );
-      parts.push('<div class="table-wrap"><table><thead><tr><th>KB</th><th>Severity</th><th>Deploy</th><th>Stations</th><th>Official</th></tr></thead><tbody>');
-      (bundle.packages || []).forEach(function (pkg) {
+      parts.push('<div class="table-wrap"><table><thead><tr>');
+      parts.push('<th class="' + sortClass("kb") + '" data-sort="kb">KB</th>');
+      parts.push('<th class="' + sortClass("severity") + '" data-sort="severity">Severity</th>');
+      parts.push('<th class="' + sortClass("deploy") + '" data-sort="deploy">Deploy</th>');
+      parts.push('<th class="' + sortClass("stations") + '" data-sort="stations">Stations</th>');
+      parts.push("<th>Official</th></tr></thead><tbody>");
+      sortedPackages(bundle.packages).forEach(function (pkg) {
         parts.push(
           "<tr><td>" +
             esc(pkg.kb) +
@@ -699,6 +785,7 @@ APP_JS = r"""(function () {
       parts.push("<p>" + esc(release.zip_name) + " — exe is not offered here. Download the Actions artifact if needed.</p>");
     }
     app.innerHTML = parts.join("");
+    bindPackageSort();
   }
 
   function show(runId) {

@@ -102,6 +102,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             )
             self.assertEqual(first["tests"]["passed"], 4)
             self.assertEqual(first["release"]["zip_name"], "DesktopApplication-20260923T174629Z-9-win-x64.zip")
+            self.assertEqual([pkg["kb"] for pkg in first["bundle"]["packages"]], ["KB5002916"])
             self.assertNotIn(".exe", json.dumps(first))
             first["created_at"] = "2026-09-23T17:46:29Z"
 
@@ -150,6 +151,20 @@ class BuildPagesSiteTests(unittest.TestCase):
         current = {"run_id": "new", "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
         merged = pages.merge_history([old, keep], current, now=now)
         self.assertEqual([item["run_id"] for item in merged], ["new", "keep"])
+
+    def test_packages_sort_critical_then_kb(self) -> None:
+        rows = pages.sort_packages(
+            [
+                {"kb": "KB5099999", "severity": "HIGH", "include_in_deploy": True},
+                {"kb": "KB5000001", "severity": "CRITICAL", "include_in_deploy": True},
+                {"kb": "KB5000002", "severity": "CRITICAL", "include_in_deploy": False},
+                {"kb": "KB5000100", "severity": "LOW", "include_in_deploy": True},
+            ]
+        )
+        self.assertEqual(
+            [item["kb"] for item in rows],
+            ["KB5000001", "KB5000002", "KB5099999", "KB5000100"],
+        )
 
     def test_skips_none_and_summary_issue_files(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
