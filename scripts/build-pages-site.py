@@ -19,6 +19,11 @@ TEST_SUMMARY_RE = re.compile(
     r"(Passed|Failed)!\s+-\s+Failed:\s+(\d+),\s+Passed:\s+(\d+),\s+Skipped:\s+(\d+),\s+Total:\s+(\d+)",
     re.IGNORECASE,
 )
+TEST_RUN_RE = re.compile(r"Test Run (Successful|Failed)\.", re.IGNORECASE)
+TEST_TOTAL_RE = re.compile(r"Total tests:\s+(\d+)", re.IGNORECASE)
+TEST_PASSED_RE = re.compile(r"^\s*Passed:\s+(\d+)", re.MULTILINE | re.IGNORECASE)
+TEST_FAILED_RE = re.compile(r"^\s*Failed:\s+(\d+)", re.MULTILINE | re.IGNORECASE)
+TEST_SKIPPED_RE = re.compile(r"^\s*Skipped:\s+(\d+)", re.MULTILINE | re.IGNORECASE)
 HEAD_RE = re.compile(r"HEAD:\s+`([0-9a-f]{7,40})`", re.IGNORECASE)
 
 
@@ -69,22 +74,38 @@ def _first_dir(root: Path, name: str) -> Path | None:
 
 
 def parse_test_results(text: str) -> dict[str, object]:
-    match = TEST_SUMMARY_RE.search(text or "")
-    if not match:
+    blob = text or ""
+    match = TEST_SUMMARY_RE.search(blob)
+    if match:
         return {
-            "outcome": "unknown",
-            "failed": None,
-            "passed": None,
-            "skipped": None,
-            "total": None,
+            "outcome": match.group(1).lower(),
+            "failed": int(match.group(2)),
+            "passed": int(match.group(3)),
+            "skipped": int(match.group(4)),
+            "total": int(match.group(5)),
+            "filter": "Smoke|Regression",
+        }
+    run = TEST_RUN_RE.search(blob)
+    total = TEST_TOTAL_RE.search(blob)
+    if run and total:
+        passed = TEST_PASSED_RE.search(blob)
+        failed = TEST_FAILED_RE.search(blob)
+        skipped = TEST_SKIPPED_RE.search(blob)
+        outcome = "passed" if run.group(1).lower() == "successful" else "failed"
+        return {
+            "outcome": outcome,
+            "failed": int(failed.group(1)) if failed else 0,
+            "passed": int(passed.group(1)) if passed else 0,
+            "skipped": int(skipped.group(1)) if skipped else 0,
+            "total": int(total.group(1)),
             "filter": "Smoke|Regression",
         }
     return {
-        "outcome": match.group(1).lower(),
-        "failed": int(match.group(2)),
-        "passed": int(match.group(3)),
-        "skipped": int(match.group(4)),
-        "total": int(match.group(5)),
+        "outcome": "unknown",
+        "failed": None,
+        "passed": None,
+        "skipped": None,
+        "total": None,
         "filter": "Smoke|Regression",
     }
 
@@ -218,6 +239,86 @@ def sort_packages(packages: list[dict[str, object]]) -> list[dict[str, object]]:
             _kb_number(str(item.get("kb") or "")),
         ),
     )
+
+
+def count_findings(findings: list[dict[str, object]] | None) -> dict[str, int]:
+    counts = {"present": 0, "partial": 0, "absent": 0, "other": 0, "total": 0}
+    for item in findings or []:
+        status = str(item.get("countermeasure") or "").lower()
+        if status in {"present", "partial", "absent"}:
+            counts[status] += 1
+        else:
+            counts["other"] += 1
+        counts["total"] += 1
+    return counts
+
+
+def _severity_bucket(value: str) -> str:
+    rank = str(value or "").lower()
+    if rank == "critical":
+        return "critical"
+    if rank in {"high", "important"}:
+        return "high"
+    return "other"
+
+
+def count_packages(packages: list[dict[str, object]] | None) -> dict[str, int]:
+    result = {
+        "deploy": 0,
+        "hold": 0,
+        "deploy_critical": 0,
+        "deploy_high": 0,
+        "deploy_other": 0,
+        "hold_critical": 0,
+        "hold_high": 0,
+        "hold_other": 0,
+    }
+    for item in packages or []:
+        bucket = _severity_bucket(str(item.get("severity") or ""))
+        side = "deploy" if item.get("include_in_deploy") else "hold"
+        result[side] += 1
+        result[f"{side}_{bucket}"] += 1
+    return result
+
+
+def count_risks(clusters: list[dict[str, object]] | None) -> dict[str, int]:
+    counts = {
+        "stays_vulnerable": 0,
+        "may_break_app": 0,
+        "no_app_impact": 0,
+        "compatible": 0,
+        "other": 0,
+    }
+    for item in clusters or []:
+        skip = str(item.get("skip_risk") or "").strip()
+        install = str(item.get("install_risk") or "").strip()
+        key = skip or install
+        if key in counts:
+            counts[key] += 1
+        elif key:
+            counts["other"] += 1
+    return counts
+
+
+def trend_points(snapshots: list[dict[str, object]] | None) -> list[dict[str, object]]:
+    points: list[dict[str, object]] = []
+    for item in snapshots or []:
+        findings = count_findings(list(item.get("findings") or []))
+        bundle = item.get("bundle") if isinstance(item.get("bundle"), dict) else {}
+        packages = count_packages(list((bundle or {}).get("packages") or []))
+        tests = item.get("tests") if isinstance(item.get("tests"), dict) else {}
+        failed = tests.get("failed") if tests else None
+        points.append(
+            {
+                "run_id": item.get("run_id"),
+                "created_at": item.get("created_at"),
+                "absent": findings["absent"],
+                "deploy": packages["deploy"],
+                "failed": int(failed) if failed not in (None, "") else 0,
+            }
+        )
+    points.sort(key=lambda row: str(row.get("created_at") or ""))
+    return points
 
 
 def collect_release(workspace: Path) -> dict[str, object] | None:
@@ -568,6 +669,20 @@ th.sort-asc::after { content: " \\25b2"; font-size: 0.7em; }
 th.sort-desc::after { content: " \\25bc"; font-size: 0.7em; }
 a { color: inherit; }
 .empty { color: var(--muted); }
+.charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; margin: 0 0 1.2rem; }
+.chart-card, .chart-wide {
+  background: var(--card);
+  border: 1px solid var(--line);
+  padding: 0.75rem 0.85rem;
+}
+.chart-wide { margin-bottom: 1.2rem; }
+.chart-card h3, .chart-wide h3 { margin: 0 0 0.45rem; font-size: 0.95rem; }
+.chart-cap { color: var(--muted); font-size: 0.8rem; margin: 0.45rem 0 0; }
+.chart-legend { color: var(--muted); font-size: 0.75rem; margin: 0.35rem 0 0; }
+svg.chart { width: 100%; height: auto; display: block; }
+svg.chart .chart-lab { font-size: 11px; fill: #4d4d4d; font-family: Arial, Helvetica, sans-serif; }
+svg.chart .chart-n { font-size: 11px; fill: #111; font-family: Arial, Helvetica, sans-serif; }
+@media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
 footer { color: var(--muted); font-size: 0.8rem; padding-bottom: 2rem; }
 """
 
@@ -627,6 +742,206 @@ APP_JS = r"""(function () {
     return "sortable " + (pkgSort.dir === 1 ? "sort-asc" : "sort-desc");
   }
 
+  function countFindings(findings) {
+    var counts = { present: 0, partial: 0, absent: 0, other: 0, total: 0 };
+    (findings || []).forEach(function (item) {
+      var status = String(item.countermeasure || "").toLowerCase();
+      if (counts[status] !== undefined && status !== "total" && status !== "other") counts[status] += 1;
+      else counts.other += 1;
+      counts.total += 1;
+    });
+    return counts;
+  }
+
+  function severityBucket(value) {
+    var rank = String(value || "").toLowerCase();
+    if (rank === "critical") return "critical";
+    if (rank === "high" || rank === "important") return "high";
+    return "other";
+  }
+
+  function countPackages(packages) {
+    var result = {
+      deploy: 0, hold: 0,
+      deploy_critical: 0, deploy_high: 0, deploy_other: 0,
+      hold_critical: 0, hold_high: 0, hold_other: 0
+    };
+    (packages || []).forEach(function (item) {
+      var side = item.include_in_deploy ? "deploy" : "hold";
+      result[side] += 1;
+      result[side + "_" + severityBucket(item.severity)] += 1;
+    });
+    return result;
+  }
+
+  function countRisks(clusters) {
+    var counts = { stays_vulnerable: 0, may_break_app: 0, no_app_impact: 0, compatible: 0, other: 0 };
+    (clusters || []).forEach(function (item) {
+      var key = String(item.skip_risk || item.install_risk || "").trim();
+      if (counts[key] !== undefined) counts[key] += 1;
+      else if (key) counts.other += 1;
+    });
+    return counts;
+  }
+
+  function allSnapshots() {
+    var list = [];
+    Object.keys(snapshots).forEach(function (id) { list.push(snapshots[id]); });
+    list.sort(function (a, b) { return String(a.created_at || "").localeCompare(String(b.created_at || "")); });
+    return list;
+  }
+
+  function trendPoints(list) {
+    return list.map(function (item) {
+      var findings = countFindings(item.findings || []);
+      var packages = countPackages(((item.bundle || {}).packages) || []);
+      var failed = item.tests && item.tests.failed;
+      return {
+        run_id: item.run_id,
+        created_at: item.created_at,
+        absent: findings.absent,
+        deploy: packages.deploy,
+        failed: failed === null || failed === undefined || failed === "" ? 0 : Number(failed)
+      };
+    });
+  }
+
+  function hbars(rows) {
+    var max = 1;
+    rows.forEach(function (row) { if (row.value > max) max = row.value; });
+    var h = rows.length * 28 + 8;
+    var svg = '<svg viewBox="0 0 300 ' + h + '" class="chart">';
+    rows.forEach(function (row, i) {
+      var y = 6 + i * 28;
+      var bw = row.value ? Math.max(row.value / max * 150, 4) : 0;
+      svg += '<text x="0" y="' + (y + 13) + '" class="chart-lab">' + esc(row.label) + "</text>";
+      if (bw) svg += '<rect x="110" y="' + y + '" width="' + bw + '" height="16" fill="' + row.color + '"/>';
+      svg += '<text x="' + (118 + bw) + '" y="' + (y + 13) + '" class="chart-n">' + row.value + "</text>";
+    });
+    return svg + "</svg>";
+  }
+
+  function stackedBars(groups) {
+    var max = 1;
+    groups.forEach(function (group) {
+      var total = 0;
+      group.parts.forEach(function (part) { total += part.value; });
+      group.total = total;
+      if (total > max) max = total;
+    });
+    var svg = '<svg viewBox="0 0 300 150" class="chart">';
+    groups.forEach(function (group, i) {
+      var x = 50 + i * 100;
+      var y = 118;
+      group.parts.forEach(function (part) {
+        var bh = part.value / max * 90;
+        y -= bh;
+        if (bh > 0) svg += '<rect x="' + x + '" y="' + y + '" width="44" height="' + bh + '" fill="' + part.color + '"/>';
+      });
+      svg += '<text x="' + (x + 22) + '" y="136" text-anchor="middle" class="chart-lab">' + esc(group.label) + "</text>";
+      svg += '<text x="' + (x + 22) + '" y="' + (y - 6) + '" text-anchor="middle" class="chart-n">' + group.total + "</text>";
+    });
+    return svg + "</svg>";
+  }
+
+  function trendSvg(points, selectedId) {
+    var w = 1000;
+    var h = 190;
+    var padL = 36;
+    var padR = 12;
+    var padT = 14;
+    var padB = 30;
+    var innerW = w - padL - padR;
+    var innerH = h - padT - padB;
+    var series = [
+      { key: "absent", color: "#CC0000" },
+      { key: "deploy", color: "#111111" },
+      { key: "failed", color: "#4d4d4d" }
+    ];
+    var max = 1;
+    points.forEach(function (point) {
+      series.forEach(function (row) { if (Number(point[row.key]) > max) max = Number(point[row.key]); });
+    });
+    function xAt(i) {
+      if (points.length === 1) return padL + innerW / 2;
+      return padL + i * innerW / (points.length - 1);
+    }
+    function yAt(value) { return padT + innerH - (Number(value) / max) * innerH; }
+    var svg = '<svg viewBox="0 0 ' + w + " " + h + '" class="chart">';
+    series.forEach(function (row) {
+      var d = points.map(function (point, i) {
+        return (i ? "L" : "M") + xAt(i) + " " + yAt(point[row.key]);
+      }).join(" ");
+      svg += '<path d="' + d + '" fill="none" stroke="' + row.color + '" stroke-width="2"/>';
+      points.forEach(function (point, i) {
+        var r = point.run_id === selectedId ? 5 : 3;
+        svg += '<circle cx="' + xAt(i) + '" cy="' + yAt(point[row.key]) + '" r="' + r + '" fill="' + row.color + '"/>';
+      });
+    });
+    points.forEach(function (point, i) {
+      svg += '<text x="' + xAt(i) + '" y="' + (h - 8) + '" text-anchor="middle" class="chart-lab">' +
+        esc(String(point.created_at || "").slice(0, 10)) + "</text>";
+    });
+    return svg + "</svg>";
+  }
+
+  function glance(run) {
+    var findings = countFindings(run.findings || []);
+    var packages = countPackages(((run.bundle || {}).packages) || []);
+    var risks = countRisks(run.clusters || []);
+    var points = trendPoints(allSnapshots());
+    var parts = ['<section class="charts">'];
+    parts.push('<article class="chart-card"><h3>Countermeasures</h3>');
+    parts.push(hbars([
+      { label: "present", value: findings.present, color: "#111111" },
+      { label: "partial", value: findings.partial, color: "#4d4d4d" },
+      { label: "absent", value: findings.absent, color: "#CC0000" }
+    ]));
+    parts.push('<p class="chart-cap">' + findings.absent + " absent of " + findings.total + " findings</p></article>");
+    parts.push('<article class="chart-card"><h3>Host KB</h3>');
+    parts.push(stackedBars([
+      {
+        label: "deploy",
+        parts: [
+          { value: packages.deploy_other, color: "#d9dee7" },
+          { value: packages.deploy_high, color: "#4d4d4d" },
+          { value: packages.deploy_critical, color: "#CC0000" }
+        ]
+      },
+      {
+        label: "hold",
+        parts: [
+          { value: packages.hold_other, color: "#d9dee7" },
+          { value: packages.hold_high, color: "#4d4d4d" },
+          { value: packages.hold_critical, color: "#CC0000" }
+        ]
+      }
+    ]));
+    parts.push('<p class="chart-cap">' + packages.deploy + " deploy · " + packages.hold + " hold · " +
+      packages.deploy_critical + " critical in deploy</p>");
+    parts.push('<p class="chart-legend">Red critical · gray high · light other</p></article>');
+    parts.push('<article class="chart-card"><h3>Impact clusters</h3>');
+    parts.push(hbars([
+      { label: "stays_vulnerable", value: risks.stays_vulnerable, color: "#CC0000" },
+      { label: "may_break_app", value: risks.may_break_app, color: "#4d4d4d" },
+      { label: "no_app_impact", value: risks.no_app_impact, color: "#111111" },
+      { label: "compatible", value: risks.compatible, color: "#111111" }
+    ]));
+    parts.push('<p class="chart-cap">' + risks.stays_vulnerable + " stay vulnerable · " +
+      risks.may_break_app + " may break app</p></article>");
+    parts.push("</section>");
+    parts.push('<section class="chart-wide"><h3>90 days</h3>');
+    parts.push(trendSvg(points, run.run_id));
+    parts.push('<p class="chart-legend">Red absent findings · black deploy KB · gray test failed</p>');
+    if (points.length < 2) {
+      parts.push('<p class="chart-cap">History will grow with later runs.</p>');
+    } else {
+      parts.push('<p class="chart-cap">' + points.length + " runs in the last 90 days. Selected run is the larger dot.</p>");
+    }
+    parts.push("</section>");
+    return parts.join("");
+  }
+
   function bindPackageSort() {
     var heads = app.querySelectorAll("th.sortable");
     heads.forEach(function (th) {
@@ -672,6 +987,7 @@ APP_JS = r"""(function () {
       parts.push("<div><dt>" + esc(row[0]) + "</dt><dd>" + row[1] + "</dd></div>");
     });
     parts.push("</section>");
+    parts.push(glance(run));
 
     parts.push("<h2>Impact</h2>");
     if (run.no_clusters || !clusters.length) {

@@ -132,6 +132,9 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertEqual([row["run_id"] for row in index["runs"]], ["10", "9"])
             html = (out2 / "index.html").read_text(encoding="utf-8")
             self.assertIn("assets/data.js", html)
+            app_js = (out2 / "assets" / "app.js").read_text(encoding="utf-8")
+            self.assertIn("function glance", app_js)
+            self.assertIn("90 days", app_js)
             data_js = (out2 / "assets" / "data.js").read_text(encoding="utf-8")
             self.assertIn('"10"', data_js)
             self.assertIn('"9"', data_js)
@@ -165,6 +168,69 @@ class BuildPagesSiteTests(unittest.TestCase):
             [item["kb"] for item in rows],
             ["KB5000001", "KB5000002", "KB5099999", "KB5000100"],
         )
+
+    def test_parse_test_run_successful_block(self) -> None:
+        text = (
+            "Test run for /tmp/DesktopApplication.Tests.dll\n"
+            "Test Run Successful.\n"
+            "Total tests: 3\n"
+            "     Passed: 3\n"
+            " Total time: 10.7176 Seconds\n"
+        )
+        result = pages.parse_test_results(text)
+        self.assertEqual(result["outcome"], "passed")
+        self.assertEqual(result["passed"], 3)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["total"], 3)
+
+    def test_count_findings_and_packages_and_trend(self) -> None:
+        findings = [
+            {"id": "A", "countermeasure": "present"},
+            {"id": "B", "countermeasure": "absent"},
+            {"id": "C", "countermeasure": "present"},
+        ]
+        self.assertEqual(pages.count_findings(findings)["absent"], 1)
+        self.assertEqual(pages.count_findings(findings)["present"], 2)
+        packages = [
+            {"severity": "CRITICAL", "include_in_deploy": True},
+            {"severity": "HIGH", "include_in_deploy": True},
+            {"severity": "HIGH", "include_in_deploy": False},
+        ]
+        counted = pages.count_packages(packages)
+        self.assertEqual(counted["deploy"], 2)
+        self.assertEqual(counted["hold"], 1)
+        self.assertEqual(counted["deploy_critical"], 1)
+        risks = pages.count_risks(
+            [
+                {"skip_risk": "stays_vulnerable"},
+                {"skip_risk": "", "install_risk": "may_break_app"},
+                {"skip_risk": "no_app_impact"},
+            ]
+        )
+        self.assertEqual(risks["stays_vulnerable"], 1)
+        self.assertEqual(risks["may_break_app"], 1)
+        points = pages.trend_points(
+            [
+                {
+                    "run_id": "2",
+                    "created_at": "2026-09-24T00:00:00Z",
+                    "findings": findings,
+                    "bundle": {"packages": packages},
+                    "tests": {"failed": 0},
+                },
+                {
+                    "run_id": "1",
+                    "created_at": "2026-09-23T00:00:00Z",
+                    "findings": [{"countermeasure": "absent"}],
+                    "bundle": {"packages": []},
+                    "tests": {"failed": 2},
+                },
+            ]
+        )
+        self.assertEqual([row["run_id"] for row in points], ["1", "2"])
+        self.assertEqual(points[0]["absent"], 1)
+        self.assertEqual(points[0]["failed"], 2)
+        self.assertEqual(points[1]["deploy"], 2)
 
     def test_skips_none_and_summary_issue_files(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
