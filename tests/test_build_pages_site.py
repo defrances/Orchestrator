@@ -144,6 +144,9 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("function countermeasureMeaning", app_js)
             self.assertIn("Defense is in the current product code.", app_js)
             self.assertIn("No defense found. This finding is still open.", app_js)
+            self.assertNotIn("Test gate", app_js)
+            self.assertIn("function applyStationFilter", app_js)
+            self.assertIn("id=\"station-filter\"", app_js)
             data_js = (out2 / "assets" / "data.js").read_text(encoding="utf-8")
             self.assertIn('"10"', data_js)
             self.assertIn('"9"', data_js)
@@ -252,6 +255,26 @@ class BuildPagesSiteTests(unittest.TestCase):
             pages.countermeasure_meaning("partial"),
             "Some defense exists, but it is not complete.",
         )
+
+    def test_packages_for_station_filters_partial_name(self) -> None:
+        packages = [
+            {"kb": "KB1", "stations": ["SYNTHETIC-PACS-01", "SYNTHETIC-W11-24H2-01"]},
+            {"kb": "KB2", "stations": ["SYNTHETIC-US-01"]},
+            {"kb": "KB3", "stations": ["SYNTHETIC-LAB-24H2-01"]},
+        ]
+        self.assertEqual(
+            [item["kb"] for item in pages.packages_for_station(packages, "pacs")],
+            ["KB1"],
+        )
+        self.assertEqual(
+            [item["kb"] for item in pages.packages_for_station(packages, "24H2")],
+            ["KB1", "KB3"],
+        )
+        self.assertEqual(
+            [item["kb"] for item in pages.packages_for_station(packages, "")],
+            ["KB1", "KB2", "KB3"],
+        )
+        self.assertEqual(pages.packages_for_station(packages, "missing"), [])
 
     def test_score_rows_are_a_list(self) -> None:
         rows = pages.score_rows(

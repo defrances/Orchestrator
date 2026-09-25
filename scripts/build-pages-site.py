@@ -261,6 +261,21 @@ def sort_packages(packages: list[dict[str, object]]) -> list[dict[str, object]]:
     )
 
 
+def packages_for_station(
+    packages: list[dict[str, object]] | None, query: str
+) -> list[dict[str, object]]:
+    needle = (query or "").strip().lower()
+    rows = [item for item in (packages or []) if isinstance(item, dict)]
+    if not needle:
+        return rows
+    matched: list[dict[str, object]] = []
+    for item in rows:
+        stations = item.get("stations") or []
+        if any(needle in str(station).lower() for station in stations):
+            matched.append(item)
+    return matched
+
+
 COUNTERMEASURE_MEANING = {
     "present": "Defense is in the current product code.",
     "absent": "No defense found. This finding is still open.",
@@ -734,6 +749,9 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--ink); }
 th.sort-asc::after { content: " \\25b2"; font-size: 0.7em; }
 th.sort-desc::after { content: " \\25bc"; font-size: 0.7em; }
+.station-filter { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.7rem 0 0.45rem; max-width: 28rem; }
+.station-filter span { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; }
+.station-filter input { padding: 0.4rem; font: inherit; }
 a { color: inherit; }
 .empty { color: var(--muted); }
 .charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; margin: 0 0 1.2rem; }
@@ -760,6 +778,7 @@ APP_JS = r"""(function () {
   var snapshots = window.SITE_SNAPSHOTS || {};
   var currentRun = null;
   var pkgSort = { key: "severity", dir: 1 };
+  var pkgStation = "";
   var SEV = { critical: 0, high: 1, important: 1, medium: 2, moderate: 2, low: 3 };
 
   function text(value, fallback) {
@@ -792,6 +811,40 @@ APP_JS = r"""(function () {
     if (key === "deploy") return pkg.include_in_deploy ? 0 : 1;
     if (key === "stations") return (pkg.stations || []).join(", ").toLowerCase();
     return String(pkg[key] || "").toLowerCase();
+  }
+
+  function matchesStation(pkg, query) {
+    var needle = String(query || "").trim().toLowerCase();
+    if (!needle) return true;
+    return (pkg.stations || []).some(function (id) {
+      return String(id).toLowerCase().indexOf(needle) !== -1;
+    });
+  }
+
+  function packagesForStation(packages, query) {
+    return (packages || []).filter(function (pkg) { return matchesStation(pkg, query); });
+  }
+
+  function applyStationFilter() {
+    var input = document.getElementById("station-filter");
+    if (input) pkgStation = input.value;
+    var needle = String(pkgStation || "").trim().toLowerCase();
+    var rows = app.querySelectorAll("tr[data-stations]");
+    var shown = 0;
+    rows.forEach(function (tr) {
+      var hay = (tr.getAttribute("data-stations") || "").toLowerCase();
+      var ok = !needle || hay.indexOf(needle) !== -1;
+      tr.hidden = !ok;
+      if (ok) shown += 1;
+    });
+    var empty = document.getElementById("station-filter-empty");
+    if (empty) empty.hidden = shown !== 0 || rows.length === 0;
+    var cap = document.getElementById("station-filter-cap");
+    if (cap) {
+      cap.textContent = needle
+        ? shown + " of " + rows.length + " KBs match this station"
+        : "";
+    }
   }
 
   function sortedPackages(packages) {
@@ -1083,13 +1136,20 @@ APP_JS = r"""(function () {
     });
   }
 
+  function bindStationFilter() {
+    var input = document.getElementById("station-filter");
+    if (!input) return;
+    input.value = pkgStation;
+    input.addEventListener("input", applyStationFilter);
+    applyStationFilter();
+  }
+
   function render(run) {
     currentRun = run;
     if (!run) {
       app.innerHTML = '<p class="empty">No snapshot for this run.</p>';
       return;
     }
-    var tests = run.tests || {};
     var bundle = run.bundle || null;
     var release = run.release || null;
     var findings = run.findings || [];
@@ -1168,6 +1228,9 @@ APP_JS = r"""(function () {
       if (bundle.bundle_id) {
         parts.push('<p class="chart-cap">Pack id ' + esc(bundle.bundle_id) + "</p>");
       }
+      parts.push('<label class="station-filter"><span>Stations</span>');
+      parts.push('<input id="station-filter" type="search" placeholder="Type a station name" autocomplete="off"></label>');
+      parts.push('<p id="station-filter-cap" class="chart-cap"></p>');
       parts.push('<div class="table-wrap"><table><thead><tr>');
       parts.push('<th class="' + sortClass("kb") + '" data-sort="kb">KB</th>');
       parts.push('<th class="' + sortClass("severity") + '" data-sort="severity">Severity</th>');
@@ -1175,39 +1238,26 @@ APP_JS = r"""(function () {
       parts.push('<th class="' + sortClass("stations") + '" data-sort="stations">Stations</th>');
       parts.push("<th>Official</th></tr></thead><tbody>");
       sortedPackages(bundle.packages).forEach(function (pkg) {
+        var stations = (pkg.stations || []).join(", ");
         parts.push(
-          "<tr><td>" +
+          '<tr data-stations="' +
+            esc(stations) +
+            '"><td>' +
             esc(pkg.kb) +
             "</td><td>" +
             esc(pkg.severity) +
             "</td><td>" +
             (pkg.include_in_deploy ? "yes" : "no") +
             "</td><td>" +
-            esc((pkg.stations || []).join(", ")) +
+            esc(stations) +
             "</td><td>" +
             (pkg.official_url ? link(pkg.official_url, "MSRC") : "—") +
             "</td></tr>"
         );
       });
+      parts.push('<tr id="station-filter-empty" hidden><td colspan="5">No KBs for this station.</td></tr>');
       parts.push("</tbody></table></div>");
     }
-
-    parts.push("<h2>Test gate</h2>");
-    parts.push(
-      '<p><span class="tag ' +
-        esc(tests.outcome) +
-        '">' +
-        esc(tests.outcome) +
-        "</span> passed " +
-        esc(tests.passed) +
-        " · failed " +
-        esc(tests.failed) +
-        " · total " +
-        esc(tests.total) +
-        " · filter " +
-        esc(tests.filter) +
-        "</p>"
-    );
 
     parts.push("<h2>Release package</h2>");
     if (!release || !release.zip_name) {
@@ -1217,6 +1267,7 @@ APP_JS = r"""(function () {
     }
     app.innerHTML = parts.join("");
     bindPackageSort();
+    bindStationFilter();
   }
 
   function show(runId) {
