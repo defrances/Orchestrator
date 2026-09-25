@@ -113,10 +113,10 @@ class BuildPagesSiteTests(unittest.TestCase):
             )
             self.assertEqual(first["tests"]["passed"], 4)
             self.assertEqual(first["release"]["zip_name"], "DesktopApplication-20260923T174629Z-9-win-x64.zip")
-            self.assertEqual(first["ai"]["provider"], "agent")
-            self.assertIn("composer-2.5", pages.format_ai_usage(first["ai"]))
-            self.assertIn("18,240 model tokens", pages.format_ai_usage(first["ai"]))
-            self.assertIn("$0.12", pages.format_ai_usage(first["ai"]))
+            self.assertEqual(first["ai"], {"provider": "agent", "model": "composer-2.5"})
+            self.assertEqual(pages.format_ai_usage(first["ai"]), "Analysis used agent, model composer-2.5.")
+            self.assertNotIn("tokens", pages.format_ai_usage(first["ai"]).lower())
+            self.assertNotIn("cost", pages.format_ai_usage(first["ai"]).lower())
             self.assertEqual([pkg["kb"] for pkg in first["bundle"]["packages"]], ["KB5002916"])
             self.assertNotIn(".exe", json.dumps(first))
             first["created_at"] = "2026-09-23T17:46:29Z"
@@ -165,6 +165,9 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("stay exposed if we skip the KB", app_js)
             self.assertIn("function infoTip", app_js)
             self.assertIn("function formatAiUsage", app_js)
+            self.assertNotIn("model tokens", app_js)
+            self.assertNotIn("cost is not available", app_js)
+            self.assertNotIn("cost_usd", app_js)
             self.assertIn("site-footer", html)
             self.assertIn("info-slot", app_js)
             self.assertIn("function realClusters", app_js)
@@ -300,8 +303,8 @@ class BuildPagesSiteTests(unittest.TestCase):
             "AI usage was not recorded for this run.",
         )
         self.assertEqual(
-            pages.format_ai_usage({"provider": "offline", "model": "", "total_tokens": 0, "cost_usd": 0}),
-            "Analysis used offline scripts. No model, 0 tokens, $0.00.",
+            pages.format_ai_usage({"provider": "offline", "model": ""}),
+            "Analysis used offline scripts.",
         )
 
     def test_countermeasure_meaning(self) -> None:

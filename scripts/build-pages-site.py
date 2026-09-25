@@ -555,22 +555,12 @@ def collect_ai_usage(workspace: Path) -> dict[str, object] | None:
         return {
             "provider": str(summary.get("provider") or ""),
             "model": str(summary.get("model") or ""),
-            "model_tokens": summary.get("model_tokens"),
-            "total_tokens": summary.get("total_tokens"),
-            "cost_usd": summary.get("cost_usd"),
         }
     tasks = [item for item in payload.get("tasks") or [] if isinstance(item, dict)]
     if not tasks:
         return None
     providers = []
     models = []
-    model_sum = 0
-    model_known = False
-    token_sum = 0
-    tokens_known = False
-    cost_sum = 0.0
-    cost_known = False
-    live = False
     for item in tasks:
         used = str(item.get("used_provider") or "")
         if used and used not in providers:
@@ -578,26 +568,9 @@ def collect_ai_usage(workspace: Path) -> dict[str, object] | None:
         model = str(item.get("model") or "")
         if model and model not in models:
             models.append(model)
-        model_tokens = item.get("model_tokens")
-        if model_tokens not in (None, ""):
-            model_sum += int(model_tokens)
-            model_known = True
-        total = item.get("total_tokens")
-        if total not in (None, ""):
-            token_sum += int(total)
-            tokens_known = True
-        cost = item.get("cost_usd")
-        if cost not in (None, ""):
-            cost_sum += float(cost)
-            cost_known = True
-        if used and used != "offline":
-            live = True
     return {
         "provider": providers[0] if len(providers) == 1 else " + ".join(providers) or "unknown",
         "model": models[0] if len(models) == 1 else ", ".join(models),
-        "model_tokens": model_sum if model_known else None,
-        "total_tokens": token_sum if tokens_known else None,
-        "cost_usd": cost_sum if cost_known or not live else None,
     }
 
 
@@ -606,23 +579,10 @@ def format_ai_usage(usage: dict[str, object] | None) -> str:
         return "AI usage was not recorded for this run."
     provider = str(usage.get("provider") or "")
     model = str(usage.get("model") or "").strip()
-    tokens = usage.get("model_tokens")
-    if tokens in (None, ""):
-        tokens = usage.get("total_tokens")
-    cost = usage.get("cost_usd")
     if provider == "offline":
-        return "Analysis used offline scripts. No model, 0 tokens, $0.00."
+        return "Analysis used offline scripts."
     model_bit = f", model {model}" if model else ""
-    if tokens in (None, ""):
-        token_bit = "Token count not reported"
-    else:
-        token_bit = f"{int(tokens):,} model tokens"
-    if cost in (None, ""):
-        cost_bit = "cost is not available on this account"
-    else:
-        amount = float(cost)
-        cost_bit = f"${amount:.2f}" if amount >= 0.01 else f"${amount:.4f}"
-    return f"Analysis used {provider}{model_bit}. {token_bit}. {cost_bit}."
+    return f"Analysis used {provider}{model_bit}."
 
 
 def collect_tests(workspace: Path, filter_name: str) -> dict[str, object]:
@@ -1028,19 +988,9 @@ APP_JS = r"""(function () {
 
   function formatAiUsage(usage) {
     if (!usage || !usage.provider) return "AI usage was not recorded for this run.";
-    if (usage.provider === "offline") return "Analysis used offline scripts. No model, 0 tokens, $0.00.";
+    if (usage.provider === "offline") return "Analysis used offline scripts.";
     var modelBit = usage.model ? ", model " + usage.model : "";
-    var raw = usage.model_tokens;
-    if (raw === null || raw === undefined || raw === "") raw = usage.total_tokens;
-    var tokenBit = raw === null || raw === undefined || raw === ""
-      ? "Token count not reported"
-      : Number(raw).toLocaleString("en-US") + " model tokens";
-    var costBit = "cost is not available on this account";
-    if (usage.cost_usd !== null && usage.cost_usd !== undefined && usage.cost_usd !== "") {
-      var amount = Number(usage.cost_usd);
-      costBit = amount >= 0.01 ? "$" + amount.toFixed(2) : "$" + amount.toFixed(4);
-    }
-    return "Analysis used " + usage.provider + modelBit + ". " + tokenBit + ". " + costBit + ".";
+    return "Analysis used " + usage.provider + modelBit + ".";
   }
 
   function updateFooter(run) {
