@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 RETENTION_DAYS = 90
-SKIP_ISSUE_NAMES = {"none.json", "missing-report.json", "summary.json"}
+SKIP_ISSUE_NAMES = {"none.json", "missing-report.json", "summary.json", "ai-usage.json"}
 TEST_SUMMARY_RE = re.compile(
     r"(Passed|Failed)!\s+-\s+Failed:\s+(\d+),\s+Passed:\s+(\d+),\s+Skipped:\s+(\d+),\s+Total:\s+(\d+)",
     re.IGNORECASE,
@@ -186,7 +186,11 @@ def _cluster_from_issue(path: Path, payload: dict) -> dict[str, object] | None:
         return None
     if "issues" in payload and not payload.get("title"):
         return None
+    if payload.get("tasks") and payload.get("summary") and not payload.get("title"):
+        return None
     cluster_key = str(payload.get("cluster_key") or "").strip()
+    if cluster_key == "ai-usage":
+        return None
     if cluster_key in {"missing-report", "summary"}:
         return None
     return {
@@ -551,6 +555,7 @@ def collect_ai_usage(workspace: Path) -> dict[str, object] | None:
         return {
             "provider": str(summary.get("provider") or ""),
             "model": str(summary.get("model") or ""),
+            "model_tokens": summary.get("model_tokens"),
             "total_tokens": summary.get("total_tokens"),
             "cost_usd": summary.get("cost_usd"),
         }
@@ -559,6 +564,8 @@ def collect_ai_usage(workspace: Path) -> dict[str, object] | None:
         return None
     providers = []
     models = []
+    model_sum = 0
+    model_known = False
     token_sum = 0
     tokens_known = False
     cost_sum = 0.0
@@ -571,6 +578,10 @@ def collect_ai_usage(workspace: Path) -> dict[str, object] | None:
         model = str(item.get("model") or "")
         if model and model not in models:
             models.append(model)
+        model_tokens = item.get("model_tokens")
+        if model_tokens not in (None, ""):
+            model_sum += int(model_tokens)
+            model_known = True
         total = item.get("total_tokens")
         if total not in (None, ""):
             token_sum += int(total)
@@ -584,6 +595,7 @@ def collect_ai_usage(workspace: Path) -> dict[str, object] | None:
     return {
         "provider": providers[0] if len(providers) == 1 else " + ".join(providers) or "unknown",
         "model": models[0] if len(models) == 1 else ", ".join(models),
+        "model_tokens": model_sum if model_known else None,
         "total_tokens": token_sum if tokens_known else None,
         "cost_usd": cost_sum if cost_known or not live else None,
     }
@@ -594,7 +606,9 @@ def format_ai_usage(usage: dict[str, object] | None) -> str:
         return "AI usage was not recorded for this run."
     provider = str(usage.get("provider") or "")
     model = str(usage.get("model") or "").strip()
-    tokens = usage.get("total_tokens")
+    tokens = usage.get("model_tokens")
+    if tokens in (None, ""):
+        tokens = usage.get("total_tokens")
     cost = usage.get("cost_usd")
     if provider == "offline":
         return "Analysis used offline scripts. No model, 0 tokens, $0.00."
@@ -602,9 +616,9 @@ def format_ai_usage(usage: dict[str, object] | None) -> str:
     if tokens in (None, ""):
         token_bit = "Token count not reported"
     else:
-        token_bit = f"{int(tokens):,} tokens"
+        token_bit = f"{int(tokens):,} model tokens"
     if cost in (None, ""):
-        cost_bit = "cost not reported"
+        cost_bit = "cost is not available on this account"
     else:
         amount = float(cost)
         cost_bit = f"${amount:.2f}" if amount >= 0.01 else f"${amount:.4f}"
@@ -924,23 +938,25 @@ select { display: block; margin-top: 0.35rem; min-width: 22rem; max-width: 100%;
 }
 .meta dt { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; }
 .meta dd { margin: 0.2rem 0 0; word-break: break-all; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.7rem; }
-.card h3 { margin: 0 0 0.45rem; font-size: 0.95rem; overflow-wrap: anywhere; }
-.card .sub { margin: 0 0 0.55rem; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
-.score-list { margin: 0; display: grid; gap: 0.35rem 0.7rem; }
-.score-list div { display: grid; grid-template-columns: minmax(7rem, 40%) 1fr; gap: 0.35rem; align-items: baseline; }
-.score-list dt { margin: 0; color: var(--muted); font-size: 0.75rem; display: flex; align-items: center; gap: 0.3rem; }
-.score-list dd { margin: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
-.info { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.7rem; align-items: stretch; }
+.card { display: flex; flex-direction: column; }
+.card h3 { margin: 0 0 0.35rem; font-size: 0.95rem; overflow-wrap: break-word; min-height: 3.6em; }
+.card .sub { margin: 0 0 0.7rem; font-size: 0.8rem; color: var(--muted); overflow-wrap: break-word; }
+.score-list { margin-top: auto; display: grid; gap: 0.4rem; }
+.score-list div { display: grid; grid-template-columns: 1.1rem 7.4rem 1fr; gap: 0.4rem; align-items: start; }
+.score-list dt { margin: 0; color: var(--muted); font-size: 0.75rem; line-height: 1.2rem; }
+.score-list dd { margin: 0; font-size: 0.85rem; line-height: 1.2rem; overflow-wrap: break-word; }
+.info-slot { display: flex; align-items: center; justify-content: center; height: 1.2rem; }
+.info { position: relative; display: inline-flex; align-items: center; }
 .info-mark {
-  width: 1rem;
-  height: 1rem;
+  width: 0.95rem;
+  height: 0.95rem;
   border-radius: 50%;
   background: #1565c0;
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  line-height: 1rem;
+  line-height: 0.95rem;
   text-align: center;
   cursor: help;
 }
@@ -962,8 +978,8 @@ select { display: block; margin-top: 0.35rem; min-width: 22rem; max-width: 100%;
 }
 .info:hover .tip, .info:focus .tip, .info:focus-within .tip { display: block; }
 .risk-rows { display: grid; gap: 0.4rem; }
-.risk-row { display: grid; grid-template-columns: minmax(7.5rem, 42%) 1fr auto; gap: 0.4rem; align-items: center; }
-.risk-lab { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--muted); }
+.risk-row { display: grid; grid-template-columns: 1.1rem 7.6rem 1fr auto; gap: 0.4rem; align-items: center; }
+.risk-lab { font-size: 0.75rem; color: var(--muted); line-height: 1.2rem; }
 .risk-track { background: #eef1f4; height: 16px; }
 .risk-bar { display: block; height: 16px; min-width: 0; }
 .risk-n { font-size: 0.8rem; min-width: 1.2rem; text-align: right; }
@@ -1014,10 +1030,12 @@ APP_JS = r"""(function () {
     if (!usage || !usage.provider) return "AI usage was not recorded for this run.";
     if (usage.provider === "offline") return "Analysis used offline scripts. No model, 0 tokens, $0.00.";
     var modelBit = usage.model ? ", model " + usage.model : "";
-    var tokenBit = usage.total_tokens === null || usage.total_tokens === undefined || usage.total_tokens === ""
+    var raw = usage.model_tokens;
+    if (raw === null || raw === undefined || raw === "") raw = usage.total_tokens;
+    var tokenBit = raw === null || raw === undefined || raw === ""
       ? "Token count not reported"
-      : Number(usage.total_tokens).toLocaleString("en-US") + " tokens";
-    var costBit = "cost not reported";
+      : Number(raw).toLocaleString("en-US") + " model tokens";
+    var costBit = "cost is not available on this account";
     if (usage.cost_usd !== null && usage.cost_usd !== undefined && usage.cost_usd !== "") {
       var amount = Number(usage.cost_usd);
       costBit = amount >= 0.01 ? "$" + amount.toFixed(2) : "$" + amount.toFixed(4);
@@ -1379,8 +1397,9 @@ APP_JS = r"""(function () {
     var html = '<div class="risk-rows">';
     rows.forEach(function (row) {
       var width = row.value ? Math.max(row.value / max * 100, 8) : 0;
-      html += '<div class="risk-row"><span class="risk-lab">' + esc(row.label) +
+      html += '<div class="risk-row"><span class="info-slot">' +
         (row.hint ? infoTip(row.hint) : "") +
+        '</span><span class="risk-lab">' + esc(row.label) +
         '</span><span class="risk-track"><span class="risk-bar" style="width:' +
         width + "%;background:" + row.color + '"></span></span><span class="risk-n">' +
         row.value + "</span></div>";
@@ -1417,7 +1436,8 @@ APP_JS = r"""(function () {
   function scoreList(cluster) {
     var html = '<dl class="score-list">';
     scoreRows(cluster).forEach(function (row) {
-      html += "<div><dt>" + esc(row[0]) + infoTip(row[2]) + "</dt><dd>" + esc(row[1]) + "</dd></div>";
+      html += "<div><span class=\"info-slot\">" + infoTip(row[2]) +
+        "</span><dt>" + esc(row[0]) + "</dt><dd>" + esc(row[1]) + "</dd></div>";
     });
     return html + "</dl>";
   }
@@ -1444,10 +1464,16 @@ APP_JS = r"""(function () {
       " held — do not install. Covers " + stationCount(bundle) + " stations.";
   }
 
+  function realClusters(run) {
+    return (run && run.clusters || []).filter(function (item) {
+      return item && item.cluster_key !== "ai-usage" && item.title !== "ai-usage";
+    });
+  }
+
   function glance(run) {
     var findings = countFindings(run.findings || []);
     var packages = countPackages(((run.bundle || {}).packages) || []);
-    var risks = countRisks(run.clusters || []);
+    var risks = countRisks(realClusters(run));
     var points = trendPoints(allSnapshots());
     var parts = ['<section class="charts">'];
     parts.push('<article class="chart-card"><h3>Countermeasures</h3>');
@@ -1531,7 +1557,7 @@ APP_JS = r"""(function () {
     }
     var bundle = run.bundle || null;
     var findings = run.findings || [];
-    var clusters = run.clusters || [];
+    var clusters = realClusters(run);
     var parts = [];
     parts.push('<section class="meta">');
     [

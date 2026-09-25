@@ -115,7 +115,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertEqual(first["release"]["zip_name"], "DesktopApplication-20260923T174629Z-9-win-x64.zip")
             self.assertEqual(first["ai"]["provider"], "agent")
             self.assertIn("composer-2.5", pages.format_ai_usage(first["ai"]))
-            self.assertIn("18,240 tokens", pages.format_ai_usage(first["ai"]))
+            self.assertIn("18,240 model tokens", pages.format_ai_usage(first["ai"]))
             self.assertIn("$0.12", pages.format_ai_usage(first["ai"]))
             self.assertEqual([pkg["kb"] for pkg in first["bundle"]["packages"]], ["KB5002916"])
             self.assertNotIn(".exe", json.dumps(first))
@@ -166,6 +166,8 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("function infoTip", app_js)
             self.assertIn("function formatAiUsage", app_js)
             self.assertIn("site-footer", html)
+            self.assertIn("info-slot", app_js)
+            self.assertIn("function realClusters", app_js)
             self.assertIn("info-mark", app_js)
             self.assertIn("station stays exposed on that host path", app_js)
             self.assertNotIn("required_for_app ", app_js)
@@ -398,6 +400,10 @@ class BuildPagesSiteTests(unittest.TestCase):
             _write(
                 work / "issues-out" / "summary.json",
                 {"title": "overflow", "cluster_key": "summary", "device_id": "overflow"},
+            )
+            _write(
+                work / "issues-out" / "ai-usage.json",
+                {"schema_version": 1, "tasks": [], "summary": {"provider": "agent"}},
             )
             clusters, none_marker = pages.collect_clusters(work)
             self.assertEqual(clusters, [])

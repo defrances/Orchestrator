@@ -63,12 +63,16 @@ class UsageRecordTests(unittest.TestCase):
         class Usage:
             input_tokens = 10
             output_tokens = 5
-            total_tokens = 15
+            cache_read_tokens = 100
+            cache_write_tokens = 20
+            total_tokens = 135
 
         class Result:
             usage = Usage()
 
-        self.assertEqual(analyze.tokens_from_result(Result())["total_tokens"], 15)
+        counted = analyze.tokens_from_result(Result())
+        self.assertEqual(counted["model_tokens"], 15)
+        self.assertEqual(counted["total_tokens"], 135)
 
         class Cost:
             charged_cents = 123
@@ -84,20 +88,23 @@ class UsageRecordTests(unittest.TestCase):
                 {
                     "used_provider": "agent",
                     "model": "composer-2.5",
-                    "total_tokens": 1000,
+                    "model_tokens": 1000,
+                    "total_tokens": 5000,
                     "cost_usd": 0.02,
                 },
                 {
                     "used_provider": "agent",
                     "model": "composer-2.5",
-                    "total_tokens": 400,
+                    "model_tokens": 400,
+                    "total_tokens": 800,
                     "cost_usd": 0.01,
                 },
             ]
         )
         self.assertEqual(summary["provider"], "agent")
         self.assertEqual(summary["model"], "composer-2.5")
-        self.assertEqual(summary["total_tokens"], 1400)
+        self.assertEqual(summary["model_tokens"], 1400)
+        self.assertEqual(summary["total_tokens"], 5800)
         self.assertAlmostEqual(float(summary["cost_usd"]), 0.03)
 
 

@@ -65,14 +65,32 @@ def tokens_from_result(result: object) -> dict[str, int | None]:
     usage = getattr(result, "usage", None)
     if usage is None and isinstance(result, dict):
         usage = result.get("usage")
+    empty = {
+        "input_tokens": None,
+        "output_tokens": None,
+        "cache_read_tokens": None,
+        "cache_write_tokens": None,
+        "model_tokens": None,
+        "total_tokens": None,
+    }
     if usage is None:
-        return {"input_tokens": None, "output_tokens": None, "total_tokens": None}
+        return empty
     inp = _pick_int(usage, "input_tokens", "inputTokens", "prompt_tokens")
     out = _pick_int(usage, "output_tokens", "outputTokens", "completion_tokens")
+    cache_r = _pick_int(usage, "cache_read_tokens", "cacheReadTokens")
+    cache_w = _pick_int(usage, "cache_write_tokens", "cacheWriteTokens")
     total = _pick_int(usage, "total_tokens", "totalTokens", "total")
-    if total is None and (inp is not None or out is not None):
-        total = (inp or 0) + (out or 0)
-    return {"input_tokens": inp, "output_tokens": out, "total_tokens": total}
+    model = (inp or 0) + (out or 0) if inp is not None or out is not None else None
+    if total is None and model is not None:
+        total = model + (cache_r or 0) + (cache_w or 0)
+    return {
+        "input_tokens": inp,
+        "output_tokens": out,
+        "cache_read_tokens": cache_r,
+        "cache_write_tokens": cache_w,
+        "model_tokens": model,
+        "total_tokens": total,
+    }
 
 
 def cost_from_billed(billed: object) -> float | None:
@@ -129,7 +147,10 @@ def usage_entry(
         "model": model if used != "offline" else "",
         "input_tokens": counts.get("input_tokens"),
         "output_tokens": counts.get("output_tokens"),
-        "total_tokens": counts.get("total_tokens") if used != "offline" else 0,
+        "cache_read_tokens": counts.get("cache_read_tokens"),
+        "cache_write_tokens": counts.get("cache_write_tokens"),
+        "model_tokens": 0 if used == "offline" else counts.get("model_tokens"),
+        "total_tokens": 0 if used == "offline" else counts.get("total_tokens"),
         "cost_usd": 0.0 if used == "offline" else cost_usd,
         "fallback": fallback,
     }
@@ -138,8 +159,10 @@ def usage_entry(
 def summarize_usage(tasks: list[dict[str, object]]) -> dict[str, object]:
     providers: list[str] = []
     models: list[str] = []
-    token_sum = 0
-    tokens_known = False
+    model_sum = 0
+    model_known = False
+    raw_sum = 0
+    raw_known = False
     cost_sum = 0.0
     cost_known = False
     live = False
@@ -150,10 +173,14 @@ def summarize_usage(tasks: list[dict[str, object]]) -> dict[str, object]:
         model = str(item.get("model") or "")
         if model and model not in models:
             models.append(model)
+        model_tokens = item.get("model_tokens")
+        if model_tokens not in (None, ""):
+            model_sum += int(model_tokens)
+            model_known = True
         total = item.get("total_tokens")
         if total not in (None, ""):
-            token_sum += int(total)
-            tokens_known = True
+            raw_sum += int(total)
+            raw_known = True
         cost = item.get("cost_usd")
         if cost not in (None, ""):
             cost_sum += float(cost)
@@ -163,7 +190,8 @@ def summarize_usage(tasks: list[dict[str, object]]) -> dict[str, object]:
     return {
         "provider": providers[0] if len(providers) == 1 else " + ".join(providers) or "unknown",
         "model": models[0] if len(models) == 1 else ", ".join(models),
-        "total_tokens": token_sum if tokens_known else None,
+        "model_tokens": model_sum if model_known else None,
+        "total_tokens": raw_sum if raw_known else None,
         "cost_usd": cost_sum if cost_known or not live else None,
         "tasks": tasks,
     }
@@ -185,13 +213,14 @@ def persist_usage(entry: dict[str, object]) -> None:
     payload["summary"] = summarize_usage(tasks)
     text = json.dumps(payload, indent=2) + "\n"
     USAGE_PATH.write_text(text, encoding="utf-8")
-    for folder in (ROOT / "pdlc-out", ROOT / "issues-out"):
-        if folder.is_dir():
-            (folder / "ai-usage.json").write_text(text, encoding="utf-8")
+    pdlc_out = ROOT / "pdlc-out"
+    if pdlc_out.is_dir():
+        (pdlc_out / "ai-usage.json").write_text(text, encoding="utf-8")
     print(
-        "usage provider={provider} model={model} tokens={tokens} cost_usd={cost}".format(
+        "usage provider={provider} model={model} model_tokens={model_tokens} raw_total={tokens} cost_usd={cost}".format(
             provider=payload["summary"].get("provider"),
             model=payload["summary"].get("model") or "n/a",
+            model_tokens=payload["summary"].get("model_tokens"),
             tokens=payload["summary"].get("total_tokens"),
             cost=payload["summary"].get("cost_usd"),
         ),
@@ -260,41 +289,26 @@ def run_agent(prompt: str, model: str) -> tuple[int, dict[str, int | None], floa
     skill_text = skill_path.read_text(encoding="utf-8") if skill_path.exists() else ""
     full_prompt = "\n\n".join(part for part in (skill_text, prompt) if part)
     options = _agent_options(sdk, api_key, model)
-    create = getattr(sdk.Agent, "create", None)
-    if callable(create):
-        try:
-            try:
-                created = create(**options)
-            except TypeError:
-                created = create(sdk.AgentOptions(**options))
-            agent = created.__enter__() if hasattr(created, "__enter__") else created
-            try:
-                run = agent.send(full_prompt)
-                result = run.wait() if hasattr(run, "wait") else run
-                print(f"agent status={getattr(result, 'status', '')}", flush=True)
-                tokens = tokens_from_result(result)
-                cost = billed_cost(agent)
-                code = 0 if getattr(result, "status", "") != "error" else 2
-                return code, tokens, cost
-            finally:
-                if hasattr(created, "__exit__"):
-                    created.__exit__(None, None, None)
-                closer = getattr(agent, "close", None)
-                if callable(closer):
-                    closer()
-        except Exception as exc:
-            print(f"agent create/send failed: {exc}; trying one-shot prompt", file=sys.stderr, flush=True)
     try:
         result = sdk.Agent.prompt(full_prompt, sdk.AgentOptions(**options))
     except Exception as exc:
         print(f"agent startup failed: {exc}", file=sys.stderr, flush=True)
-        return 1, {"input_tokens": None, "output_tokens": None, "total_tokens": None}, None
+        return 1, tokens_from_result(None), None
     print(f"agent status={result.status}", flush=True)
-    return (
-        0 if result.status != "error" else 2,
-        tokens_from_result(result),
-        None,
+    tokens = tokens_from_result(result)
+    print(
+        "agent tokens input={input} output={output} cache_read={cache_r} "
+        "cache_write={cache_w} model={model_tokens} raw_total={total}".format(
+            input=tokens.get("input_tokens"),
+            output=tokens.get("output_tokens"),
+            cache_r=tokens.get("cache_read_tokens"),
+            cache_w=tokens.get("cache_write_tokens"),
+            model_tokens=tokens.get("model_tokens"),
+            total=tokens.get("total_tokens"),
+        ),
+        flush=True,
     )
+    return 0 if result.status != "error" else 2, tokens, None
 
 
 def normalize_provider(raw: str) -> str:
