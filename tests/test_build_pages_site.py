@@ -80,6 +80,17 @@ class BuildPagesSiteTests(unittest.TestCase):
                 "Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 1 s\n",
             )
             _write(work / "artifacts" / "release" / "DesktopApplication-20260923T174629Z-9-win-x64.zip", "zip")
+            _write(
+                work / "artifacts" / "ai-usage.json",
+                {
+                    "summary": {
+                        "provider": "agent",
+                        "model": "composer-2.5",
+                        "total_tokens": 18240,
+                        "cost_usd": 0.12,
+                    }
+                },
+            )
 
             first = pages.snapshot_from_workspace(
                 work,
@@ -102,6 +113,10 @@ class BuildPagesSiteTests(unittest.TestCase):
             )
             self.assertEqual(first["tests"]["passed"], 4)
             self.assertEqual(first["release"]["zip_name"], "DesktopApplication-20260923T174629Z-9-win-x64.zip")
+            self.assertEqual(first["ai"]["provider"], "agent")
+            self.assertIn("composer-2.5", pages.format_ai_usage(first["ai"]))
+            self.assertIn("18,240 tokens", pages.format_ai_usage(first["ai"]))
+            self.assertIn("$0.12", pages.format_ai_usage(first["ai"]))
             self.assertEqual([pkg["kb"] for pkg in first["bundle"]["packages"]], ["KB5002916"])
             self.assertNotIn(".exe", json.dumps(first))
             first["created_at"] = "2026-09-23T17:46:29Z"
@@ -149,6 +164,8 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("Skip: still exposed", app_js)
             self.assertIn("stay exposed if we skip the KB", app_js)
             self.assertIn("function infoTip", app_js)
+            self.assertIn("function formatAiUsage", app_js)
+            self.assertIn("site-footer", html)
             self.assertIn("info-mark", app_js)
             self.assertIn("station stays exposed on that host path", app_js)
             self.assertNotIn("required_for_app ", app_js)
@@ -274,6 +291,16 @@ class BuildPagesSiteTests(unittest.TestCase):
         ]
         self.assertEqual(pages.trend_x_labels(mixed), ["23 Sep", "25 Sep"])
         self.assertNotIn("Counts did not change.", pages.trend_caption(mixed, selected_id="2"))
+
+    def test_ai_usage_line(self) -> None:
+        self.assertEqual(
+            pages.format_ai_usage(None),
+            "AI usage was not recorded for this run.",
+        )
+        self.assertEqual(
+            pages.format_ai_usage({"provider": "offline", "model": "", "total_tokens": 0, "cost_usd": 0}),
+            "Analysis used offline scripts. No model, 0 tokens, $0.00.",
+        )
 
     def test_countermeasure_meaning(self) -> None:
         self.assertEqual(

@@ -229,6 +229,7 @@ jobs:
             inputs/report.json
             issues-out/**
             pdlc-out/**
+            artifacts/ai-usage.json
             workspace/desktop-application-inventory.md
           if-no-files-found: warn
           retention-days: 14
@@ -251,6 +252,7 @@ jobs:
             artifacts/release/**
             artifacts/windows-bundle/**
             artifacts/TEST_RESULTS.md
+            artifacts/ai-usage.json
           if-no-files-found: error
           retention-days: 14
 

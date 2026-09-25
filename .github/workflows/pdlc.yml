@@ -181,5 +181,6 @@ jobs:
             artifacts/release/**
             artifacts/windows-bundle/**
             artifacts/TEST_RESULTS.md
+            artifacts/ai-usage.json
           if-no-files-found: error
           retention-days: 14

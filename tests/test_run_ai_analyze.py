@@ -58,6 +58,49 @@ class ResolveModelTests(unittest.TestCase):
         self.assertEqual(analyze.resolve_model("agent", "default"), "composer-2.5")
 
 
+class UsageRecordTests(unittest.TestCase):
+    def test_tokens_from_result_and_cost(self) -> None:
+        class Usage:
+            input_tokens = 10
+            output_tokens = 5
+            total_tokens = 15
+
+        class Result:
+            usage = Usage()
+
+        self.assertEqual(analyze.tokens_from_result(Result())["total_tokens"], 15)
+
+        class Cost:
+            charged_cents = 123
+
+        class Billed:
+            cost = Cost()
+
+        self.assertEqual(analyze.cost_from_billed(Billed()), 1.23)
+
+    def test_summarize_two_agent_tasks(self) -> None:
+        summary = analyze.summarize_usage(
+            [
+                {
+                    "used_provider": "agent",
+                    "model": "composer-2.5",
+                    "total_tokens": 1000,
+                    "cost_usd": 0.02,
+                },
+                {
+                    "used_provider": "agent",
+                    "model": "composer-2.5",
+                    "total_tokens": 400,
+                    "cost_usd": 0.01,
+                },
+            ]
+        )
+        self.assertEqual(summary["provider"], "agent")
+        self.assertEqual(summary["model"], "composer-2.5")
+        self.assertEqual(summary["total_tokens"], 1400)
+        self.assertAlmostEqual(float(summary["cost_usd"]), 0.03)
+
+
 class CopilotArgvTests(unittest.TestCase):
     def test_passes_selected_model(self) -> None:
         with patch("subprocess.run") as run:
