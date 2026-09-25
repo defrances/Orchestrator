@@ -92,6 +92,14 @@ class BuildPagesSiteTests(unittest.TestCase):
             )
             self.assertEqual(first["cluster_count"], 1)
             self.assertEqual(first["sha"], "abc1234")
+            self.assertEqual(
+                first["findupdates_url"],
+                "https://github.com/defrances/FindUpdates/actions/runs/111",
+            )
+            self.assertEqual(
+                first["sha_url"],
+                "https://github.com/defrances/DesktopApplication/commit/abc1234",
+            )
             self.assertEqual(first["tests"]["passed"], 4)
             self.assertEqual(first["release"]["zip_name"], "DesktopApplication-20260923T174629Z-9-win-x64.zip")
             self.assertNotIn(".exe", json.dumps(first))

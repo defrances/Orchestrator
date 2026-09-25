@@ -235,12 +235,17 @@ def snapshot_from_workspace(workspace: Path, *, env: dict[str, str] | None = Non
     server = (environ.get("GITHUB_SERVER_URL") or "https://github.com").rstrip("/")
     repo = (environ.get("GITHUB_REPOSITORY") or "defrances/Orchestrator").strip()
     workflow = (environ.get("GITHUB_WORKFLOW") or "Vendor impact and PDLC").strip()
+    fu_repo = (environ.get("FINDUPDATES_REPO") or "defrances/FindUpdates").strip()
+    app_repo = (environ.get("APP_REPO") or "defrances/DesktopApplication").strip()
     fu_run = (environ.get("FU_RUN_ID") or "").strip()
     fu_url = (environ.get("FU_HTML_URL") or "").strip()
     if bundle and not fu_run:
         fu_run = str(bundle.get("findupdates_run_id") or "")
     if bundle and not fu_url:
         fu_url = str(bundle.get("findupdates_html_url") or "")
+    if fu_run and not fu_url:
+        fu_url = f"{server}/{fu_repo}/actions/runs/{fu_run}"
+    sha = collect_sha(workspace, meta)
     created = _iso()
     return {
         "schema_version": 1,
@@ -252,7 +257,8 @@ def snapshot_from_workspace(workspace: Path, *, env: dict[str, str] | None = Non
         "findupdates_url": fu_url,
         "product": meta.get("product") or "DesktopApplication",
         "branch": meta.get("branch") or "main",
-        "sha": collect_sha(workspace, meta),
+        "sha": sha,
+        "sha_url": f"{server}/{app_repo}/commit/{sha}" if sha else "",
         "conclusion": (environ.get("ORCH_CONCLUSION") or "").strip(),
         "clusters": clusters,
         "cluster_count": len(clusters),
@@ -571,8 +577,14 @@ APP_JS = r"""(function () {
     [
       ["Created", esc(run.created_at)],
       ["Orchestrator run", run.run_url ? link(run.run_url, run.run_id) : esc(run.run_id)],
-      ["FindUpdates run", run.findupdates_url ? link(run.findupdates_url, run.findupdates_run_id) : esc(text(run.findupdates_run_id))],
-      ["DesktopApplication SHA", esc(run.sha)],
+      ["FindUpdates run", (function () {
+        var href = run.findupdates_url || (run.findupdates_run_id ? "https://github.com/defrances/FindUpdates/actions/runs/" + run.findupdates_run_id : "");
+        return href ? link(href, run.findupdates_run_id) : esc(text(run.findupdates_run_id));
+      })()],
+      ["DesktopApplication SHA", (function () {
+        var href = run.sha_url || (run.sha ? "https://github.com/defrances/DesktopApplication/commit/" + run.sha : "");
+        return href ? link(href, run.sha) : esc(run.sha);
+      })()],
       ["Conclusion", esc(run.conclusion)],
       ["Workflow", esc(run.workflow)],
     ].forEach(function (row) {
