@@ -15,6 +15,13 @@ RELEASE_DIR = Path("artifacts/release")
 REPORT = Path("pdlc-out/PDLC_REPORT.md")
 
 
+def product_display(value: object) -> str:
+    text = str(value or "").strip()
+    if text in {"", "DesktopApplication"}:
+        return "Desktop Application"
+    return text
+
+
 def release_label() -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = (os.environ.get("GITHUB_RUN_ID") or "").strip()
@@ -33,7 +40,7 @@ def main() -> int:
     lines = [
         "# PDLC report",
         "",
-        f"- Product: `{data.get('product')}`",
+        f"- Product: {product_display(data.get('product'))}",
         f"- Branch: `{data.get('branch')}`",
         f"- SHA: `{sha}`",
         f"- Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}",
@@ -59,9 +66,9 @@ def main() -> int:
     REPORT.write_text("\n".join(lines), encoding="utf-8")
 
     notes = [
-        f"# DesktopApplication {version}",
+        f"# Desktop Application {version}",
         "",
-        f"Tree from DesktopApplication `{sha}`.",
+        f"Tree from Desktop Application `{sha}`.",
         "",
         "This zip is the application patch/release package.",
         "It does not contain Windows OS KBs.",

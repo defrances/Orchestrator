@@ -132,7 +132,10 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertEqual([row["run_id"] for row in index["runs"]], ["10", "9"])
             html = (out2 / "index.html").read_text(encoding="utf-8")
             self.assertIn("assets/data.js", html)
+            self.assertIn("Desktop Application", html)
+            self.assertNotIn("Orchestrator · DesktopApplication", html)
             app_js = (out2 / "assets" / "app.js").read_text(encoding="utf-8")
+            self.assertIn("Desktop Application SHA", app_js)
             self.assertIn("function glance", app_js)
             self.assertIn("90 days", app_js)
             self.assertIn("function trendRow", app_js)
@@ -145,7 +148,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("Required for app", app_js)
             self.assertNotIn("required_for_app ", app_js)
             self.assertIn("function countermeasureMeaning", app_js)
-            self.assertIn("Defense is in the current product code.", app_js)
+            self.assertIn("Defense is in the product code on main.", app_js)
             self.assertIn("No defense found. This finding is still open.", app_js)
             self.assertNotIn("Test gate", app_js)
             self.assertNotIn("Release package", app_js)
@@ -270,7 +273,7 @@ class BuildPagesSiteTests(unittest.TestCase):
     def test_countermeasure_meaning(self) -> None:
         self.assertEqual(
             pages.countermeasure_meaning("PRESENT"),
-            "Defense is in the current product code.",
+            "Defense is in the product code on main.",
         )
         self.assertEqual(
             pages.countermeasure_meaning("absent"),
