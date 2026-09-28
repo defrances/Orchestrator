@@ -38,10 +38,37 @@ Name the product files, libraries, or host components this patch can touch. Cite
 
 ### Risks
 
-- Required for the app to keep working: `{required_for_app}`
-- If we install: `{install_risk}`
-- If we skip: `{skip_risk}`
-- Compatibility: `{compatibility}`
+Do **not** leave a bare enum (`not_required`, `stays_vulnerable`). Each line is **human label + why + evidence** from files, SBOM, or publish settings you actually read.
+
+| JSON value | Label to print |
+| --- | --- |
+| `required` | Required |
+| `not_required` | Not required |
+| `breaks_app` | App may stop working |
+| `may_break_app` | App may break |
+| `compatible` | Compatible with the app |
+| `app_will_fail` | App will fail |
+| `stays_vulnerable` | Station stays exposed |
+| `no_app_impact` | No effect on the app |
+| `incompatible` | Not compatible |
+| `unknown` | Unknown |
+
+Shape:
+
+- **Required for the app to keep working: {label}.** {why with cited file/SBOM/publish fact}
+- **If we install: {label}.** {why}
+- **If we skip: {label}.** {why}
+- **Compatibility: {label}.** {why}
+
+Why rules:
+
+- `not_required`: say the UVCS configuration 1 exe still starts without this KB, and why (no matching `PackageReference`, self-contained publish, or the patched library is not loaded).
+- `required`: name the loader file that cannot run without this vendor package.
+- `stays_vulnerable`: host path stays exposed; the app can still run. Name the host component and the product file that uses it.
+- `no_app_impact`: skipping does not change the product process. Say why (usually bundled runtime / no loader).
+- `compatible` (install or compatibility): current `main` already runs with today's host bits; installing does not replace the exe.
+- `may_break_app` / `breaks_app`: name the WPF/DPI/Shell/reboot path that can change.
+- `unknown`: say what you could not prove. Do not invent a loader.
 
 ### Conclusions
 

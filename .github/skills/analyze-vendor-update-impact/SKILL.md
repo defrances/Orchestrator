@@ -112,14 +112,14 @@ Look for a real library or logic path:
 - BCL / WPF / Win32 / TLS APIs the `.cs` / `.xaml` files call
 - tests that freeze those contracts
 
-Then assign (JSON fields stay these names):
+Then assign (JSON fields stay these names). In the email **Risks** block, never print only the enum. Use the human label from [issue-template.md](issue-template.md) plus a why sentence with a cited file, SBOM row, or publish fact.
 
-| Field | Allowed values | Meaning |
-| --- | --- | --- |
-| `required_for_app` | `required` / `not_required` / `unknown` | `required` only if the app on `main` will fail, refuse to start, or stay on a library version the code cannot run without this vendor package |
-| `install_risk` | `breaks_app` / `may_break_app` / `compatible` / `unknown` | Risk **if the vendor update is installed** on the host |
-| `skip_risk` | `app_will_fail` / `stays_vulnerable` / `no_app_impact` / `unknown` | Risk **if the update is not installed** |
-| `compatibility` | `incompatible` / `compatible` / `unknown` | Does current `main` logic work with the proposed vendor bits? |
+| Field | Allowed values | Meaning | Why the manager must see |
+| --- | --- | --- | --- |
+| `required_for_app` | `required` / `not_required` / `unknown` | `required` only if the app on `main` will fail, refuse to start, or stay on a library version the code cannot run without this vendor package | `not_required`: exe still starts without this KB, and the patched library is not a product `PackageReference` / not loaded. `required`: name the loader file. |
+| `install_risk` | `breaks_app` / `may_break_app` / `compatible` / `unknown` | Risk **if the vendor update is installed** on the host | `compatible`: KB does not replace bits inside the self-contained exe. `may_break_app`: name WPF/DPI/Shell/reboot path. |
+| `skip_risk` | `app_will_fail` / `stays_vulnerable` / `no_app_impact` / `unknown` | Risk **if the update is not installed** | `stays_vulnerable`: host path stays exposed; app can still run. `no_app_impact`: skipping does not change the product process (bundled runtime / no loader). Do not treat those as the same. |
+| `compatibility` | `incompatible` / `compatible` / `unknown` | Does current `main` logic work with the proposed vendor bits? | `compatible`: current `main` already runs against today's host bits; cite the files you read. |
 
 Rules:
 

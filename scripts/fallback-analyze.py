@@ -193,6 +193,119 @@ def risk_fields(key: str) -> dict[str, str]:
     }
 
 
+RISK_VALUE_LABELS = {
+    "required": "Required",
+    "not_required": "Not required",
+    "breaks_app": "App may stop working",
+    "may_break_app": "App may break",
+    "compatible": "Compatible with the app",
+    "app_will_fail": "App will fail",
+    "stays_vulnerable": "Station stays exposed",
+    "no_app_impact": "No effect on the app",
+    "incompatible": "Not compatible",
+    "unknown": "Unknown",
+}
+
+
+def risk_label(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "—"
+    return RISK_VALUE_LABELS.get(text, text.replace("_", " "))
+
+
+def risk_why(key: str, risk: dict[str, str]) -> str:
+    required = risk_label(risk.get("required_for_app"))
+    install = risk_label(risk.get("install_risk"))
+    skip = risk_label(risk.get("skip_risk"))
+    compat = risk_label(risk.get("compatibility"))
+    if key == "os-dotnet":
+        return "\n".join(
+            [
+                f"- **Required for the app to keep working: {required}.** "
+                "The published UVCS configuration 1 exe still starts without this KB. "
+                "`DesktopApplication.csproj` has no third-party `PackageReference` for host .NET, "
+                "and CI publishes `--self-contained true`. An OS .NET KB does not patch the bundled runtime.",
+                f"- **If we install: {install}.** "
+                "Putting the KB on the host does not replace bits inside the self-contained exe.",
+                f"- **If we skip: {skip}.** "
+                "Skipping the OS .NET KB does not change the product process. The exe already ships its own runtime.",
+                f"- **Compatibility: {compat}.** "
+                "Current `main` loads the bundled runtime from publish, not the host .NET Framework / OS .NET KB.",
+            ]
+        )
+    if key == "schannel-tls":
+        return "\n".join(
+            [
+                f"- **Required for the app to keep working: {required}.** "
+                "The published UVCS configuration 1 exe still starts without this KB. "
+                "`DesktopApplication.csproj` has no third-party `PackageReference` for the patched library, "
+                "and CI publishes `--self-contained true`. This host KB is not a product runtime patch.",
+                f"- **If we install: {install}.** "
+                "Putting the KB on the host does not replace bits inside the self-contained exe. "
+                "The bulletin HTTPS client still calls host Schannel the same way.",
+                f"- **If we skip: {skip}.** "
+                "Leaving the KB off leaves that host TLS stack unpatched. "
+                "`InsecureVendorBulletinClient` uses host Schannel, so the station path stays exposed even though the app keeps running.",
+                f"- **Compatibility: {compat}.** "
+                "Current `main` already runs against today's host Schannel; "
+                "we did not find an API/ABI break in `InsecureVendorBulletinClient.cs`.",
+            ]
+        )
+    if key == "ntfs-notes":
+        return "\n".join(
+            [
+                f"- **Required for the app to keep working: {required}.** "
+                "The exe still starts without this KB. Notes I/O is product code in `NoteStore.cs`, not a vendor package the process cannot load.",
+                f"- **If we install: {install}.** "
+                "An NTFS host KB does not replace the self-contained exe. `NoteStore` still writes `%AppData%\\DesktopApplication\\notes.txt`.",
+                f"- **If we skip: {skip}.** "
+                "Leaving the KB off leaves host NTFS unpatched near the notes path. The app still runs.",
+                f"- **Compatibility: {compat}.** "
+                "Current `main` already uses today's NTFS via `NoteStore`; we did not find an API break in that file.",
+            ]
+        )
+    if key in {"win32k-wpf", "dwm-wpf"}:
+        return "\n".join(
+            [
+                f"- **Required for the app to keep working: {required}.** "
+                "The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.",
+                f"- **If we install: {install}.** "
+                "A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).",
+                f"- **If we skip: {skip}.** "
+                "Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.",
+                f"- **Compatibility: {compat}.** "
+                "We did not prove an API/ABI break against current `main`; windowing/DPI after the KB is not covered by a UI test.",
+            ]
+        )
+    if key == "shell-launch":
+        return "\n".join(
+            [
+                f"- **Required for the app to keep working: {required}.** "
+                "The published WinExe still exists without this KB. Shell identity is a host path, not a product library load.",
+                f"- **If we install: {install}.** "
+                "A host Shell KB can change how `OutputType=WinExe` and `app.manifest` assembly identity launch.",
+                f"- **If we skip: {skip}.** "
+                "Leaving the KB off leaves host Shell unpatched. The app file is unchanged.",
+                f"- **Compatibility: {compat}.** "
+                "We did not prove launch will fail on current `main`; there is no UI/launch automation test.",
+            ]
+        )
+    return "\n".join(
+        [
+            f"- **Required for the app to keep working: {required}.** "
+            "The published UVCS configuration 1 exe still starts without this KB. "
+            "No matching product `PackageReference` was found for the patched library.",
+            f"- **If we install: {install}.** "
+            "We did not prove the self-contained exe would change if this host KB is installed.",
+            f"- **If we skip: {skip}.** "
+            "Skipping this KB does not change the product process unless a cited file loads the patched component.",
+            f"- **Compatibility: {compat}.** "
+            "We did not prove an API/ABI break in the files we read on `main`.",
+        ]
+    )
+
+
 def short_risk(key: str) -> str:
     return {
         "schannel-tls": "Schannel TLS path has no defense in depth",
@@ -426,10 +539,7 @@ def issue_body(
 
 ### Risks
 
-- Required for the app to keep working: `{risk["required_for_app"]}`
-- If we install: `{risk["install_risk"]}`
-- If we skip: `{risk["skip_risk"]}`
-- Compatibility: `{risk["compatibility"]}`
+{risk_why(key, risk)}
 
 ### Conclusions
 

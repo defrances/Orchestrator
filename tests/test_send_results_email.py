@@ -398,6 +398,12 @@ class FallbackLinkTests(unittest.TestCase):
         self.assertIn("UVCS configuration 1", body)
         self.assertIn("https://github.com/defrances/DesktopApplication - commit `abc`", body)
         self.assertIn("TC-REG-TLS-CALLBACK", body)
+        self.assertIn("**Required for the app to keep working: Not required.**", body)
+        self.assertIn("**If we skip: Station stays exposed.**", body)
+        self.assertIn("self-contained", body)
+        self.assertIn("InsecureVendorBulletinClient", body)
+        self.assertNotIn("`not_required`", body)
+        self.assertNotIn("- Required for the app to keep working: `not_required`", body)
 
 
 if __name__ == "__main__":
