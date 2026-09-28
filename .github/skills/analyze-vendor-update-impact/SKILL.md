@@ -112,7 +112,7 @@ Look for a real library or logic path:
 - BCL / WPF / Win32 / TLS APIs the `.cs` / `.xaml` files call
 - tests that freeze those contracts
 
-Then assign (JSON fields stay these names). In the email **Risks** block, never print only the enum. Use the human label from [issue-template.md](issue-template.md) plus a why sentence with a cited file, SBOM row, or publish fact.
+Then assign (JSON fields stay these names). In the email **Potential Risks** block, never print only the enum. Use the human label from [issue-template.md](issue-template.md) plus a why sentence with a cited file, SBOM row, or publish fact.
 
 | Field | Allowed values | Meaning | Why the manager must see |
 | --- | --- | --- | --- |

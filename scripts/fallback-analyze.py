@@ -444,37 +444,41 @@ def product_risk_text(key: str) -> str:
 
 
 def test_planning_text(key: str) -> str:
-    preface = "\n".join(
+    if key == "schannel-tls":
+        suite = [
+            "- `TC-UNIT-TLS-MARKER`",
+            "- `TC-REG-TLS-CALLBACK`",
+        ]
+        gaps = ["- No UI automation for the bulletin button."]
+    elif key == "ntfs-notes":
+        suite = [
+            "- `TC-UNIT-NOTES-EMPTY`",
+            "- `TC-UNIT-NOTES-PATH`",
+            "- `TC-SMOKE-NOTES`",
+        ]
+        gaps = ["- No host-NTFS integration test."]
+    elif key == "os-dotnet":
+        suite = ["- `TC-SMOKE-SYSINFO`"]
+        gaps = [
+            "- No test that the bundled runtime is independent of an OS .NET KB.",
+        ]
+    else:
+        suite = ["- None. No documented test covers this coupling."]
+        gaps = [
+            "- No Unit, Smoke, or Regression case in `docs/test-plan.md` for this host path.",
+            "- No UI automation.",
+        ]
+    return "\n".join(
         [
-            "This section:",
-            "- Analyzes the technical and risk impact from the previous sections",
-            "- Defines the regression scope and maps impact onto existing Unit, Smoke, and Regression tests in `docs/test-plan.md`",
-            "- Identifies coverage gaps and the additional cases needed to close them",
-            "- Produces the test recommendation aligned to the quarterly release cadence",
+            "### Recommended Regression Suite",
             "",
+            *suite,
+            "",
+            "### Gap Analysis",
+            "",
+            *gaps,
         ]
     )
-    if key == "schannel-tls":
-        tests = (
-            "Run `TC-UNIT-TLS-MARKER` and `TC-REG-TLS-CALLBACK`. "
-            "There is no UI automation for the bulletin button; that remains a coverage gap."
-        )
-    elif key == "ntfs-notes":
-        tests = (
-            "Run `TC-UNIT-NOTES-EMPTY`, `TC-UNIT-NOTES-PATH`, and `TC-SMOKE-NOTES`. "
-            "There is no host-NTFS integration test; that remains a coverage gap."
-        )
-    elif key == "os-dotnet":
-        tests = (
-            "`TC-SMOKE-SYSINFO` only reads runtime strings. "
-            "There is no test that the bundled runtime is independent of an OS .NET KB; that is a testing gap."
-        )
-    else:
-        tests = (
-            "No Unit, Smoke, or Regression case in `docs/test-plan.md` covers this host coupling. "
-            "That is a testing gap. Do not invent UI or clinical protocol tests."
-        )
-    return preface + tests
 
 
 def recommendation_text(key: str, members: list[dict[str, object]]) -> str:
@@ -533,11 +537,11 @@ def issue_body(
 
 ## Technical Impact Assessment
 
-### Components
+### Impacted Components
 
 {evidence}
 
-### Risks
+### Potential Risks
 
 {risk_why(key, risk)}
 
@@ -553,7 +557,7 @@ def issue_body(
 
 {product_risk_text(key)}
 
-## TEST PLANNING & COVERAGE ANALYSIS
+## Test Planning
 
 {test_planning_text(key)}
 

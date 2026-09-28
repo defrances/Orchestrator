@@ -32,11 +32,11 @@ Do not put synthetic station ids in the subject. If several lab stations share t
 
 ## Technical Impact Assessment
 
-### Components
+### Impacted Components
 
 Name the product files, libraries, or host components this patch can touch. Cite paths you actually read on `main`. If the product does not load the patched component, say so.
 
-### Risks
+### Potential Risks
 
 Do **not** leave a bare enum (`not_required`, `stays_vulnerable`). Each line is **human label + why + evidence** from files, SBOM, or publish settings you actually read.
 
@@ -95,16 +95,17 @@ A SBOM row alone is not enough. Name the file or module, or state that none exis
 - Potential hazards, if any; write `None identified for this product configuration` when the patched component is not loaded
 - Failure scenarios for install vs skip
 
-## TEST PLANNING & COVERAGE ANALYSIS
+## Test Planning
 
-This section:
+Map impact onto `docs/test-plan.md`. Do not invent UI or clinical protocol tests that are not in that file.
 
-- Analyzes the technical and risk impact from the previous sections
-- Defines the regression scope and maps impact onto existing Unit, Smoke, and Regression tests in `docs/test-plan.md`
-- Identifies coverage gaps and the additional cases needed to close them
-- Produces the test recommendation aligned to the quarterly release cadence
+### Recommended Regression Suite
 
-Recommend the existing `TC-*` ids that should be run. If no automated or documented test covers the coupling, state the gap. Do not invent UI or clinical protocol tests that are not in `docs/test-plan.md`.
+- `{TC-id}` — one existing test per line. If none map, write `None. No documented test covers this coupling.`
+
+### Gap Analysis
+
+- Coverage gaps (for example no UI automation). If there is no gap, write `None identified.`
 
 ## Recommendation
 

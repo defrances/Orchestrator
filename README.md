@@ -64,7 +64,7 @@ Subject: `[Impact] {patch name} on UVCS configuration 1 - {description}`. Patch 
 | One status mail | No clusters |
 | One Windows patch bundle mail | After the bundle README exists |
 
-Body sections: source-code versions (product repos + commit), updates applicable for this product configuration (`Title`, `Package`, `CVEs`, `Recommendation`), product configuration specification, technical impact assessment, cybersecurity impact assessment, product risk assessment, test planning and coverage analysis, recommendation.
+Body sections: source-code versions (product repos + commit), updates applicable for this product configuration (`Title`, `Package`, `CVEs`, `Recommendation`), product configuration specification, technical impact assessment (impacted components, potential risks), cybersecurity impact assessment, product risk assessment, test planning (recommended regression suite, gap analysis), recommendation.
 
 Recommendation display (FindUpdates `action` is unchanged in JSON):
 
