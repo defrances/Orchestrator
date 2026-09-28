@@ -153,16 +153,19 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("Desktop Application SHA", app_js)
             self.assertIn("function glance", app_js)
             self.assertIn("90 days", app_js)
-            self.assertIn("function trendRow", app_js)
-            self.assertIn("function trendCaption", app_js)
-            self.assertIn("Still-open findings", app_js)
-            self.assertIn("Counts did not change", app_js)
+            self.assertIn("function configBars", app_js)
+            self.assertIn("function configUpdateCounts", app_js)
+            self.assertIn("can ignore", app_js)
+            self.assertIn("Configurations", app_js)
+            self.assertNotIn("<h3>Countermeasures</h3>", app_js)
+            self.assertNotIn("<h2>Countermeasures</h2>", app_js)
+            self.assertNotIn("<h3>Host KB</h3>", app_js)
+            self.assertNotIn("<h3>Skip or install</h3>", app_js)
+            self.assertNotIn("Still-open findings", app_js)
             self.assertNotIn("test failed", app_js)
             self.assertNotIn("key: \"failed\"", app_js)
             self.assertIn("function scoreList", app_js)
             self.assertIn("Required for app", app_js)
-            self.assertIn("Skip: still exposed", app_js)
-            self.assertIn("stay exposed if we skip the KB", app_js)
             self.assertIn("function infoTip", app_js)
             self.assertIn("function formatAiUsage", app_js)
             self.assertNotIn("model tokens", app_js)
@@ -172,11 +175,11 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("info-slot", app_js)
             self.assertIn("function realClusters", app_js)
             self.assertIn("info-mark", app_js)
-            self.assertIn("station stays exposed on that host path", app_js)
+            self.assertIn("configuration stays exposed on that host path", app_js)
             self.assertNotIn("required_for_app ", app_js)
-            self.assertIn("function countermeasureMeaning", app_js)
-            self.assertIn("Defense is in the product code on main.", app_js)
-            self.assertIn("No defense found. This finding is still open.", app_js)
+            self.assertNotIn("function countermeasureMeaning", app_js)
+            self.assertNotIn("Defense is in the product code on main.", app_js)
+            self.assertNotIn("No defense found. This finding is still open.", app_js)
             self.assertNotIn("Test gate", app_js)
             self.assertNotIn("Release package", app_js)
             self.assertNotIn("exe is not offered here", app_js)
@@ -184,6 +187,9 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertNotIn('["Workflow"', app_js)
             self.assertIn("function applyStationFilter", app_js)
             self.assertIn("id=\"station-filter\"", app_js)
+            self.assertIn("Type a configuration name", app_js)
+            html_banner = html
+            self.assertIn("Configurations are synthetic lab fixtures", html_banner)
             data_js = (out2 / "assets" / "data.js").read_text(encoding="utf-8")
             self.assertIn('"10"', data_js)
             self.assertIn('"9"', data_js)
@@ -258,44 +264,32 @@ class BuildPagesSiteTests(unittest.TestCase):
         )
         self.assertEqual(risks["stays_vulnerable"], 1)
         self.assertEqual(risks["may_break_app"], 1)
-        points = pages.trend_points(
+        configs = pages.config_update_counts(
             [
-                {
-                    "run_id": "2",
-                    "created_at": "2026-09-24T00:00:00Z",
-                    "findings": findings,
-                    "bundle": {"packages": packages},
-                },
-                {
-                    "run_id": "1",
-                    "created_at": "2026-09-23T00:00:00Z",
-                    "findings": [{"countermeasure": "absent"}],
-                    "bundle": {"packages": []},
-                },
+                {"kb": "KB1", "include_in_deploy": True, "stations": ["CFG-A", "CFG-B"]},
+                {"kb": "KB2", "include_in_deploy": False, "stations": ["CFG-A"]},
+                {"kb": "KB1", "include_in_deploy": True, "stations": ["CFG-A"]},
             ]
         )
-        self.assertEqual([row["run_id"] for row in points], ["1", "2"])
-        self.assertEqual(points[0]["absent"], 1)
-        self.assertNotIn("failed", points[0])
-        self.assertEqual(points[1]["deploy"], 2)
+        by_name = {item["name"]: item for item in configs}
+        self.assertEqual(by_name["CFG-A"]["recommended"], 1)
+        self.assertEqual(by_name["CFG-A"]["ignored"], 1)
+        self.assertEqual(by_name["CFG-B"]["recommended"], 1)
+        self.assertEqual(by_name["CFG-B"]["ignored"], 0)
+        caption = pages.config_chart_caption(configs, run_id="9", history_n=3)
+        self.assertIn("This run (9)", caption)
+        self.assertIn("recommended", caption)
+        self.assertIn("can ignore", caption)
+        self.assertIn("2 configurations", caption)
+        self.assertIn("3 runs in the last 90 days", caption)
 
-    def test_trend_labels_use_time_when_runs_share_one_day(self) -> None:
-        same_day = [
-            {"run_id": "1", "created_at": "2026-09-25T18:01:00Z", "absent": 1, "deploy": 20},
-            {"run_id": "2", "created_at": "2026-09-25T18:40:00Z", "absent": 1, "deploy": 20},
-        ]
-        self.assertEqual(pages.trend_x_labels(same_day), ["18:01", "18:40"])
-        self.assertTrue(pages.trend_is_flat(same_day, "deploy"))
-        caption = pages.trend_caption(same_day, selected_id="2")
-        self.assertIn("This run: 1 still open · 20 KB for lab check.", caption)
-        self.assertIn("Axis shows run time", caption)
-        self.assertIn("Counts did not change.", caption)
-        mixed = [
-            {"run_id": "1", "created_at": "2026-09-23T10:00:00Z", "absent": 2, "deploy": 4},
-            {"run_id": "2", "created_at": "2026-09-25T18:40:00Z", "absent": 1, "deploy": 20},
-        ]
-        self.assertEqual(pages.trend_x_labels(mixed), ["23 Sep", "25 Sep"])
-        self.assertNotIn("Counts did not change.", pages.trend_caption(mixed, selected_id="2"))
+    def test_config_chart_caption_grows_with_history(self) -> None:
+        rows = [{"name": "CFG-A", "recommended": 2, "ignored": 1}]
+        short = pages.config_chart_caption(rows, run_id="1", history_n=1)
+        self.assertIn("History will grow with later runs.", short)
+        long = pages.config_chart_caption(rows, run_id="2", history_n=4)
+        self.assertIn("4 runs in the last 90 days", long)
+        self.assertNotIn("still open", long)
 
     def test_ai_usage_line(self) -> None:
         self.assertEqual(
@@ -355,12 +349,12 @@ class BuildPagesSiteTests(unittest.TestCase):
             [
                 ("Required for app", "Not required"),
                 ("If we install", "Compatible with the app"),
-                ("If we skip", "Station stays exposed"),
+                ("If we skip", "Configuration stays exposed"),
                 ("Compatibility", "Compatible with the app"),
             ],
         )
         self.assertEqual(pages.chart_risk_label("stays_vulnerable"), "Skip: still exposed")
-        self.assertIn("station stays exposed", pages.RISK_HINTS["stays_vulnerable"])
+        self.assertIn("configuration stays exposed", pages.RISK_HINTS["stays_vulnerable"])
         self.assertIn(
             "6 stay exposed if we skip the KB",
             pages.risk_chart_caption({"stays_vulnerable": 6, "may_break_app": 0, "no_app_impact": 2, "compatible": 0}),

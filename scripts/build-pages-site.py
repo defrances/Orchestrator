@@ -124,7 +124,7 @@ SCORE_VALUE_LABELS = {
     "may_break_app": "App may break",
     "compatible": "Compatible with the app",
     "app_will_fail": "App will fail",
-    "stays_vulnerable": "Station stays exposed",
+    "stays_vulnerable": "Configuration stays exposed",
     "no_app_impact": "No effect on the app",
     "incompatible": "Not compatible",
 }
@@ -137,7 +137,7 @@ CHART_RISK_LABELS = {
 }
 
 RISK_HINTS = {
-    "stays_vulnerable": "If we do not install this KB, the station stays exposed on that host path.",
+    "stays_vulnerable": "If we do not install this KB, the configuration stays exposed on that host path.",
     "may_break_app": "If we install this KB, the app on main may break.",
     "no_app_impact": "If we skip this KB, the app on main does not change.",
     "compatible": "If we install this KB, the app on main should still run.",
@@ -145,8 +145,8 @@ RISK_HINTS = {
 
 SCORE_FIELD_HINTS = {
     "required_for_app": "Does the product on main need this KB to keep working?",
-    "install_risk": "What happens to the app if we put the KB on the station?",
-    "skip_risk": "What happens if we leave the KB off the station?",
+    "install_risk": "What happens to the app if we put the KB on the configuration?",
+    "skip_risk": "What happens if we leave the KB off the configuration?",
     "compatibility": "Does current main work with these vendor bits?",
 }
 
@@ -431,8 +431,49 @@ def bundle_summary(bundle: dict[str, object] | None, *, run_id: str = "") -> str
         f"{run} host Windows update pack{date}. "
         f"{counted['deploy']} for lab check. "
         f"{counted['hold']} held — do not install. "
-        f"Covers {station_count(bundle)} stations."
+        f"Covers {station_count(bundle)} configurations."
     )
+
+
+def config_update_counts(packages: list[dict[str, object]] | None) -> list[dict[str, object]]:
+    recommended: dict[str, set[str]] = {}
+    ignored: dict[str, set[str]] = {}
+    for index, item in enumerate(packages or []):
+        if not isinstance(item, dict):
+            continue
+        kb = str(item.get("kb") or f"row-{index}")
+        names = [str(name).strip() for name in (item.get("stations") or []) if str(name).strip()]
+        bucket = recommended if item.get("include_in_deploy") else ignored
+        for name in names:
+            bucket.setdefault(name, set()).add(kb)
+    names = sorted(set(recommended) | set(ignored))
+    return [
+        {
+            "name": name,
+            "recommended": len(recommended.get(name, set())),
+            "ignored": len(ignored.get(name, set())),
+        }
+        for name in names
+    ]
+
+
+def config_chart_caption(
+    rows: list[dict[str, object]] | None,
+    *,
+    run_id: str = "",
+    history_n: int = 0,
+) -> str:
+    items = list(rows or [])
+    recommended = sum(int(item.get("recommended") or 0) for item in items)
+    ignored = sum(int(item.get("ignored") or 0) for item in items)
+    run = f"This run ({run_id})" if run_id else "This run"
+    line = (
+        f"{run}: {recommended} recommended · {ignored} can ignore "
+        f"across {len(items)} configurations."
+    )
+    if history_n < 2:
+        return line + " History will grow with later runs."
+    return line + f" {history_n} runs in the last 90 days."
 
 
 _MONTHS = (
@@ -847,7 +888,7 @@ INDEX_HTML = """<!DOCTYPE html>
   <header>
     <p class="kicker">Orchestrator · Desktop Application</p>
     <h1>Vendor impact and PDLC</h1>
-    <p class="banner">Advisory only. Not an authorization to install, approve, or deploy. HOLD and BLOCK stay. Stations are synthetic lab fixtures.</p>
+    <p class="banner">Advisory only. Not an authorization to install, approve, or deploy. HOLD and BLOCK stay. Configurations are synthetic lab fixtures.</p>
     <label class="history">
       History (90 days)
       <select id="run-select"></select>
@@ -1061,7 +1102,7 @@ APP_JS = r"""(function () {
     var cap = document.getElementById("station-filter-cap");
     if (cap) {
       cap.textContent = needle
-        ? shown + " of " + rows.length + " KBs match this station"
+        ? shown + " of " + rows.length + " KBs match this configuration"
         : "";
     }
   }
@@ -1295,17 +1336,6 @@ APP_JS = r"""(function () {
     return match ? match[1] + "-" + match[2] + "-" + match[3] : "";
   }
 
-  var COUNTERMEASURE_MEANING = {
-    present: "Defense is in the product code on main.",
-    absent: "No defense found. This finding is still open.",
-    partial: "Some defense exists, but it is not complete."
-  };
-
-  function countermeasureMeaning(status) {
-    var key = String(status || "").trim().toLowerCase();
-    return COUNTERMEASURE_MEANING[key] || "Status is not present, absent, or partial.";
-  }
-
   var SCORE_VALUE_LABELS = {
     required: "Required",
     not_required: "Not required",
@@ -1313,7 +1343,7 @@ APP_JS = r"""(function () {
     may_break_app: "App may break",
     compatible: "Compatible with the app",
     app_will_fail: "App will fail",
-    stays_vulnerable: "Station stays exposed",
+    stays_vulnerable: "Configuration stays exposed",
     no_app_impact: "No effect on the app",
     incompatible: "Not compatible"
   };
@@ -1324,15 +1354,15 @@ APP_JS = r"""(function () {
     compatible: "Install: compatible"
   };
   var RISK_HINTS = {
-    stays_vulnerable: "If we do not install this KB, the station stays exposed on that host path.",
+    stays_vulnerable: "If we do not install this KB, the configuration stays exposed on that host path.",
     may_break_app: "If we install this KB, the app on main may break.",
     no_app_impact: "If we skip this KB, the app on main does not change.",
     compatible: "If we install this KB, the app on main should still run."
   };
   var SCORE_FIELD_HINTS = {
     required_for_app: "Does the product on main need this KB to keep working?",
-    install_risk: "What happens to the app if we put the KB on the station?",
-    skip_risk: "What happens if we leave the KB off the station?",
+    install_risk: "What happens to the app if we put the KB on the configuration?",
+    skip_risk: "What happens if we leave the KB off the configuration?",
     compatibility: "Does current main work with these vendor bits?"
   };
 
@@ -1411,7 +1441,7 @@ APP_JS = r"""(function () {
     var runBit = run && run.run_id ? "This run (" + run.run_id + ")" : "This run";
     return runBit + " host Windows update pack" + (when ? " from " + when : "") +
       ". " + counted.deploy + " for lab check. " + counted.hold +
-      " held — do not install. Covers " + stationCount(bundle) + " stations.";
+      " held — do not install. Covers " + stationCount(bundle) + " configurations.";
   }
 
   function realClusters(run) {
@@ -1420,57 +1450,105 @@ APP_JS = r"""(function () {
     });
   }
 
-  function glance(run) {
-    var findings = countFindings(run.findings || []);
-    var packages = countPackages(((run.bundle || {}).packages) || []);
-    var risks = countRisks(realClusters(run));
-    var points = trendPoints(allSnapshots());
-    var parts = ['<section class="charts">'];
-    parts.push('<article class="chart-card"><h3>Countermeasures</h3>');
-    parts.push(labeledBars([
-      { label: "present", value: findings.present, color: "#111111", hint: COUNTERMEASURE_MEANING.present },
-      { label: "partial", value: findings.partial, color: "#4d4d4d", hint: COUNTERMEASURE_MEANING.partial },
-      { label: "absent", value: findings.absent, color: "#CC0000", hint: COUNTERMEASURE_MEANING.absent }
-    ]));
-    parts.push('<p class="chart-cap">' + findings.absent + " absent of " + findings.total + " findings</p></article>");
-    parts.push('<article class="chart-card"><h3>Host KB</h3>');
-    parts.push(stackedBars([
-      {
-        label: "deploy",
-        parts: [
-          { value: packages.deploy_other, color: "#d9dee7" },
-          { value: packages.deploy_high, color: "#4d4d4d" },
-          { value: packages.deploy_critical, color: "#CC0000" }
-        ]
-      },
-      {
-        label: "hold",
-        parts: [
-          { value: packages.hold_other, color: "#d9dee7" },
-          { value: packages.hold_high, color: "#4d4d4d" },
-          { value: packages.hold_critical, color: "#CC0000" }
-        ]
+  function configUpdateCounts(packages) {
+    var recommended = {};
+    var ignored = {};
+    (packages || []).forEach(function (item, index) {
+      var kb = String(item.kb || ("row-" + index));
+      var names = item.stations || [];
+      var bucket = item.include_in_deploy ? recommended : ignored;
+      names.forEach(function (raw) {
+        var name = String(raw || "").trim();
+        if (!name) return;
+        if (!bucket[name]) bucket[name] = {};
+        bucket[name][kb] = 1;
+      });
+    });
+    var names = Object.keys(recommended).concat(Object.keys(ignored)).filter(function (name, i, all) {
+      return all.indexOf(name) === i;
+    }).sort();
+    return names.map(function (name) {
+      return {
+        name: name,
+        recommended: Object.keys(recommended[name] || {}).length,
+        ignored: Object.keys(ignored[name] || {}).length
+      };
+    });
+  }
+
+  function configLabel(name) {
+    return String(name || "").replace(/^SYNTHETIC-/, "");
+  }
+
+  function configChartCaption(rows, runId, historyN) {
+    var recommended = 0;
+    var ignored = 0;
+    (rows || []).forEach(function (row) {
+      recommended += Number(row.recommended || 0);
+      ignored += Number(row.ignored || 0);
+    });
+    var runBit = runId ? "This run (" + runId + ")" : "This run";
+    var line = runBit + ": " + recommended + " recommended · " + ignored +
+      " can ignore across " + (rows || []).length + " configurations.";
+    if (!historyN || historyN < 2) return line + " History will grow with later runs.";
+    return line + " " + historyN + " runs in the last 90 days.";
+  }
+
+  function configBars(rows) {
+    var list = rows || [];
+    if (!list.length) {
+      return '<p class="empty">No configuration counts on this run.</p>';
+    }
+    var n = list.length;
+    var w = Math.max(640, n * 90);
+    var h = 220;
+    var padL = 36;
+    var padR = 16;
+    var padT = 24;
+    var padB = 56;
+    var innerW = w - padL - padR;
+    var innerH = h - padT - padB;
+    var groupW = innerW / n;
+    var max = 1;
+    list.forEach(function (row) {
+      if (row.recommended > max) max = row.recommended;
+      if (row.ignored > max) max = row.ignored;
+    });
+    var barW = Math.min(18, groupW / 2 - 6);
+    var svg = '<svg viewBox="0 0 ' + w + " " + h + '" class="chart">';
+    svg += '<text x="0" y="' + (padT + 4) + '" class="chart-lab">' + max + "</text>";
+    svg += '<text x="0" y="' + (padT + innerH + 4) + '" class="chart-lab">0</text>';
+    list.forEach(function (row, i) {
+      var cx = padL + i * groupW + groupW / 2;
+      var recH = row.recommended / max * innerH;
+      var ignH = row.ignored / max * innerH;
+      var recX = cx - barW - 2;
+      var ignX = cx + 2;
+      if (recH > 0) {
+        svg += '<rect x="' + recX + '" y="' + (padT + innerH - recH) + '" width="' + barW +
+          '" height="' + recH + '" fill="#111111"/>';
       }
-    ]));
-    parts.push('<p class="chart-cap">' + packages.deploy + " for lab check · " + packages.hold +
-      " held · " + packages.deploy_critical + " critical in the lab set</p>");
-    parts.push('<p class="chart-legend">Red critical · gray high · light other</p></article>');
-    parts.push('<article class="chart-card"><h3>Skip or install</h3>');
-    parts.push(labeledBars([
-      { label: chartRiskLabel("stays_vulnerable"), value: risks.stays_vulnerable, color: "#CC0000", hint: RISK_HINTS.stays_vulnerable },
-      { label: chartRiskLabel("may_break_app"), value: risks.may_break_app, color: "#4d4d4d", hint: RISK_HINTS.may_break_app },
-      { label: chartRiskLabel("no_app_impact"), value: risks.no_app_impact, color: "#111111", hint: RISK_HINTS.no_app_impact },
-      { label: chartRiskLabel("compatible"), value: risks.compatible, color: "#111111", hint: RISK_HINTS.compatible }
-    ]));
-    parts.push('<p class="chart-cap">' + esc(riskChartCaption(risks)) + "</p>");
-    parts.push('<p class="chart-legend">Skip = do not put the KB on. Install = put the KB on.</p></article>');
-    parts.push("</section>");
-    parts.push('<section class="chart-wide"><h3>90 days</h3>');
-    parts.push('<p class="chart-cap">' + esc(trendCaption(points, run.run_id)) + "</p>");
-    parts.push('<p class="chart-legend">Still-open findings</p>');
-    parts.push(trendRow(points, run.run_id, "absent", "#CC0000"));
-    parts.push('<p class="chart-legend">KB for lab check</p>');
-    parts.push(trendRow(points, run.run_id, "deploy", "#111111"));
+      if (ignH > 0) {
+        svg += '<rect x="' + ignX + '" y="' + (padT + innerH - ignH) + '" width="' + barW +
+          '" height="' + ignH + '" fill="#4d4d4d"/>';
+      }
+      svg += '<text x="' + (recX + barW / 2) + '" y="' + (padT + innerH - recH - 4) +
+        '" text-anchor="middle" class="chart-n">' + row.recommended + "</text>";
+      svg += '<text x="' + (ignX + barW / 2) + '" y="' + (padT + innerH - ignH - 4) +
+        '" text-anchor="middle" class="chart-n">' + row.ignored + "</text>";
+      svg += '<text x="' + cx + '" y="' + (h - 20) + '" text-anchor="middle" class="chart-lab">' +
+        esc(configLabel(row.name)) + "</text>";
+    });
+    return svg + "</svg>";
+  }
+
+  function glance(run) {
+    var rows = configUpdateCounts(((run.bundle || {}).packages) || []);
+    var historyN = allSnapshots().length;
+    var parts = ['<section class="chart-wide"><h3>90 days</h3>'];
+    parts.push('<p class="chart-cap">' + esc(configChartCaption(rows, run.run_id, historyN)) + "</p>");
+    parts.push('<p class="chart-legend">Black recommended · gray can ignore</p>');
+    parts.push(configBars(rows));
     parts.push("</section>");
     return parts.join("");
   }
@@ -1506,7 +1584,6 @@ APP_JS = r"""(function () {
       return;
     }
     var bundle = run.bundle || null;
-    var findings = run.findings || [];
     var clusters = realClusters(run);
     var parts = [];
     parts.push('<section class="meta">');
@@ -1548,30 +1625,6 @@ APP_JS = r"""(function () {
       parts.push("</div>");
     }
 
-    parts.push("<h2>Countermeasures</h2>");
-    if (!findings.length) {
-      parts.push('<p class="empty">No PDLC analysis.json on this run.</p>');
-    } else {
-      parts.push('<p class="chart-cap">PRESENT: defense is in the product code on main. ABSENT: no defense found. PARTIAL: incomplete defense.</p>');
-      parts.push('<div class="cards">');
-      findings.forEach(function (item) {
-        parts.push(
-          '<article class="card"><h3>' +
-            esc(item.id) +
-            " — " +
-            esc(item.title) +
-            '</h3><span class="tag ' +
-            esc(item.countermeasure) +
-            '">' +
-            esc(item.countermeasure) +
-            '</span><p class="meaning">' +
-            esc(countermeasureMeaning(item.countermeasure)) +
-            "</p></article>"
-        );
-      });
-      parts.push("</div>");
-    }
-
     parts.push("<h2>Patch package</h2>");
     if (!bundle) {
       parts.push('<p class="empty">No Windows patch bundle on this run.</p>');
@@ -1580,14 +1633,14 @@ APP_JS = r"""(function () {
       if (bundle.bundle_id) {
         parts.push('<p class="chart-cap">Pack id ' + esc(bundle.bundle_id) + "</p>");
       }
-      parts.push('<label class="station-filter"><span>Stations</span>');
-      parts.push('<input id="station-filter" type="search" placeholder="Type a station name" autocomplete="off"></label>');
+      parts.push('<label class="station-filter"><span>Configurations</span>');
+      parts.push('<input id="station-filter" type="search" placeholder="Type a configuration name" autocomplete="off"></label>');
       parts.push('<p id="station-filter-cap" class="chart-cap"></p>');
       parts.push('<div class="table-wrap"><table><thead><tr>');
       parts.push('<th class="' + sortClass("kb") + '" data-sort="kb">KB</th>');
       parts.push('<th class="' + sortClass("severity") + '" data-sort="severity">Severity</th>');
       parts.push('<th class="' + sortClass("deploy") + '" data-sort="deploy">Deploy</th>');
-      parts.push('<th class="' + sortClass("stations") + '" data-sort="stations">Stations</th>');
+      parts.push('<th class="' + sortClass("stations") + '" data-sort="stations">Configurations</th>');
       parts.push("<th>Official</th></tr></thead><tbody>");
       sortedPackages(bundle.packages).forEach(function (pkg) {
         var stations = (pkg.stations || []).join(", ");
@@ -1607,7 +1660,7 @@ APP_JS = r"""(function () {
             "</td></tr>"
         );
       });
-      parts.push('<tr id="station-filter-empty" hidden><td colspan="5">No KBs for this station.</td></tr>');
+      parts.push('<tr id="station-filter-empty" hidden><td colspan="5">No KBs for this configuration.</td></tr>');
       parts.push("</tbody></table></div>");
     }
 
