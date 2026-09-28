@@ -191,6 +191,9 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("function applyStationFilter", app_js)
             self.assertIn("id=\"station-filter\"", app_js)
             self.assertIn("Type a configuration name", app_js)
+            self.assertIn("function configNameMap", app_js)
+            self.assertIn('"Configurations"', app_js)
+            self.assertNotIn(".replace(/^SYNTHETIC-/", app_js)
             html_banner = html
             self.assertIn("Configurations are synthetic lab fixtures", html_banner)
             data_js = (out2 / "assets" / "data.js").read_text(encoding="utf-8")
@@ -285,6 +288,12 @@ class BuildPagesSiteTests(unittest.TestCase):
         self.assertIn("2 recommended to install", caption)
         self.assertIn("2 configurations", caption)
         self.assertIn("3 runs in the last 90 days", caption)
+        labels = pages.config_display_names(
+            ["SYNTHETIC-W11-24H2-01", "SYNTHETIC-CT-IMG-01", "SYNTHETIC-LAB-24H2-01"]
+        )
+        self.assertEqual(labels["SYNTHETIC-CT-IMG-01"], "Configurations1")
+        self.assertEqual(labels["SYNTHETIC-LAB-24H2-01"], "Configurations2")
+        self.assertEqual(labels["SYNTHETIC-W11-24H2-01"], "Configurations3")
 
     def test_config_chart_caption_grows_with_history(self) -> None:
         rows = [{"name": "CFG-A", "recommended": 2, "ignored": 1}]

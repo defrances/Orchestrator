@@ -435,6 +435,11 @@ def bundle_summary(bundle: dict[str, object] | None, *, run_id: str = "") -> str
     )
 
 
+def config_display_names(names: list[str] | None) -> dict[str, str]:
+    unique = sorted({str(name).strip() for name in (names or []) if str(name).strip()})
+    return {name: f"Configurations{index}" for index, name in enumerate(unique, start=1)}
+
+
 def config_update_counts(packages: list[dict[str, object]] | None) -> list[dict[str, object]]:
     recommended: dict[str, set[str]] = {}
     ignored: dict[str, set[str]] = {}
@@ -1070,7 +1075,7 @@ APP_JS = r"""(function () {
       return rank === undefined ? 9 : rank;
     }
     if (key === "deploy") return pkg.include_in_deploy ? 0 : 1;
-    if (key === "stations") return (pkg.stations || []).join(", ").toLowerCase();
+    if (key === "stations") return labeledStations(pkg.stations).toLowerCase();
     return String(pkg[key] || "").toLowerCase();
   }
 
@@ -1078,7 +1083,9 @@ APP_JS = r"""(function () {
     var needle = String(query || "").trim().toLowerCase();
     if (!needle) return true;
     return (pkg.stations || []).some(function (id) {
-      return String(id).toLowerCase().indexOf(needle) !== -1;
+      var raw = String(id || "").toLowerCase();
+      var label = String(configLabel(id) || "").toLowerCase();
+      return raw.indexOf(needle) !== -1 || label.indexOf(needle) !== -1;
     });
   }
 
@@ -1477,8 +1484,30 @@ APP_JS = r"""(function () {
     });
   }
 
+  var pageConfigMap = {};
+
+  function configNameMap(packages) {
+    var seen = {};
+    (packages || []).forEach(function (item) {
+      (item.stations || []).forEach(function (raw) {
+        var name = String(raw || "").trim();
+        if (name) seen[name] = 1;
+      });
+    });
+    var map = {};
+    Object.keys(seen).sort().forEach(function (name, i) {
+      map[name] = "Configurations" + (i + 1);
+    });
+    return map;
+  }
+
   function configLabel(name) {
-    return String(name || "").replace(/^SYNTHETIC-/, "");
+    var key = String(name || "").trim();
+    return pageConfigMap[key] || key;
+  }
+
+  function labeledStations(ids) {
+    return (ids || []).map(function (id) { return configLabel(id); }).join(", ");
   }
 
   function configChartCaption(rows, runId, historyN) {
@@ -1586,6 +1615,7 @@ APP_JS = r"""(function () {
       return;
     }
     var bundle = run.bundle || null;
+    pageConfigMap = configNameMap((bundle && bundle.packages) || []);
     var clusters = realClusters(run);
     var parts = [];
     parts.push('<section class="meta">');
@@ -1618,7 +1648,7 @@ APP_JS = r"""(function () {
             '</h3><p class="sub">' +
             esc(cluster.cluster_key) +
             " · " +
-            esc(cluster.device_id) +
+            esc(configLabel(cluster.device_id)) +
             "</p>" +
             scoreList(cluster) +
             "</article>"
@@ -1645,10 +1675,11 @@ APP_JS = r"""(function () {
       parts.push('<th class="' + sortClass("stations") + '" data-sort="stations">Configurations</th>');
       parts.push("<th>Official</th></tr></thead><tbody>");
       sortedPackages(bundle.packages).forEach(function (pkg) {
-        var stations = (pkg.stations || []).join(", ");
+        var stations = labeledStations(pkg.stations);
+        var hay = stations + " " + (pkg.stations || []).join(" ");
         parts.push(
           '<tr data-stations="' +
-            esc(stations) +
+            esc(hay) +
             '"><td>' +
             esc(pkg.kb) +
             "</td><td>" +
