@@ -436,24 +436,24 @@ def bundle_summary(bundle: dict[str, object] | None, *, run_id: str = "") -> str
 
 
 def config_update_counts(packages: list[dict[str, object]] | None) -> list[dict[str, object]]:
-    applicable: dict[str, set[str]] = {}
     recommended: dict[str, set[str]] = {}
+    ignored: dict[str, set[str]] = {}
     for index, item in enumerate(packages or []):
         if not isinstance(item, dict):
             continue
         kb = str(item.get("kb") or f"row-{index}")
         names = [str(name).strip() for name in (item.get("stations") or []) if str(name).strip()]
+        bucket = recommended if item.get("include_in_deploy") else ignored
         for name in names:
-            applicable.setdefault(name, set()).add(kb)
-            if item.get("include_in_deploy"):
-                recommended.setdefault(name, set()).add(kb)
+            bucket.setdefault(name, set()).add(kb)
+    names = sorted(set(recommended) | set(ignored))
     return [
         {
             "name": name,
-            "applicable": len(applicable[name]),
             "recommended": len(recommended.get(name, set())),
+            "ignored": len(ignored.get(name, set())),
         }
-        for name in sorted(applicable)
+        for name in names
     ]
 
 
@@ -464,11 +464,11 @@ def config_chart_caption(
     history_n: int = 0,
 ) -> str:
     items = list(rows or [])
-    applicable = sum(int(item.get("applicable") or 0) for item in items)
     recommended = sum(int(item.get("recommended") or 0) for item in items)
+    ignored = sum(int(item.get("ignored") or 0) for item in items)
     run = f"This run ({run_id})" if run_id else "This run"
     line = (
-        f"{run}: {applicable} applicable for our platform · "
+        f"{run}: {ignored} applicable for our platform · "
         f"{recommended} recommended to install "
         f"across {len(items)} configurations."
     )
@@ -1452,27 +1452,27 @@ APP_JS = r"""(function () {
   }
 
   function configUpdateCounts(packages) {
-    var applicable = {};
     var recommended = {};
+    var ignored = {};
     (packages || []).forEach(function (item, index) {
       var kb = String(item.kb || ("row-" + index));
       var names = item.stations || [];
+      var bucket = item.include_in_deploy ? recommended : ignored;
       names.forEach(function (raw) {
         var name = String(raw || "").trim();
         if (!name) return;
-        if (!applicable[name]) applicable[name] = {};
-        applicable[name][kb] = 1;
-        if (item.include_in_deploy) {
-          if (!recommended[name]) recommended[name] = {};
-          recommended[name][kb] = 1;
-        }
+        if (!bucket[name]) bucket[name] = {};
+        bucket[name][kb] = 1;
       });
     });
-    return Object.keys(applicable).sort().map(function (name) {
+    var names = Object.keys(recommended).concat(Object.keys(ignored)).filter(function (name, i, all) {
+      return all.indexOf(name) === i;
+    }).sort();
+    return names.map(function (name) {
       return {
         name: name,
-        applicable: Object.keys(applicable[name] || {}).length,
-        recommended: Object.keys(recommended[name] || {}).length
+        recommended: Object.keys(recommended[name] || {}).length,
+        ignored: Object.keys(ignored[name] || {}).length
       };
     });
   }
@@ -1482,14 +1482,14 @@ APP_JS = r"""(function () {
   }
 
   function configChartCaption(rows, runId, historyN) {
-    var applicable = 0;
     var recommended = 0;
+    var ignored = 0;
     (rows || []).forEach(function (row) {
-      applicable += Number(row.applicable || 0);
       recommended += Number(row.recommended || 0);
+      ignored += Number(row.ignored || 0);
     });
     var runBit = runId ? "This run (" + runId + ")" : "This run";
-    var line = runBit + ": " + applicable + " applicable for our platform · " +
+    var line = runBit + ": " + ignored + " applicable for our platform · " +
       recommended + " recommended to install across " + (rows || []).length +
       " configurations.";
     if (!historyN || historyN < 2) return line + " History will grow with later runs.";
@@ -1513,8 +1513,8 @@ APP_JS = r"""(function () {
     var groupW = innerW / n;
     var max = 1;
     list.forEach(function (row) {
-      if (row.applicable > max) max = row.applicable;
       if (row.recommended > max) max = row.recommended;
+      if (row.ignored > max) max = row.ignored;
     });
     var barW = Math.min(18, groupW / 2 - 6);
     var svg = '<svg viewBox="0 0 ' + w + " " + h + '" class="chart">';
@@ -1522,20 +1522,20 @@ APP_JS = r"""(function () {
     svg += '<text x="0" y="' + (padT + innerH + 4) + '" class="chart-lab">0</text>';
     list.forEach(function (row, i) {
       var cx = padL + i * groupW + groupW / 2;
-      var appH = row.applicable / max * innerH;
       var recH = row.recommended / max * innerH;
-      var appX = cx - barW - 2;
+      var ignH = row.ignored / max * innerH;
+      var ignX = cx - barW - 2;
       var recX = cx + 2;
-      if (appH > 0) {
-        svg += '<rect x="' + appX + '" y="' + (padT + innerH - appH) + '" width="' + barW +
-          '" height="' + appH + '" fill="#111111"/>';
+      if (ignH > 0) {
+        svg += '<rect x="' + ignX + '" y="' + (padT + innerH - ignH) + '" width="' + barW +
+          '" height="' + ignH + '" fill="#111111"/>';
       }
       if (recH > 0) {
         svg += '<rect x="' + recX + '" y="' + (padT + innerH - recH) + '" width="' + barW +
           '" height="' + recH + '" fill="#CC0000"/>';
       }
-      svg += '<text x="' + (appX + barW / 2) + '" y="' + (padT + innerH - appH - 4) +
-        '" text-anchor="middle" class="chart-n">' + row.applicable + "</text>";
+      svg += '<text x="' + (ignX + barW / 2) + '" y="' + (padT + innerH - ignH - 4) +
+        '" text-anchor="middle" class="chart-n">' + row.ignored + "</text>";
       svg += '<text x="' + (recX + barW / 2) + '" y="' + (padT + innerH - recH - 4) +
         '" text-anchor="middle" class="chart-n">' + row.recommended + "</text>";
       svg += '<text x="' + cx + '" y="' + (h - 20) + '" text-anchor="middle" class="chart-lab">' +

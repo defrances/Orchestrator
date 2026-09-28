@@ -158,7 +158,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("applicable for our platform", app_js)
             self.assertIn("recommended to install", app_js)
             self.assertIn('fill="#CC0000"', app_js)
-            self.assertNotIn("can ignore", app_js)
+            self.assertIn('fill="#111111"', app_js)
             self.assertIn("Configurations", app_js)
             self.assertNotIn("<h3>Countermeasures</h3>", app_js)
             self.assertNotIn("<h2>Countermeasures</h2>", app_js)
@@ -275,19 +275,19 @@ class BuildPagesSiteTests(unittest.TestCase):
             ]
         )
         by_name = {item["name"]: item for item in configs}
-        self.assertEqual(by_name["CFG-A"]["applicable"], 2)
         self.assertEqual(by_name["CFG-A"]["recommended"], 1)
-        self.assertEqual(by_name["CFG-B"]["applicable"], 1)
+        self.assertEqual(by_name["CFG-A"]["ignored"], 1)
         self.assertEqual(by_name["CFG-B"]["recommended"], 1)
+        self.assertEqual(by_name["CFG-B"]["ignored"], 0)
         caption = pages.config_chart_caption(configs, run_id="9", history_n=3)
         self.assertIn("This run (9)", caption)
-        self.assertIn("applicable for our platform", caption)
-        self.assertIn("recommended to install", caption)
+        self.assertIn("1 applicable for our platform", caption)
+        self.assertIn("2 recommended to install", caption)
         self.assertIn("2 configurations", caption)
         self.assertIn("3 runs in the last 90 days", caption)
 
     def test_config_chart_caption_grows_with_history(self) -> None:
-        rows = [{"name": "CFG-A", "applicable": 3, "recommended": 2}]
+        rows = [{"name": "CFG-A", "recommended": 2, "ignored": 1}]
         short = pages.config_chart_caption(rows, run_id="1", history_n=1)
         self.assertIn("History will grow with later runs.", short)
         long = pages.config_chart_caption(rows, run_id="2", history_n=4)
