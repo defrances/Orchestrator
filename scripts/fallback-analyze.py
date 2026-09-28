@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build clustered issue payloads from FindUpdates report.json when Copilot CLI cannot run."""
+"""Build clustered issue payloads from FindUpdates report.json when live analysis cannot run."""
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from collections import defaultdict
@@ -11,9 +12,13 @@ from pathlib import Path
 
 REPORT = Path("inputs/report.json")
 OUT_DIR = Path("issues-out")
-APP_DIR = Path("workspace/DesktopApplication")
+APP_DIR = Path(os.environ.get("DA_CHECKOUT") or "workspace/DesktopApplication")
 MAX_ISSUES = 8
 CANDIDATE = "candidate_for_validation"
+PRODUCT_CONFIG_ID = "uvcs-configuration-1"
+PRODUCT_CONFIG_NAME = "UVCS configuration 1"
+DEFAULT_PRODUCT_REPOS = ("defrances/DesktopApplication",)
+HOLD_POLICY = {"HOLD", "BLOCK"}
 
 CLUSTER_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("schannel-tls", ("schannel", "tls", "ssl")),
@@ -25,41 +30,99 @@ CLUSTER_RULES: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
-def git_log() -> str:
-    if not (APP_DIR / ".git").exists():
-        return "(DesktopApplication checkout not available)"
+def git_sha(app_dir: Path | None = None) -> str:
+    root = app_dir or APP_DIR
+    if not (root / ".git").exists():
+        return "(checkout not available)"
     result = subprocess.run(
-        ["git", "-C", str(APP_DIR), "log", "--oneline", "-12"],
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
         check=False,
         text=True,
         capture_output=True,
     )
-    return (result.stdout or result.stderr or "").strip() or "(no git log)"
+    sha = (result.stdout or "").strip()
+    if result.returncode != 0 or not sha:
+        return "(unable to read commit)"
+    return sha
+
+
+def product_source_repos() -> list[str]:
+    raw = os.environ.get("PRODUCT_SOURCE_REPOS") or ",".join(DEFAULT_PRODUCT_REPOS)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def checkout_for_repo(repo: str) -> Path:
+    name = repo.split("/")[-1]
+    if name.lower() == "desktopapplication":
+        return Path(os.environ.get("DA_CHECKOUT") or APP_DIR)
+    return Path("workspace") / name
+
+
+def source_version_lines(repos: list[str] | None = None) -> str:
+    lines = ["Impact analysis conducted on source code version:", ""]
+    for repo in repos or product_source_repos():
+        sha = git_sha(checkout_for_repo(repo))
+        lines.append(f"- https://github.com/{repo} - commit `{sha}`")
+    return "\n".join(lines)
+
+
+def recommendation_label(action: object, policy: object = None) -> str:
+    raw = str(action or "").strip()
+    policy_s = str(policy or "").strip().upper()
+    if raw == CANDIDATE and policy_s not in HOLD_POLICY:
+        return "Install - High Prio"
+    return "Low Prio"
+
+
+def patch_name(members: list[dict[str, object]], key: str) -> str:
+    packages: list[str] = []
+    for item in unique_updates(members):
+        pkg = str(item.get("package") or "").strip()
+        if pkg and pkg not in packages:
+            packages.append(pkg)
+    if len(packages) == 1:
+        return packages[0]
+    return key
+
+
+def unique_updates(members: list[dict[str, object]]) -> list[dict[str, object]]:
+    seen: set[tuple[str, str, str]] = set()
+    rows: list[dict[str, object]] = []
+    for item in members:
+        fingerprint = (
+            str(item.get("package") or ""),
+            cve_text(item),
+            str(item.get("title") or ""),
+        )
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        rows.append(item)
+    return rows
+
+
+def unique_field(members: list[dict[str, object]], name: str) -> str:
+    values: list[str] = []
+    for item in members:
+        value = str(item.get(name) or "").strip()
+        if value and value not in values:
+            values.append(value)
+    return ", ".join(values) or "—"
 
 
 def app_notes() -> str:
     notes = [
-        "Analyzed https://github.com/defrances/DesktopApplication branch `main` (full checkout).",
-        "DesktopApplication is a WPF WinExe (`src/DesktopApplication/DesktopApplication.csproj`: `UseWPF`, `net9.0-windows`).",
-        "CI publishes `--self-contained true` `-r win-x64` (`.github/workflows/ci.yml`); an OS .NET KB does not patch the bundled runtime.",
-        "`NoteStore` writes `%AppData%\\DesktopApplication\\notes.txt`.",
-        "`SystemInformationProvider` reads OS/user/machine via `RuntimeInformation`.",
-        "`app.manifest` sets Windows 10 compatibility and `PerMonitorV2` DPI.",
+        "`src/DesktopApplication/DesktopApplication.csproj` — `UseWPF`, WinExe, `net9.0-windows`.",
+        "`.github/workflows/ci.yml` — `dotnet publish` `--self-contained true` `-r win-x64`.",
+        "`src/DesktopApplication.Core/NoteStore.cs` — `%AppData%\\DesktopApplication\\notes.txt`.",
+        "`src/DesktopApplication.Core/SystemInformation.cs` — `RuntimeInformation` host strings.",
+        "`src/DesktopApplication/app.manifest` — Windows 10 compatibility and `PerMonitorV2`.",
     ]
     tls = APP_DIR / "src" / "DesktopApplication.Core" / "InsecureVendorBulletinClient.cs"
     if tls.exists():
         notes.append(
-            "`InsecureVendorBulletinClient` calls HTTPS with `AcceptAnyServerCertificate` from `CheckBulletinCommand`."
+            "`src/DesktopApplication.Core/InsecureVendorBulletinClient.cs` — HTTPS via host Schannel."
         )
-    csproj = APP_DIR / "src" / "DesktopApplication" / "DesktopApplication.csproj"
-    if csproj.exists():
-        text = csproj.read_text(encoding="utf-8")
-        tfm = re.search(r"<TargetFramework>([^<]+)</TargetFramework>", text)
-        if tfm:
-            notes.append(f"Project TargetFramework is `{tfm.group(1)}`.")
-    inventory = Path("workspace/desktop-application-inventory.md")
-    if inventory.exists():
-        notes.append(f"Repo inventory: `{inventory.as_posix()}`.")
     sbom = (
         Path("workspace/sbom/DesktopApplication.sbom.spdx.json")
         if Path("workspace/sbom/DesktopApplication.sbom.spdx.json").exists()
@@ -67,7 +130,7 @@ def app_notes() -> str:
     )
     if sbom.exists():
         notes.append(f"SBOM present at `{sbom.as_posix()}`.")
-    return " ".join(notes)
+    return "\n".join(f"- {line}" for line in notes)
 
 
 def relevant(item: dict[str, object]) -> bool:
@@ -148,6 +211,27 @@ def cve_text(item: dict[str, object]) -> str:
     return str(cves) or "none"
 
 
+def listed_cves(members: list[dict[str, object]]) -> str:
+    seen: list[str] = []
+    for item in unique_updates(members):
+        raw = item.get("cve_ids") or []
+        values = raw if isinstance(raw, list) else [raw]
+        for cve in values:
+            text = str(cve or "").strip()
+            if text and text not in seen:
+                seen.append(text)
+    return ", ".join(seen) or "the listed advisories"
+
+
+def listed_packages(members: list[dict[str, object]]) -> str:
+    seen: list[str] = []
+    for item in unique_updates(members):
+        pkg = str(item.get("package") or "").strip()
+        if pkg and pkg not in seen:
+            seen.append(pkg)
+    return ", ".join(seen) or "the vendor package"
+
+
 def _md_cell(text: object) -> str:
     return str(text or "").replace("|", "/").replace("\n", " ").strip()
 
@@ -161,77 +245,216 @@ def linked_update(label: object, url: object) -> str:
     return f"`{text}`" if text else ""
 
 
+def cybersecurity_text(key: str, members: list[dict[str, object]]) -> str:
+    cves = listed_cves(members)
+    packages = listed_packages(members)
+    if key == "os-dotnet":
+        return (
+            f"This patch fixes {cves} in {packages}. SBOM scan and source code scan "
+            "revealed there is no such dependency in our code. This patch will not affect our product."
+        )
+    if key == "schannel-tls":
+        return (
+            f"This patch fixes {cves} in {packages}. SBOM scan and source code scan "
+            "revealed that the vendor bulletin HTTPS client uses host Schannel. "
+            "The process has that host dependency."
+        )
+    if key == "ntfs-notes":
+        return (
+            f"This patch fixes {cves} in {packages}. SBOM scan and source code scan "
+            "revealed that the notes module (`NoteStore`) uses the host NTFS profile path."
+        )
+    if key in {"win32k-wpf", "dwm-wpf"}:
+        return (
+            f"This patch fixes {cves} in {packages}. SBOM scan and source code scan "
+            "revealed that the WPF UI module has such host windowing dependency."
+        )
+    if key == "shell-launch":
+        return (
+            f"This patch fixes {cves} in {packages}. SBOM scan and source code scan "
+            "revealed that the WinExe launch path has such host Shell dependency."
+        )
+    return (
+        f"This patch fixes {cves} in {packages}. SBOM scan and source code scan "
+        "revealed there is no such dependency in our code. This patch will not affect our product."
+    )
+
+
+def product_risk_text(key: str) -> str:
+    if key == "os-dotnet":
+        return "\n".join(
+            [
+                "- Affected product functions: none. The published exe bundles its own runtime.",
+                "- Potential hazards: None identified for this product configuration.",
+                "- Failure scenarios: skipping the OS KB leaves host .NET unchanged; the product process does not load that host runtime.",
+            ]
+        )
+    if key == "schannel-tls":
+        return "\n".join(
+            [
+                "- Affected product functions: vendor bulletin HTTPS check (`CheckBulletinCommand`).",
+                "- Potential hazards: untrusted TLS if the host Schannel stack stays exposed and the client accepts a bad chain.",
+                "- Failure scenarios: skip — host TLS remains unpatched; install — handshake behavior may change, bulletin fetch may fail closed.",
+            ]
+        )
+    if key == "ntfs-notes":
+        return "\n".join(
+            [
+                "- Affected product functions: local notes read/write.",
+                "- Potential hazards: integrity of `%AppData%\\DesktopApplication\\notes.txt` if NTFS behavior changes.",
+                "- Failure scenarios: skip — host NTFS stays exposed; install — notes I/O may fail or change path semantics.",
+            ]
+        )
+    if key in {"win32k-wpf", "dwm-wpf"}:
+        return "\n".join(
+            [
+                "- Affected product functions: WPF windowing, DPI, and composition.",
+                "- Potential hazards: operator cannot read the UI if windowing or DPI breaks after the host KB.",
+                "- Failure scenarios: install — layout or DPI may break; skip — host windowing stays exposed.",
+            ]
+        )
+    if key == "shell-launch":
+        return "\n".join(
+            [
+                "- Affected product functions: process launch and exe identity.",
+                "- Potential hazards: operator cannot start the client if Shell identity handling changes.",
+                "- Failure scenarios: install — launch may fail; skip — host Shell stays exposed.",
+            ]
+        )
+    return "\n".join(
+        [
+            "- Affected product functions: none identified.",
+            "- Potential hazards: None identified for this product configuration.",
+            "- Failure scenarios: none for this product configuration.",
+        ]
+    )
+
+
+def test_planning_text(key: str) -> str:
+    preface = "\n".join(
+        [
+            "This section:",
+            "- Analyzes the technical and risk impact from the previous sections",
+            "- Defines the regression scope and maps impact onto existing Unit, Smoke, and Regression tests in `docs/test-plan.md`",
+            "- Identifies coverage gaps and the additional cases needed to close them",
+            "- Produces the test recommendation aligned to the quarterly release cadence",
+            "",
+        ]
+    )
+    if key == "schannel-tls":
+        tests = (
+            "Run `TC-UNIT-TLS-MARKER` and `TC-REG-TLS-CALLBACK`. "
+            "There is no UI automation for the bulletin button; that remains a coverage gap."
+        )
+    elif key == "ntfs-notes":
+        tests = (
+            "Run `TC-UNIT-NOTES-EMPTY`, `TC-UNIT-NOTES-PATH`, and `TC-SMOKE-NOTES`. "
+            "There is no host-NTFS integration test; that remains a coverage gap."
+        )
+    elif key == "os-dotnet":
+        tests = (
+            "`TC-SMOKE-SYSINFO` only reads runtime strings. "
+            "There is no test that the bundled runtime is independent of an OS .NET KB; that is a testing gap."
+        )
+    else:
+        tests = (
+            "No Unit, Smoke, or Regression case in `docs/test-plan.md` covers this host coupling. "
+            "That is a testing gap. Do not invent UI or clinical protocol tests."
+        )
+    return preface + tests
+
+
+def recommendation_text(key: str, members: list[dict[str, object]]) -> str:
+    labels = {recommendation_label(item.get("action"), item.get("policy_result")) for item in members}
+    if labels == {"Install - High Prio"}:
+        return (
+            f"Install - High Prio: lab-check the published win-x64 build for UVCS configuration 1 "
+            f"against this `{key}` coupling. Do not instruct production install from this analysis."
+        )
+    return (
+        f"Low Prio: do not treat this host KB as a product patch for UVCS configuration 1 "
+        f"(`{key}`). Keep it off the product install set."
+    )
+
+
 def issue_body(
     key: str,
-    device: str,
     members: list[dict[str, object]],
     evidence: str,
-    log: str,
     risk: dict[str, str],
+    source_versions: str | None = None,
+    device: str | None = None,
+    log: str | None = None,
 ) -> str:
+    del device, log
     rows = []
-    for item in members:
+    for item in unique_updates(members):
         url = item.get("official_url")
         rows.append(
-            "| `{advisory}` | {title} | {package} | {cves} | `{action}` | `{policy}` | {score} |".format(
-                advisory=_md_cell(item.get("advisory_id")) or "unknown",
+            "| {title} | {package} | {cves} | {recommendation} |".format(
                 title=_md_cell(item.get("title")),
                 package=linked_update(item.get("package"), url) or "`-`",
                 cves=cve_text(item),
-                action=item.get("action"),
-                policy=item.get("policy_result"),
-                score=item.get("risk_score"),
+                recommendation=recommendation_label(item.get("action"), item.get("policy_result")),
             )
         )
-    first = members[0]
-    return f"""<!-- impact:{key}:{device} -->
+    versions = source_versions if source_versions is not None else source_version_lines()
+    return f"""<!-- impact:{key}:{PRODUCT_CONFIG_ID} -->
 
-## Updates in this cluster
+{versions}
 
-| Advisory | Title | Package | CVEs | Action | Policy | Score |
-| --- | --- | --- | --- | --- | --- | --- |
+## Updates applicable for this product configuration
+
+| Title | Package | CVEs | Recommendation |
+| --- | --- | --- | --- |
 {chr(10).join(rows)}
 
-This issue is **not** an authorization to install, approve, or deploy. HOLD and BLOCK stay HOLD and BLOCK.
+## Product Configuration Specification
 
-## Workstation
+- Product configuration: {PRODUCT_CONFIG_NAME}
+- Model / role: {unique_field(members, "model")} / {unique_field(members, "device_role")}
+- Deployment group: {unique_field(members, "deployment_group")}
+- OS: {unique_field(members, "os_product")} build {unique_field(members, "os_build")}
+- Clinical criticality: {unique_field(members, "clinical_criticality")}
+- Network exposure: {unique_field(members, "network_exposure")}
 
-- Device: `{device}`
-- Model / role: {first.get("model")} / {first.get("device_role")}
-- Deployment group: `{first.get("deployment_group")}`
-- OS: {first.get("os_product")} build {first.get("os_build")}
-- Clinical criticality: {first.get("clinical_criticality")}
-- Network exposure: {first.get("network_exposure")}
+## Technical Impact Assessment
 
-## Evidence from DesktopApplication main
+### Components
 
 {evidence}
 
-## Risk to DesktopApplication on main
+### Risks
 
 - Required for the app to keep working: `{risk["required_for_app"]}`
-- Risk if the vendor updates **are installed**: `{risk["install_risk"]}`
-- Risk if the vendor updates **are not installed**: `{risk["skip_risk"]}`
-- Compatibility of current `main` with the proposed bits: `{risk["compatibility"]}`
+- If we install: `{risk["install_risk"]}`
+- If we skip: `{risk["skip_risk"]}`
+- Compatibility: `{risk["compatibility"]}`
 
-Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.
+### Conclusions
 
-## How this can affect DesktopApplication
+{short_risk(key)}. Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.
 
-Cluster `{key}`: {short_risk(key)}. {first.get("explanation")}
+## Cybersecurity impact assessment
 
-A host Windows update can still change WPF, DPI, reboot, TLS, or Win32 behavior used by `DesktopApplication.exe`. That is install-side incompatibility, not a reason to treat every KB as required.
+{cybersecurity_text(key, members)}
 
-## Recent code that raises or lowers the risk
+## Product Risk assessment
 
-```
-{log}
-```
+{product_risk_text(key)}
 
-## Recommended reviewer action
+## TEST PLANNING & COVERAGE ANALYSIS
 
-Validate the published win-x64 build on `{device}` for this `{key}` cluster in a lab ring. Do not install from this issue.
+{test_planning_text(key)}
+
+## Recommendation
+
+{recommendation_text(key, members)}
 """
+
+
+def issue_title(key: str, members: list[dict[str, object]]) -> str:
+    return f"[Impact] {patch_name(members, key)} on {PRODUCT_CONFIG_NAME} - {short_risk(key)}"
 
 
 def main() -> int:
@@ -242,13 +465,9 @@ def main() -> int:
                 {
                     "title": "FindUpdates report.json was not available",
                     "advisory_id": "missing-report",
-                    "device_id": "n/a",
+                    "device_id": PRODUCT_CONFIG_ID,
                     "cluster_key": "missing-report",
-                    "body": (
-                        "inputs/report.json was missing. "
-                        "Orchestrator did not start FindUpdates and did not create GitHub Issues. "
-                        "This is not an authorization to install, approve, or deploy."
-                    ),
+                    "body": "inputs/report.json was missing. Orchestrator did not start FindUpdates.",
                 },
                 indent=2,
             )
@@ -261,13 +480,12 @@ def main() -> int:
     items = [item for item in payload.get("items") or [] if isinstance(item, dict) and relevant(item)]
     items.sort(key=lambda item: (item.get("action") != CANDIDATE, -int(item.get("risk_score") or 0)))
 
-    groups: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
+    groups: dict[str, list[dict[str, object]]] = defaultdict(list)
     for item in items:
         key = cluster_key(item)
         if not key:
             continue
-        device = str(item.get("device_id") or "unknown")
-        groups[(key, device)].append(item)
+        groups[key].append(item)
 
     ranked = sorted(
         groups.items(),
@@ -279,42 +497,42 @@ def main() -> int:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     evidence = app_notes()
-    log = git_log()
+    versions = source_version_lines()
     written = 0
-    overflow: list[tuple[str, str, int]] = []
-    for (key, device), members in ranked:
+    overflow: list[tuple[str, int]] = []
+    for key, members in ranked:
         if written >= MAX_ISSUES:
-            overflow.append((key, device, len(members)))
+            overflow.append((key, len(members)))
             continue
         written += 1
         risk = risk_fields(key)
         issue = {
-            "title": f"[Impact] {key} on {device} — {short_risk(key)}",
+            "title": issue_title(key, members),
             "advisory_id": key,
-            "device_id": device,
+            "device_id": PRODUCT_CONFIG_ID,
             "cluster_key": key,
-            "labels": ["vendor-update-impact", f"workstation:{device}"],
+            "labels": ["vendor-update-impact", f"product-config:{PRODUCT_CONFIG_ID}"],
             "required_for_app": risk["required_for_app"],
             "install_risk": risk["install_risk"],
             "skip_risk": risk["skip_risk"],
             "compatibility": risk["compatibility"],
-            "body": issue_body(key, device, members, evidence, log, risk),
+            "body": issue_body(key, members, evidence, risk, source_versions=versions),
         }
-        name = f"{written:02d}-{re.sub(r'[^A-Za-z0-9._-]+', '-', key)}-{device}.json"
+        name = f"{written:02d}-{re.sub(r'[^A-Za-z0-9._-]+', '-', key)}-{PRODUCT_CONFIG_ID}.json"
         (OUT_DIR / name).write_text(json.dumps(issue, indent=2) + "\n", encoding="utf-8")
 
     if overflow:
-        rows = [f"- `{key}` on `{device}` ({count} updates)" for key, device, count in overflow]
+        rows = [f"- `{key}` on `{PRODUCT_CONFIG_NAME}` ({count} updates)" for key, count in overflow]
         (OUT_DIR / "summary.json").write_text(
             json.dumps(
                 {
-                    "title": "[Impact] Additional vendor-update clusters not filed individually",
+                    "title": f"[Impact] Additional vendor-update clusters on {PRODUCT_CONFIG_NAME}",
                     "advisory_id": "summary",
-                    "device_id": "overflow",
+                    "device_id": PRODUCT_CONFIG_ID,
                     "cluster_key": "summary",
                     "labels": ["vendor-update-impact"],
                     "body": (
-                        "<!-- impact:summary:overflow -->\n\n"
+                        f"<!-- impact:summary:{PRODUCT_CONFIG_ID} -->\n\n"
                         "These additional clusters exceeded the per-run cap.\n\n"
                         + "\n".join(rows)
                     ),

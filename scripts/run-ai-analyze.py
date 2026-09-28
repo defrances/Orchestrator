@@ -30,9 +30,10 @@ VENDOR_PROMPT = """Follow .github/skills/analyze-vendor-update-impact/SKILL.md.
 
 Analyze workspace/DesktopApplication on branch main (see workspace/desktop-application-inventory.md).
 Read every source file listed in that inventory before writing analysis JSON.
+The customer-facing product name is UVCS configuration 1.
 Score install_risk, skip_risk, required_for_app, and compatibility against libraries and logic on main.
-Cluster rows that share the same workstation, cluster_key, risk fields, and reviewer action into ONE analysis file.
-Cap at 8 analysis files. Prefer cluster_key values from the skill.
+Cluster rows that share the same product configuration, cluster_key, risk fields, and Recommendation into ONE analysis file.
+Do not write one file per lab station. Cap at 8 analysis files. Prefer cluster_key values from the skill.
 Input report: inputs/report.json
 Write analysis JSON files only to issues-out/. Do not call gh issue create. Do not publish GitHub Issues. Do not deploy.
 """

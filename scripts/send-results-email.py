@@ -17,11 +17,7 @@ from pathlib import Path
 
 FINDUPDATES_REPO = os.environ.get("FINDUPDATES_REPO", "defrances/FindUpdates")
 NO_CLUSTER_SUBJECT = "Orchestrator: no vendor-update clusters"
-NO_CLUSTER_BODY = (
-    "No vendor-update clusters were written for this run.\n\n"
-    "This email is not an authorization to install, approve, or deploy. "
-    "HOLD and BLOCK stay HOLD and BLOCK. GitHub Issues were not created."
-)
+NO_CLUSTER_BODY = "No vendor-update clusters were written for this run.\n"
 
 
 @dataclass(frozen=True)
@@ -85,12 +81,12 @@ def load_issue_payloads(directory: Path) -> list[dict[str, object]]:
 
 
 def run_footer(app_dir: Path | None = None) -> str:
+    del app_dir
     fu_run = _env("FU_RUN_ID", "(missing)")
     fu_url = _env("FU_HTML_URL")
     if not fu_url and fu_run not in {"", "(missing)"}:
         fu_url = f"https://github.com/{FINDUPDATES_REPO}/actions/runs/{fu_run}"
     orch_url = _env("ORCH_HTML_URL") or "(none)"
-    sha = desktop_sha(app_dir or Path(_env("DA_CHECKOUT", "workspace/DesktopApplication")))
     fu_line = (
         f"- FindUpdates: [{fu_run}]({fu_url})"
         if fu_url.startswith("https://")
@@ -103,14 +99,9 @@ def run_footer(app_dir: Path | None = None) -> str:
     )
     return "\n".join(
         [
-            f"Desktop Application `main`: `{sha}`",
-            "",
             fu_line,
             orch_line,
             "- Windows patch bundle artifact: `windows-patch-bundle` (KB manifest + APPLY.ps1, not .msu files)",
-            "",
-            "This email is not an authorization to install, approve, or deploy.",
-            "HOLD and BLOCK stay HOLD and BLOCK. GitHub Issues were not created.",
         ]
     )
 

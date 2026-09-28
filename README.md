@@ -13,7 +13,7 @@ One workflow, [Vendor impact and PDLC](.github/workflows/orchestrate.yml), runs 
 7. Email results
 8. Rebuild the GitHub Page from those files (script only, no AI)
 
-Orchestrator does not apply product code patches and does not create GitHub Issues. Analysis is advisory. HOLD and BLOCK stay HOLD and BLOCK. Official `.msu` / `.cab` files are not copied into the zip.
+Orchestrator does not apply product code patches and does not create GitHub Issues. The vendor-impact email is **design-control evidence** for product configuration **UVCS configuration 1**. It is not a lab-validation ticket and not an authorization to install. Official `.msu` / `.cab` files are not copied into the zip.
 
 ```mermaid
 sequenceDiagram
@@ -48,7 +48,7 @@ Vendor impact is **not** “the CVE is Critical”. A row is in scope only if a 
 | `skip_risk` | Risk **if the KB is skipped** |
 | `compatibility` | Current `main` vs the proposed host bits |
 
-Self-contained publish means an OS .NET KB almost never patches the bundled runtime (`os-dotnet` → `not_required`, `skip_risk: no_app_impact`). Rows that share workstation + `cluster_key` + the same four scores become **one** email. Cap 8 cluster files.
+Self-contained publish means an OS .NET KB almost never patches the bundled runtime (`os-dotnet` → `not_required`, `skip_risk: no_app_impact`). Rows that share product configuration **UVCS configuration 1** + `cluster_key` + the same four scores and Recommendation become **one** email. Lab station ids stay in the Windows bundle. Cap 8 cluster files.
 
 Product PDLC uses the docs as the finding list. Those files can lag `main` (for example VR-TLS-001 still marked open after the TLS callback was tightened). Station KB rows are not product vulnerabilities.
 
@@ -56,13 +56,24 @@ Product PDLC uses the docs as the finding list. Those files can lag `main` (for 
 
 `SMTP_USERNAME` / `SMTP_PASSWORD` (Gmail App Password). From and To are that address.
 
+Subject: `[Impact] {patch name} on UVCS configuration 1 - {description}`. Patch name is the KB when the cluster has one package, otherwise the `cluster_key`.
+
 | Message | When |
 | --- | --- |
 | One mail per vendor cluster | `issues-out/*.json` with title + body (markdown + HTML) |
 | One status mail | No clusters |
 | One Windows patch bundle mail | After the bundle README exists |
 
-The bundle mail body is `artifacts/windows-bundle/**/README.md`. HTTPS markdown links and bare `https://` URLs become clickable `<a href>`. Footer links FindUpdates and Orchestrator runs.
+Body sections: source-code versions (product repos + commit), updates applicable for this product configuration (`Title`, `Package`, `CVEs`, `Recommendation`), product configuration specification, technical impact assessment, cybersecurity impact assessment, product risk assessment, test planning and coverage analysis, recommendation.
+
+Recommendation display (FindUpdates `action` is unchanged in JSON):
+
+| FindUpdates `action` | Email Recommendation |
+| --- | --- |
+| `candidate_for_validation` | Install - High Prio |
+| `do_not_install` / HOLD / BLOCK / `not_in_scope` | Low Prio |
+
+The bundle mail body is `artifacts/windows-bundle/**/README.md`. HTTPS markdown links and bare `https://` URLs become clickable `<a href>`. Footer links FindUpdates and Orchestrator runs. Product commit SHAs live in the source-version block of the cluster mail, not in the footer.
 
 ## Windows patch bundle
 
