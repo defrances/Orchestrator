@@ -1,4 +1,4 @@
-<!-- impact:{cluster_key}:uvcs-configuration-1 -->
+<!-- impact:{cluster_key}:{config_label} -->
 
 Impact analysis conducted on source code version:
 
@@ -21,14 +21,14 @@ Map FindUpdates `action` to Recommendation display only (do not rewrite `report.
 
 ## Product Configuration Specification
 
-- Product configuration: UVCS configuration 1
+- Product configuration: `{config_label}` (`Configurations1`, `Configurations2`, … — never a synthetic station id)
 - Model / role: `{model}` / `{device_role}`
 - Deployment group: `{deployment_group}`
 - OS: `{os_product}` build `{os_build}`
 - Clinical criticality: `{clinical_criticality}`
 - Network exposure: `{network_exposure}`
 
-Do not put synthetic station ids in the subject. If several lab stations share this configuration, summarize shared OS / role values instead of listing each device.
+Do not put synthetic station ids in the subject. Use the numbered label (`Configurations1`). If several report rows share this numbered configuration, summarize shared OS / role values instead of listing each device.
 
 ## Technical Impact Assessment
 
@@ -62,7 +62,7 @@ Shape:
 
 Why rules:
 
-- `not_required`: say the UVCS configuration 1 exe still starts without this KB, and why (no matching `PackageReference`, self-contained publish, or the patched library is not loaded).
+- `not_required`: say the published exe still starts without this KB, and why (no matching `PackageReference`, self-contained publish, or the patched library is not loaded).
 - `required`: name the loader file that cannot run without this vendor package.
 - `stays_vulnerable`: host path stays exposed; the app can still run. Name the host component and the product file that uses it.
 - `no_app_impact`: skipping does not change the product process. Say why (usually bundled runtime / no loader).

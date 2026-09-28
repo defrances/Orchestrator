@@ -376,6 +376,7 @@ class FallbackLinkTests(unittest.TestCase):
             "- `src/DesktopApplication.Core/InsecureVendorBulletinClient.cs`",
             fallback.risk_fields("schannel-tls"),
             source_versions="- https://github.com/defrances/DesktopApplication - commit `abc`",
+            device="Configurations1",
         )
         self.assertIn(f"[KB5122871]({url})", body)
         self.assertNotIn(f"[Schannel RCE]({url})", body)
@@ -403,7 +404,8 @@ class FallbackLinkTests(unittest.TestCase):
         self.assertNotIn("### Components", body)
         self.assertNotIn("### Risks\n", body)
         self.assertIn("## Recommendation", body)
-        self.assertIn("UVCS configuration 1", body)
+        self.assertIn("Configurations1", body)
+        self.assertNotIn("UVCS configuration 1", body)
         self.assertIn("https://github.com/defrances/DesktopApplication - commit `abc`", body)
         self.assertIn("TC-REG-TLS-CALLBACK", body)
         self.assertIn("**Required for the app to keep working: Not required.**", body)
@@ -412,6 +414,52 @@ class FallbackLinkTests(unittest.TestCase):
         self.assertIn("InsecureVendorBulletinClient", body)
         self.assertNotIn("`not_required`", body)
         self.assertNotIn("- Required for the app to keep working: `not_required`", body)
+
+    def test_one_issue_per_numbered_configuration(self) -> None:
+        labels = fallback.config_display_names(
+            ["SYNTHETIC-W11-24H2-01", "SYNTHETIC-CT-IMG-01", "SYNTHETIC-LAB-24H2-01"]
+        )
+        self.assertEqual(labels["SYNTHETIC-CT-IMG-01"], "Configurations1")
+        self.assertEqual(labels["SYNTHETIC-LAB-24H2-01"], "Configurations2")
+        self.assertEqual(labels["SYNTHETIC-W11-24H2-01"], "Configurations3")
+        payload = {
+            "stations": ["SYNTHETIC-CT-IMG-01", "SYNTHETIC-LAB-24H2-01"],
+            "items": [
+                {
+                    "device_id": "SYNTHETIC-CT-IMG-01",
+                    "title": "Windows Schannel TLS",
+                    "package": "KB5122871",
+                    "action": "candidate_for_validation",
+                    "os_product": "Windows 11",
+                    "cve_ids": ["CVE-1"],
+                    "risk_score": 80,
+                    "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-1",
+                },
+                {
+                    "device_id": "SYNTHETIC-LAB-24H2-01",
+                    "title": "Windows Schannel TLS",
+                    "package": "KB5122871",
+                    "action": "candidate_for_validation",
+                    "os_product": "Windows 11",
+                    "cve_ids": ["CVE-1"],
+                    "risk_score": 80,
+                    "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-1",
+                },
+            ],
+        }
+        issues, overflow = fallback.build_cluster_issues(payload)
+        self.assertEqual(overflow, [])
+        self.assertEqual(
+            [item["device_id"] for item in issues],
+            ["Configurations1", "Configurations2"],
+        )
+        self.assertEqual(
+            [item["title"] for item in issues],
+            [
+                "[Impact] KB5122871 on Configurations1 - Schannel TLS path has no defense in depth",
+                "[Impact] KB5122871 on Configurations2 - Schannel TLS path has no defense in depth",
+            ],
+        )
 
 
 if __name__ == "__main__":

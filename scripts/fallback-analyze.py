@@ -13,10 +13,8 @@ from pathlib import Path
 REPORT = Path("inputs/report.json")
 OUT_DIR = Path("issues-out")
 APP_DIR = Path(os.environ.get("DA_CHECKOUT") or "workspace/DesktopApplication")
-MAX_ISSUES = 8
+MAX_CLUSTER_KEYS = 8
 CANDIDATE = "candidate_for_validation"
-PRODUCT_CONFIG_ID = "uvcs-configuration-1"
-PRODUCT_CONFIG_NAME = "UVCS configuration 1"
 DEFAULT_PRODUCT_REPOS = ("defrances/DesktopApplication",)
 HOLD_POLICY = {"HOLD", "BLOCK"}
 
@@ -64,6 +62,34 @@ def source_version_lines(repos: list[str] | None = None) -> str:
         sha = git_sha(checkout_for_repo(repo))
         lines.append(f"- https://github.com/{repo} - commit `{sha}`")
     return "\n".join(lines)
+
+
+def config_display_names(names: list[str] | None) -> dict[str, str]:
+    unique = sorted({str(name).strip() for name in (names or []) if str(name).strip()})
+    return {name: f"Configurations{index}" for index, name in enumerate(unique, start=1)}
+
+
+def report_config_labels(payload: dict[str, object] | None) -> dict[str, str]:
+    names: list[str] = []
+    blob = payload if isinstance(payload, dict) else {}
+    for row in blob.get("stations") or []:
+        if isinstance(row, dict):
+            name = str(row.get("device_id") or "").strip()
+        else:
+            name = str(row).strip()
+        if name:
+            names.append(name)
+    for item in blob.get("items") or []:
+        if isinstance(item, dict):
+            name = str(item.get("device_id") or "").strip()
+            if name:
+                names.append(name)
+    return config_display_names(names)
+
+
+def config_sort_key(label: str) -> int:
+    digits = "".join(ch for ch in (label or "") if ch.isdigit())
+    return int(digits) if digits else 0
 
 
 def recommendation_label(action: object, policy: object = None) -> str:
@@ -223,7 +249,7 @@ def risk_why(key: str, risk: dict[str, str]) -> str:
         return "\n".join(
             [
                 f"- **Required for the app to keep working: {required}.** "
-                "The published UVCS configuration 1 exe still starts without this KB. "
+                "The published exe still starts without this KB. "
                 "`DesktopApplication.csproj` has no third-party `PackageReference` for host .NET, "
                 "and CI publishes `--self-contained true`. An OS .NET KB does not patch the bundled runtime.",
                 f"- **If we install: {install}.** "
@@ -238,7 +264,7 @@ def risk_why(key: str, risk: dict[str, str]) -> str:
         return "\n".join(
             [
                 f"- **Required for the app to keep working: {required}.** "
-                "The published UVCS configuration 1 exe still starts without this KB. "
+                "The published exe still starts without this KB. "
                 "`DesktopApplication.csproj` has no third-party `PackageReference` for the patched library, "
                 "and CI publishes `--self-contained true`. This host KB is not a product runtime patch.",
                 f"- **If we install: {install}.** "
@@ -294,7 +320,7 @@ def risk_why(key: str, risk: dict[str, str]) -> str:
     return "\n".join(
         [
             f"- **Required for the app to keep working: {required}.** "
-            "The published UVCS configuration 1 exe still starts without this KB. "
+            "The published exe still starts without this KB. "
             "No matching product `PackageReference` was found for the patched library.",
             f"- **If we install: {install}.** "
             "We did not prove the self-contained exe would change if this host KB is installed.",
@@ -481,15 +507,18 @@ def test_planning_text(key: str) -> str:
     )
 
 
-def recommendation_text(key: str, members: list[dict[str, object]]) -> str:
+def recommendation_text(
+    key: str, members: list[dict[str, object]], config_name: str
+) -> str:
     labels = {recommendation_label(item.get("action"), item.get("policy_result")) for item in members}
+    name = config_name or "this configuration"
     if labels == {"Install - High Prio"}:
         return (
-            f"Install - High Prio: lab-check the published win-x64 build for UVCS configuration 1 "
+            f"Install - High Prio: lab-check the published win-x64 build for {name} "
             f"against this `{key}` coupling. Do not instruct production install from this analysis."
         )
     return (
-        f"Low Prio: do not treat this host KB as a product patch for UVCS configuration 1 "
+        f"Low Prio: do not treat this host KB as a product patch for {name} "
         f"(`{key}`). Keep it off the product install set."
     )
 
@@ -503,7 +532,8 @@ def issue_body(
     device: str | None = None,
     log: str | None = None,
 ) -> str:
-    del device, log
+    del log
+    config_name = (device or "").strip() or "Configurations1"
     rows = []
     for item in unique_updates(members):
         url = item.get("official_url")
@@ -516,7 +546,7 @@ def issue_body(
             )
         )
     versions = source_versions if source_versions is not None else source_version_lines()
-    return f"""<!-- impact:{key}:{PRODUCT_CONFIG_ID} -->
+    return f"""<!-- impact:{key}:{config_name} -->
 
 {versions}
 
@@ -528,7 +558,7 @@ def issue_body(
 
 ## Product Configuration Specification
 
-- Product configuration: {PRODUCT_CONFIG_NAME}
+- Product configuration: {config_name}
 - Model / role: {unique_field(members, "model")} / {unique_field(members, "device_role")}
 - Deployment group: {unique_field(members, "deployment_group")}
 - OS: {unique_field(members, "os_product")} build {unique_field(members, "os_build")}
@@ -563,35 +593,23 @@ def issue_body(
 
 ## Recommendation
 
-{recommendation_text(key, members)}
+{recommendation_text(key, members, config_name)}
 """
 
 
-def issue_title(key: str, members: list[dict[str, object]]) -> str:
-    return f"[Impact] {patch_name(members, key)} on {PRODUCT_CONFIG_NAME} - {short_risk(key)}"
+def issue_title(key: str, members: list[dict[str, object]], config_name: str) -> str:
+    return f"[Impact] {patch_name(members, key)} on {config_name} - {short_risk(key)}"
 
 
-def main() -> int:
-    if not REPORT.exists():
-        OUT_DIR.mkdir(parents=True, exist_ok=True)
-        (OUT_DIR / "missing-report.json").write_text(
-            json.dumps(
-                {
-                    "title": "FindUpdates report.json was not available",
-                    "advisory_id": "missing-report",
-                    "device_id": PRODUCT_CONFIG_ID,
-                    "cluster_key": "missing-report",
-                    "body": "inputs/report.json was missing. Orchestrator did not start FindUpdates.",
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        print(f"missing {REPORT}; wrote placeholder analysis")
-        return 0
-    payload = json.loads(REPORT.read_text(encoding="utf-8"))
-    items = [item for item in payload.get("items") or [] if isinstance(item, dict) and relevant(item)]
+def build_cluster_issues(
+    payload: dict[str, object],
+) -> tuple[list[dict[str, object]], list[tuple[str, int]]]:
+    labels = report_config_labels(payload)
+    items = [
+        item
+        for item in payload.get("items") or []
+        if isinstance(item, dict) and relevant(item)
+    ]
     items.sort(key=lambda item: (item.get("action") != CANDIDATE, -int(item.get("risk_score") or 0)))
 
     groups: dict[str, list[dict[str, object]]] = defaultdict(list)
@@ -609,44 +627,94 @@ def main() -> int:
         ),
     )
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
     evidence = app_notes()
     versions = source_version_lines()
-    written = 0
+    issues: list[dict[str, object]] = []
     overflow: list[tuple[str, int]] = []
-    for key, members in ranked:
-        if written >= MAX_ISSUES:
+    for index, (key, members) in enumerate(ranked):
+        if index >= MAX_CLUSTER_KEYS:
             overflow.append((key, len(members)))
             continue
-        written += 1
-        risk = risk_fields(key)
-        issue = {
-            "title": issue_title(key, members),
-            "advisory_id": key,
-            "device_id": PRODUCT_CONFIG_ID,
-            "cluster_key": key,
-            "labels": ["vendor-update-impact", f"product-config:{PRODUCT_CONFIG_ID}"],
-            "required_for_app": risk["required_for_app"],
-            "install_risk": risk["install_risk"],
-            "skip_risk": risk["skip_risk"],
-            "compatibility": risk["compatibility"],
-            "body": issue_body(key, members, evidence, risk, source_versions=versions),
-        }
-        name = f"{written:02d}-{re.sub(r'[^A-Za-z0-9._-]+', '-', key)}-{PRODUCT_CONFIG_ID}.json"
+        by_config: dict[str, list[dict[str, object]]] = defaultdict(list)
+        for item in members:
+            device = str(item.get("device_id") or "").strip()
+            label = labels.get(device)
+            if not label:
+                continue
+            by_config[label].append(item)
+        for config_name in sorted(by_config, key=config_sort_key):
+            config_members = by_config[config_name]
+            risk = risk_fields(key)
+            issues.append(
+                {
+                    "title": issue_title(key, config_members, config_name),
+                    "advisory_id": key,
+                    "device_id": config_name,
+                    "cluster_key": key,
+                    "labels": ["vendor-update-impact", f"product-config:{config_name}"],
+                    "required_for_app": risk["required_for_app"],
+                    "install_risk": risk["install_risk"],
+                    "skip_risk": risk["skip_risk"],
+                    "compatibility": risk["compatibility"],
+                    "body": issue_body(
+                        key,
+                        config_members,
+                        evidence,
+                        risk,
+                        source_versions=versions,
+                        device=config_name,
+                    ),
+                }
+            )
+    return issues, overflow
+
+
+def main() -> int:
+    if not REPORT.exists():
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        (OUT_DIR / "missing-report.json").write_text(
+            json.dumps(
+                {
+                    "title": "FindUpdates report.json was not available",
+                    "advisory_id": "missing-report",
+                    "device_id": "configurations",
+                    "cluster_key": "missing-report",
+                    "body": "inputs/report.json was missing. Orchestrator did not start FindUpdates.",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"missing {REPORT}; wrote placeholder analysis")
+        return 0
+    payload = json.loads(REPORT.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        payload = {}
+    issues, overflow = build_cluster_issues(payload)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for written, issue in enumerate(issues, start=1):
+        key = str(issue.get("cluster_key") or "cluster")
+        config_name = str(issue.get("device_id") or "Configurations")
+        name = (
+            f"{written:02d}-"
+            f"{re.sub(r'[^A-Za-z0-9._-]+', '-', key)}-"
+            f"{re.sub(r'[^A-Za-z0-9._-]+', '-', config_name)}.json"
+        )
         (OUT_DIR / name).write_text(json.dumps(issue, indent=2) + "\n", encoding="utf-8")
 
     if overflow:
-        rows = [f"- `{key}` on `{PRODUCT_CONFIG_NAME}` ({count} updates)" for key, count in overflow]
+        rows = [f"- `{key}` ({count} updates)" for key, count in overflow]
         (OUT_DIR / "summary.json").write_text(
             json.dumps(
                 {
-                    "title": f"[Impact] Additional vendor-update clusters on {PRODUCT_CONFIG_NAME}",
+                    "title": "[Impact] Additional vendor-update clusters across configurations",
                     "advisory_id": "summary",
-                    "device_id": PRODUCT_CONFIG_ID,
+                    "device_id": "configurations",
                     "cluster_key": "summary",
                     "labels": ["vendor-update-impact"],
                     "body": (
-                        f"<!-- impact:summary:{PRODUCT_CONFIG_ID} -->\n\n"
+                        "<!-- impact:summary:configurations -->\n\n"
                         "These additional clusters exceeded the per-run cap.\n\n"
                         + "\n".join(rows)
                     ),
@@ -657,9 +725,9 @@ def main() -> int:
             encoding="utf-8",
         )
 
-    if written == 0:
+    if not issues:
         (OUT_DIR / "none.json").write_text(json.dumps({"issues": []}, indent=2) + "\n", encoding="utf-8")
-    print(f"fallback wrote {written} clustered issue payloads overflow={len(overflow)}")
+    print(f"fallback wrote {len(issues)} clustered issue payloads overflow={len(overflow)}")
     return 0
 
 

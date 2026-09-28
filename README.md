@@ -13,7 +13,7 @@ One workflow, [Vendor impact and PDLC](.github/workflows/orchestrate.yml), runs 
 7. Email results
 8. Rebuild the GitHub Page from those files (script only, no AI)
 
-Orchestrator does not apply product code patches and does not create GitHub Issues. The vendor-impact email is **design-control evidence** for product configuration **UVCS configuration 1**. It is not a lab-validation ticket and not an authorization to install. Official `.msu` / `.cab` files are not copied into the zip.
+Orchestrator does not apply product code patches and does not create GitHub Issues. The vendor-impact email is **design-control evidence** for each numbered configuration (**Configurations1**, **Configurations2**, …). It is not a lab-validation ticket and not an authorization to install. Official `.msu` / `.cab` files are not copied into the zip.
 
 ```mermaid
 sequenceDiagram
@@ -48,7 +48,7 @@ Vendor impact is **not** “the CVE is Critical”. A row is in scope only if a 
 | `skip_risk` | Risk **if the KB is skipped** |
 | `compatibility` | Current `main` vs the proposed host bits |
 
-Self-contained publish means an OS .NET KB almost never patches the bundled runtime (`os-dotnet` → `not_required`, `skip_risk: no_app_impact`). Rows that share product configuration **UVCS configuration 1** + `cluster_key` + the same four scores and Recommendation become **one** email. Lab station ids stay in the Windows bundle. Cap 8 cluster files.
+Self-contained publish means an OS .NET KB almost never patches the bundled runtime (`os-dotnet` → `not_required`, `skip_risk: no_app_impact`). Rows that share a numbered configuration (**Configurations1** …) + `cluster_key` + the same four scores and Recommendation become **one** email. Number configurations from sorted lab `device_id` values, same order as the GitHub Page. Cap 8 `cluster_key` values; each key produces one mail per configuration that has rows.
 
 Product PDLC uses the docs as the finding list. Those files can lag `main` (for example VR-TLS-001 still marked open after the TLS callback was tightened). Station KB rows are not product vulnerabilities.
 
@@ -56,7 +56,7 @@ Product PDLC uses the docs as the finding list. Those files can lag `main` (for 
 
 `SMTP_USERNAME` / `SMTP_PASSWORD` (Gmail App Password). From and To are that address.
 
-Subject: `[Impact] {patch name} on UVCS configuration 1 - {description}`. Patch name is the KB when the cluster has one package, otherwise the `cluster_key`.
+Subject: `[Impact] {patch name} on Configurations{N} - {description}`. Patch name is the KB when the cluster has one package, otherwise the `cluster_key`.
 
 | Message | When |
 | --- | --- |

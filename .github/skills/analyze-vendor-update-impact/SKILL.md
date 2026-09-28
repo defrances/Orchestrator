@@ -1,17 +1,17 @@
 ---
 name: analyze-vendor-update-impact
-description: Analyze FindUpdates station report JSON against DesktopApplication main, score install vs skip risk, cluster same-coupling CVEs into one analysis file per product configuration, then write JSON under issues-out/. Do not open GitHub Issues. Use when given findupdates-report-json or report.json.
+description: Analyze FindUpdates station report JSON against DesktopApplication main, score install vs skip risk, cluster same-coupling CVEs into one analysis file per numbered configuration, then write JSON under issues-out/. Do not open GitHub Issues. Use when given findupdates-report-json or report.json.
 ---
 
 # Analyze vendor update impact
 
-You write design-control evidence for product configuration **UVCS configuration 1**.
+You write design-control evidence for each lab configuration **Configurations1**, **Configurations2**, … (sorted lab `device_id` values, same order as the GitHub Page).
 FindUpdates and this workflow collect facts; they are not the product tool-validation procedure and they do not authorize install.
 Do not call `gh issue create`. Write JSON files only under `issues-out/`. Results are emailed.
 
 The application under analysis is **always** https://github.com/defrances/DesktopApplication **branch `main`**.
 Do not analyze another branch, a single project file, or "the idea of a WPF app".
-The customer-facing product name is **UVCS configuration 1**. Keep repository folder names (`DesktopApplication`) as they are on disk.
+Keep repository folder names (`DesktopApplication`) as they are on disk. Do not put synthetic station ids (`SYNTHETIC-…`) in the email subject. Use `Configurations1`, `Configurations2`, … instead.
 
 ## Inputs
 
@@ -86,7 +86,7 @@ After the full-repo pass, score remaining rows, then **cluster** (do not file on
 
 ## Coupling to this codebase
 
-DesktopApplication on `main` is a small self-contained WPF client shipped as **UVCS configuration 1**. OS vendor rows are in scope only when you can name a **file on main** that would feel the change.
+DesktopApplication on `main` is a small self-contained WPF client. OS vendor rows are in scope only when you can name a **file on main** that would feel the change.
 
 Typical couplings from this repo (use only if the file supports it):
 
@@ -131,61 +131,62 @@ Rules:
 
 ## Cluster before writing analysis files
 
-Reviewers need **one card per coupling on UVCS configuration 1**, not one card per CVE and not one card per synthetic station.
+Reviewers need **one card per coupling per numbered configuration**, not one card per CVE and not one card that collapses every lab configuration into a single name.
 
-A live run that produced 20 files with six repeated rationales (Schannel ×4, Win32k ×3, DWM ×2, Shell ×3, NTFS ×4, .NET ×4) is a failure of this skill.
+Number configurations from the FindUpdates report: take every distinct lab `device_id` (and `stations` entries), sort them, and label them `Configurations1`, `Configurations2`, … in that order. This must match the GitHub Page.
 
 After scoring, group rows that share **all** of:
 
-- the same product configuration (`uvcs-configuration-1`)
+- the same numbered configuration (`Configurations1` …)
 - the same `cluster_key` (same cited files, same failure mode)
 - the same four risk fields
 - the same Recommendation (`Install - High Prio` / `Low Prio`)
 
-Write **one** file for that group. Put every distinct Title, Package, CVE, and Recommendation in the Updates table. Dedupe identical package + CVE rows that only differ by lab `device_id`. For each row, if `official_url` is a `https://` value from that same report row, make **only Package** a markdown link (`[KB5122871](https://msrc.microsoft.com/...)`). Do not link Title or CVEs. Never invent or rewrite the URL. Technical Impact Assessment, Cybersecurity impact assessment, and Product Risk assessment are written **once** for the coupling.
+Write **one** file for that group. If the same coupling applies to seven configurations, write seven files. Put every distinct Title, Package, CVE, and Recommendation for **that configuration** in the Updates table. Dedupe identical package + CVE rows inside one configuration. For each row, if `official_url` is a `https://` value from that same report row, make **only Package** a markdown link (`[KB5122871](https://msrc.microsoft.com/...)`). Do not link Title or CVEs. Never invent or rewrite the URL. Technical Impact Assessment, Cybersecurity impact assessment, and Product Risk assessment are written **once** for the coupling on that configuration.
 
 Do **not** file a second analysis because:
 
-- two rows share a KB but are different CVEs of the same component
+- two rows share a KB but are different CVEs of the same component on the same configuration
 - titles differ only by DoS / EoP / RCE / bypass on the same host stack
 - `risk_score` differs while the cited files and recommendation stay the same
-- lab stations differ while the product configuration is the same
 
-Split into two files only when the **cited files** or **Install vs Low Prio recommendation** actually differ (for example HOLD vs `candidate_for_validation`, or `os-dotnet` Low Prio vs `schannel-tls` Install - High Prio).
+Do **not** merge Configurations1 with Configurations2 even when the coupling paragraph would be the same.
+
+Split into two files when the **cited files**, **Install vs Low Prio recommendation**, or **numbered configuration** actually differ (for example HOLD vs `candidate_for_validation`, or `os-dotnet` Low Prio vs `schannel-tls` Install - High Prio, or the same KB on Configurations2 and Configurations6).
 
 Prefer `candidate_for_validation` when choosing which member rows to keep. File a Low Prio cluster when installing would be harmful **or** the app is explicitly not affected (`os-dotnet`) and reviewers must not treat the KB as a product patch.
 
-Cap: at most **8** individual analysis files (one cluster × product configuration each). Overflow goes to `issues-out/summary.json`.
+Cap: at most **8** `cluster_key` values. Each of those keys produces one file **per numbered configuration that has rows**. Overflow `cluster_key` values go to `issues-out/summary.json`.
 
 Skip:
 
 - `not_in_scope` unless `main` still targets that OS/package
 - Media/codec/network CVEs with no caller on `main`
-- Duplicate `cluster_key` + `uvcs-configuration-1` pairs
+- Duplicate `cluster_key` + `ConfigurationsN` pairs
 - Files whose only evidence is "it is a Windows WPF app"
-- Extra files that would repeat an already-written coupling paragraph
+- Extra files that would repeat an already-written coupling paragraph **for the same configuration**
 
 ## Output files
 
-`issues-out/01-<cluster_key>-uvcs-configuration-1.json`
+`issues-out/01-<cluster_key>-Configurations1.json`
 
 Required keys: `title`, `body`, `advisory_id`, `device_id`, `cluster_key`, `labels`, `required_for_app`, `install_risk`, `skip_risk`, `compatibility`.
 
-Set `advisory_id` to the same value as `cluster_key`. Set `device_id` to `uvcs-configuration-1` (product configuration id, not a lab station).
+Set `advisory_id` to the same value as `cluster_key`. Set `device_id` to `Configurations1`, `Configurations2`, … (the numbered label, not a synthetic station id).
 
 Patch name in the title: the cluster's `package` (KB) when every distinct update row shares one package; otherwise `cluster_key`.
 
 Title format:
 
-`[Impact] {patch name} on UVCS configuration 1 - {short description}`
+`[Impact] {patch name} on Configurations{N} - {short description}`
 
 `{short description}` describes the coupling, not one CVE (for example `Schannel TLS path has no defense in depth`, `Win32k may change WPF DPI`, `OS .NET KB does not patch bundled runtime`).
 
-Labels must include `vendor-update-impact` and `product-config:uvcs-configuration-1`.
+Labels must include `vendor-update-impact` and `product-config:Configurations{N}`.
 
 The body must follow [issue-template.md](issue-template.md), include
 
-`<!-- impact:{cluster_key}:uvcs-configuration-1 -->`
+`<!-- impact:{cluster_key}:Configurations{N} -->`
 
 list each product source repo with its commit under **Impact analysis conducted on source code version**, and cite **at least one path under `workspace/DesktopApplication/`** from `main` (file plus what you read there). "WPF / net9 / SBOM present" is not sufficient evidence.
 
