@@ -24,7 +24,7 @@ class FallbackPdlcTests(unittest.TestCase):
     def test_scores_catalog_rows_without_hardcoded_ids(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            app = root / "workspace" / "DesktopApplication"
+            app = root / "workspace" / "HostApplication"
             src = app / "src" / "App.cs"
             src.parent.mkdir(parents=True)
             src.write_text("class App {}\n", encoding="utf-8")

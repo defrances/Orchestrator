@@ -19,7 +19,7 @@ VENDOR_SKILL = ROOT / ".github" / "skills" / "analyze-vendor-update-impact" / "S
 PDLC_PROMPT = """Follow .github/skills/analyze-pdlc-release/SKILL.md.
 
 Read inputs/architecture.md, inputs/mds2.md, inputs/test-plan.md, and inputs/vulnerability-report.md.
-Analyze Host Application (workspace/DesktopApplication) on branch main (see workspace/desktop-application-inventory.md).
+Analyze Host Application (workspace/HostApplication) on branch main (see workspace/host-application-inventory.md).
 For each product finding, set countermeasure present/absent/partial, cite files, list tests_to_run, and write a patch_plan.
 Do not treat FindUpdates station KB rows as product vulnerabilities.
 os_kb_advice must not package Windows KBs.
@@ -28,7 +28,7 @@ Write pdlc-out/analysis.json only. Do not call gh issue create. Do not deploy.
 
 VENDOR_PROMPT = """Follow .github/skills/analyze-vendor-update-impact/SKILL.md.
 
-Analyze Host Application (workspace/DesktopApplication) on branch main (see workspace/desktop-application-inventory.md).
+Analyze Host Application (workspace/HostApplication) on branch main (see workspace/host-application-inventory.md).
 Read every source file listed in that inventory before writing analysis JSON.
 The numbered configuration labels are Configurations1, Configurations2, … from sorted lab device_id values (same order as the GitHub Page).
 Score install_risk, skip_risk, required_for_app, and compatibility against libraries and logic on main.

@@ -17,7 +17,7 @@ REPORT = Path("pdlc-out/PDLC_REPORT.md")
 
 def product_display(value: object) -> str:
     text = str(value or "").strip()
-    if text in {"", "DesktopApplication", "Desktop Application"}:
+    if text in {"", "HostApplication", "DesktopApplication", "Desktop Application"}:
         return "Host Application"
     return text
 
@@ -87,7 +87,7 @@ def main() -> int:
     )
 
     RELEASE_DIR.mkdir(parents=True, exist_ok=True)
-    zip_path = RELEASE_DIR / f"DesktopApplication-{version}-win-x64.zip"
+    zip_path = RELEASE_DIR / f"HostApplication-{version}-win-x64.zip"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("PDLC_REPORT.md", REPORT.read_text(encoding="utf-8"))
         archive.writestr("RELEASE_NOTES.md", "\n".join(notes))

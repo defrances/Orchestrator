@@ -12,7 +12,7 @@ import re
 import subprocess
 from pathlib import Path
 
-APP = Path("workspace/DesktopApplication")
+APP = Path("workspace/HostApplication")
 OUT = Path("pdlc-out/analysis.json")
 VULN = Path("inputs/vulnerability-report.md")
 MDS2 = Path("inputs/mds2.md")
@@ -165,7 +165,7 @@ def main() -> int:
     ]
 
     payload = {
-        "product": "DesktopApplication",
+        "product": "HostApplication",
         "branch": "main",
         "sha": git_sha(),
         "findings": findings,

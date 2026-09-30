@@ -422,7 +422,7 @@ def collect_findings(workspace: Path) -> tuple[list[dict[str, object]], dict[str
         if str(row).strip()
     ]
     meta = {
-        "product": str(payload.get("product") or "DesktopApplication"),
+        "product": str(payload.get("product") or "HostApplication"),
         "branch": str(payload.get("branch") or "main"),
         "sha": str(payload.get("sha") or ""),
         "tests_filter": str(payload.get("tests_filter") or "Smoke|Regression"),
@@ -870,10 +870,15 @@ def trend_points(snapshots: list[dict[str, object]] | None) -> list[dict[str, ob
 
 def collect_release(workspace: Path) -> dict[str, object] | None:
     release_dir = _first_dir(workspace, "release")
+    patterns = ("HostApplication-*-win-x64.zip", "DesktopApplication-*-win-x64.zip")
+    zips: list[Path] = []
     if release_dir is None:
-        zips = sorted(workspace.rglob("DesktopApplication-*-win-x64.zip"))
+        for pattern in patterns:
+            zips.extend(workspace.rglob(pattern))
     else:
-        zips = sorted(release_dir.glob("DesktopApplication-*-win-x64.zip"))
+        for pattern in patterns:
+            zips.extend(release_dir.glob(pattern))
+    zips = sorted(zips)
     if not zips:
         return None
     return {"zip_name": zips[-1].name}
@@ -882,7 +887,9 @@ def collect_release(workspace: Path) -> dict[str, object] | None:
 def collect_sha(workspace: Path, analysis_meta: dict[str, str]) -> str:
     if analysis_meta.get("sha"):
         return analysis_meta["sha"]
-    inventory = _first_file(workspace, "desktop-application-inventory.md")
+    inventory = _first_file(workspace, "host-application-inventory.md") or _first_file(
+        workspace, "desktop-application-inventory.md"
+    )
     if inventory:
         match = HEAD_RE.search(inventory.read_text(encoding="utf-8"))
         if match:
@@ -952,7 +959,7 @@ def snapshot_from_workspace(workspace: Path, *, env: dict[str, str] | None = Non
     repo = (environ.get("GITHUB_REPOSITORY") or "defrances/Orchestrator").strip()
     workflow = (environ.get("GITHUB_WORKFLOW") or "Vendor impact and PDLC").strip()
     fu_repo = (environ.get("FINDUPDATES_REPO") or "defrances/FindUpdates").strip()
-    app_repo = (environ.get("APP_REPO") or "defrances/DesktopApplication").strip()
+    app_repo = (environ.get("APP_REPO") or "defrances/HostApplication").strip()
     fu_run = (environ.get("FU_RUN_ID") or "").strip()
     fu_url = (environ.get("FU_HTML_URL") or "").strip()
     if bundle and not fu_run:
@@ -976,7 +983,7 @@ def snapshot_from_workspace(workspace: Path, *, env: dict[str, str] | None = Non
         "run_url": f"{server}/{repo}/actions/runs/{run_id}" if run_id != "local" else "",
         "findupdates_run_id": fu_run,
         "findupdates_url": fu_url,
-        "product": meta.get("product") or "DesktopApplication",
+        "product": meta.get("product") or "HostApplication",
         "branch": meta.get("branch") or "main",
         "sha": sha,
         "sha_url": f"{server}/{app_repo}/commit/{sha}" if sha else "",

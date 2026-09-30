@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-APP_REPO = os.environ.get("APP_REPO", "defrances/DesktopApplication")
+APP_REPO = os.environ.get("APP_REPO", "defrances/HostApplication")
 MAX_ISSUES = int(os.environ.get("MAX_ISSUES", "8"))
 OUT_DIR = Path(os.environ.get("ISSUES_OUT_DIR", "issues-out"))
 IMPACT_LABEL = "vendor-update-impact"

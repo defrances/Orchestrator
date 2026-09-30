@@ -6,8 +6,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-APP = Path("workspace/DesktopApplication")
-OUT = Path("workspace/desktop-application-inventory.md")
+APP = Path("workspace/HostApplication")
+OUT = Path("workspace/host-application-inventory.md")
 SKIP_PARTS = {".git", "bin", "obj", "artifacts"}
 
 
@@ -49,7 +49,7 @@ def main() -> int:
     lines = [
         "# Host Application main inventory",
         "",
-        f"- Remote: https://github.com/defrances/DesktopApplication",
+        f"- Remote: https://github.com/defrances/HostApplication",
         f"- Branch: `{branch}`",
         f"- HEAD: `{sha}`",
         f"- Tracked-like source files: {len(files)}",
@@ -65,7 +65,7 @@ def main() -> int:
     ]
     for path in files:
         rel = path.relative_to(APP).as_posix()
-        lines.append(f"- `workspace/DesktopApplication/{rel}`")
+        lines.append(f"- `workspace/HostApplication/{rel}`")
     lines.append("")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(lines), encoding="utf-8")

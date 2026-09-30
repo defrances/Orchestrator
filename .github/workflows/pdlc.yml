@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      APP_REPO: defrances/DesktopApplication
+      APP_REPO: defrances/HostApplication
       GH_TOKEN: ${{ secrets.ORCHESTRATOR_PAT }}
       FU_RUN_ID: ${{ github.event.client_payload.run_id || github.event.inputs.findupdates_run_id || '' }}
       FU_SOURCE: ${{ github.event.client_payload.source || github.event.inputs.source || 'live' }}
@@ -74,23 +74,23 @@ jobs:
       - name: Checkout Host Application main
         uses: actions/checkout@v4
         with:
-          repository: defrances/DesktopApplication
+          repository: defrances/HostApplication
           ref: main
           token: ${{ secrets.ORCHESTRATOR_PAT }}
-          path: workspace/DesktopApplication
+          path: workspace/HostApplication
           fetch-depth: 0
 
       - name: Inventory Host Application main
-        run: python3 scripts/inventory-desktop-application.py
+        run: python3 scripts/inventory-host-application.py
 
       - name: Copy PDLC corpus into inputs
         run: |
           set -euo pipefail
           mkdir -p inputs
-          cp workspace/DesktopApplication/docs/architecture.md inputs/architecture.md
-          cp workspace/DesktopApplication/docs/mds2.md inputs/mds2.md
-          cp workspace/DesktopApplication/docs/test-plan.md inputs/test-plan.md
-          cp workspace/DesktopApplication/docs/vulnerability-report.md inputs/vulnerability-report.md
+          cp workspace/HostApplication/docs/architecture.md inputs/architecture.md
+          cp workspace/HostApplication/docs/mds2.md inputs/mds2.md
+          cp workspace/HostApplication/docs/test-plan.md inputs/test-plan.md
+          cp workspace/HostApplication/docs/vulnerability-report.md inputs/vulnerability-report.md
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -124,20 +124,20 @@ jobs:
           dotnet-version: "9.0.x"
 
       - name: Run smoke and regression tests
-        working-directory: workspace/DesktopApplication
+        working-directory: workspace/HostApplication
         run: |
           set -euo pipefail
           mkdir -p ../../artifacts
           # Core tests are net9.0; do not restore the WPF WinExe on Ubuntu.
-          dotnet test tests/DesktopApplication.Tests/DesktopApplication.Tests.csproj \
+          dotnet test tests/HostApplication.Tests/HostApplication.Tests.csproj \
             -c Release --verbosity normal \
             --filter "Category=Smoke|Category=Regression" \
             | tee ../../artifacts/TEST_RESULTS.md
 
       - name: Publish win-x64
-        working-directory: workspace/DesktopApplication
+        working-directory: workspace/HostApplication
         run: >
-          dotnet publish src/DesktopApplication/DesktopApplication.csproj
+          dotnet publish src/HostApplication/HostApplication.csproj
           -c Release
           -r win-x64
           --self-contained true

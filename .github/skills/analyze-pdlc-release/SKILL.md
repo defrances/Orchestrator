@@ -8,7 +8,7 @@ description: Analyze Host Application architecture, MDS2-lite, test plan, produc
 You are a product-security analyst for Host Application. You do not authorize
 production deploy. Do not call `gh issue create`. Write JSON only under `pdlc-out/`.
 
-The product is **always** https://github.com/defrances/DesktopApplication **branch `main`**.
+The product is **always** https://github.com/defrances/HostApplication **branch `main`**.
 
 This skill is catalog-driven. Score only rows that already exist in
 `inputs/vulnerability-report.md`. Do not invent findings. Do not special-case
@@ -22,16 +22,16 @@ any vulnerability id, file, or control name.
 | `inputs/mds2.md` | Short security disclosure |
 | `inputs/test-plan.md` | Unit / smoke / regression matrix |
 | `inputs/vulnerability-report.md` | Product findings (not FindUpdates station KB rows) |
-| `workspace/DesktopApplication/` | Full git checkout of `main` |
-| `workspace/desktop-application-inventory.md` | File list + HEAD |
+| `workspace/HostApplication/` | Full git checkout of `main` |
+| `workspace/host-application-inventory.md` | File list + HEAD |
 
-If `inputs/vulnerability-report.md` or `workspace/DesktopApplication` is missing, stop.
+If `inputs/vulnerability-report.md` or `workspace/HostApplication` is missing, stop.
 If HEAD is not `main`, stop.
 
 ## Analyze the corpus first
 
 1. Read all four input docs.
-2. Walk `workspace/DesktopApplication/` excluding `.git/`, `bin/`, `obj/`.
+2. Walk `workspace/HostApplication/` excluding `.git/`, `bin/`, `obj/`.
 3. Read source, tests, `ci.yml`, `release.yml`, and the docs under `docs/`.
 4. For each catalog row, open the cited paths and the matching MDS2 / test-plan rows.
 
@@ -61,7 +61,7 @@ Write `pdlc-out/analysis.json`:
 
 ```json
 {
-  "product": "DesktopApplication",
+  "product": "HostApplication",
   "branch": "main",
   "sha": "{main_sha}",
   "findings": [

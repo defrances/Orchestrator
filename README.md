@@ -1,6 +1,6 @@
 # Orchestrator
 
-Control plane for [Host Application](https://github.com/defrances/DesktopApplication). This repository does **not** start [FindUpdates](https://github.com/defrances/FindUpdates). Detect notifies here after it uploads `findupdates-report-json`.
+Control plane for [Host Application](https://github.com/defrances/HostApplication). This repository does **not** start [FindUpdates](https://github.com/defrances/FindUpdates). Detect notifies here after it uploads `findupdates-report-json`.
 
 One workflow, [Vendor impact and PDLC](.github/workflows/orchestrate.yml), runs after `findupdates-complete` (or from **Run workflow**):
 
@@ -113,7 +113,7 @@ Fine-grained PAT (or classic `repo` PAT):
 | --- | --- |
 | `defrances/Orchestrator` | Contents: **Read and write** |
 | `defrances/FindUpdates` | Actions: **Read** |
-| `defrances/DesktopApplication` | Contents: read, Actions: read |
+| `defrances/HostApplication` | Contents: read, Actions: read |
 
 `GITHUB_TOKEN` cannot start workflows in another repository. This PAT does not need Issues write.
 
@@ -170,5 +170,5 @@ python scripts/build-pages-site.py --workspace <run-dir> --history <gh-pages-che
 | [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload report, notify this repo |
 | [Vendor impact and PDLC](.github/workflows/orchestrate.yml) | Orchestrator | One follow-through run, then Pages |
 | [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Manual product-only package |
-| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | Host Application | Build, test, SBOM |
-| [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | Host Application | Versioned win-x64 zip from that repo |
+| [CI](https://github.com/defrances/HostApplication/blob/main/.github/workflows/ci.yml) | Host Application | Build, test, SBOM |
+| [Release package](https://github.com/defrances/HostApplication/blob/main/.github/workflows/release.yml) | Host Application | Versioned win-x64 zip from that repo |

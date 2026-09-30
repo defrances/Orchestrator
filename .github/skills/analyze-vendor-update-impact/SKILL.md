@@ -9,62 +9,62 @@ You write design-control evidence for each lab configuration **Configurations1**
 FindUpdates and this workflow collect facts; they are not the product tool-validation procedure and they do not authorize install.
 Do not call `gh issue create`. Write JSON files only under `issues-out/`. Results are emailed.
 
-The application under analysis is **always** https://github.com/defrances/DesktopApplication **branch `main`**.
+The application under analysis is **always** https://github.com/defrances/HostApplication **branch `main`**.
 Do not analyze another branch, a single project file, or "the idea of a WPF app".
-Keep repository folder names (`DesktopApplication`) as they are on disk. Do not put synthetic station ids (`SYNTHETIC-…`) in the email subject. Use `Configurations1`, `Configurations2`, … instead.
+Keep repository folder names (`HostApplication`) as they are on disk. Do not put synthetic station ids (`SYNTHETIC-…`) in the email subject. Use `Configurations1`, `Configurations2`, … instead.
 
 ## Inputs
 
 | Path | What it is |
 | --- | --- |
 | `inputs/report.json` | FindUpdates `findupdates-report-json` (`kind=station_report`) |
-| `workspace/DesktopApplication/` | Full git checkout of `defrances/DesktopApplication` @ `main` |
-| `workspace/desktop-application-inventory.md` | File list + HEAD of that `main` checkout |
-| `workspace/sbom/DesktopApplication.sbom.spdx.json` | Optional SPDX SBOM from the triggering CI run |
-| `workspace/DesktopApplication/docs/test-plan.md` | Documented Unit / Smoke / Regression ids |
-| `workspace/DesktopApplication/docs/security-risk-management.md` | Product patch management under design control |
+| `workspace/HostApplication/` | Full git checkout of `defrances/HostApplication` @ `main` |
+| `workspace/host-application-inventory.md` | File list + HEAD of that `main` checkout |
+| `workspace/sbom/HostApplication.sbom.spdx.json` | Optional SPDX SBOM from the triggering CI run |
+| `workspace/HostApplication/docs/test-plan.md` | Documented Unit / Smoke / Regression ids |
+| `workspace/HostApplication/docs/security-risk-management.md` | Product patch management under design control |
 
 If `inputs/report.json` is missing, stop.
-If `workspace/DesktopApplication` is missing, stop.
+If `workspace/HostApplication` is missing, stop.
 If HEAD is not `main`, stop. Do not invent repository contents.
 
 ## Analyze the entire main repository first
 
 Complete this pass **before** deciding any issue. Do not skip files because they look unrelated.
 
-1. Read `workspace/desktop-application-inventory.md`. Confirm branch `main` and note HEAD.
-2. Walk the whole tree under `workspace/DesktopApplication/`, excluding `.git/`, `bin/`, `obj/`.
+1. Read `workspace/host-application-inventory.md`. Confirm branch `main` and note HEAD.
+2. Walk the whole tree under `workspace/HostApplication/`, excluding `.git/`, `bin/`, `obj/`.
 3. Read every source and project file, at least:
-   - `DesktopApplication.sln`
+   - `HostApplication.sln`
    - `README.md`
    - `.github/workflows/ci.yml`
    - `.github/workflows/notify-orchestrator.yml`
-   - `src/DesktopApplication/DesktopApplication.csproj`
-   - `src/DesktopApplication/App.xaml`, `App.xaml.cs`
-   - `src/DesktopApplication/MainWindow.xaml`, `MainWindow.xaml.cs`
-   - `src/DesktopApplication/MainViewModel.cs`
-   - `src/DesktopApplication/RelayCommand.cs`
-   - `src/DesktopApplication/AssemblyInfo.cs`
-   - `src/DesktopApplication/app.manifest`
-   - `src/DesktopApplication.Core/DesktopApplication.Core.csproj`
-   - `src/DesktopApplication.Core/NoteStore.cs`
-   - `src/DesktopApplication.Core/SystemInformation.cs`
-   - `src/DesktopApplication.Core/InsecureVendorBulletinClient.cs` (if present)
-   - `tests/DesktopApplication.Tests/DesktopApplication.Tests.csproj`
-   - `tests/DesktopApplication.Tests/NoteStoreTests.cs`
-   - `tests/DesktopApplication.Tests/SystemInformationProviderTests.cs`
-   - `tests/DesktopApplication.Tests/InsecureVendorBulletinClientTests.cs` (if present)
+   - `src/HostApplication/HostApplication.csproj`
+   - `src/HostApplication/App.xaml`, `App.xaml.cs`
+   - `src/HostApplication/MainWindow.xaml`, `MainWindow.xaml.cs`
+   - `src/HostApplication/MainViewModel.cs`
+   - `src/HostApplication/RelayCommand.cs`
+   - `src/HostApplication/AssemblyInfo.cs`
+   - `src/HostApplication/app.manifest`
+   - `src/HostApplication.Core/HostApplication.Core.csproj`
+   - `src/HostApplication.Core/NoteStore.cs`
+   - `src/HostApplication.Core/SystemInformation.cs`
+   - `src/HostApplication.Core/InsecureVendorBulletinClient.cs` (if present)
+   - `tests/HostApplication.Tests/HostApplication.Tests.csproj`
+   - `tests/HostApplication.Tests/NoteStoreTests.cs`
+   - `tests/HostApplication.Tests/SystemInformationProviderTests.cs`
+   - `tests/HostApplication.Tests/InsecureVendorBulletinClientTests.cs` (if present)
    - `docs/test-plan.md`, `docs/mds2.md`, `docs/security-risk-management.md`
 4. From those files, extract facts (cite path + symbol), including:
    - Target framework, `UseWPF`, `OutputType=WinExe`, project references
    - Self-contained `win-x64` publish and SBOM generation in CI (not assumed from memory)
    - `app.manifest`: Windows 10 compatibility GUID, `dpiAware`, `PerMonitorV2`
    - UI/view-model behavior in `MainWindow` / `MainViewModel`
-   - `%AppData%\DesktopApplication\notes.txt` via `NoteStore`
+   - `%AppData%\HostApplication\notes.txt` via `NoteStore`
    - OS/user/machine/runtime strings via `SystemInformationProvider` (`RuntimeInformation`)
    - HTTPS / TLS via `InsecureVendorBulletinClient` / `CheckBulletinCommand` when those files exist
    - Tests that lock file I/O, OS information, or TLS-bypass contracts
-5. History on **main only**: `git -C workspace/DesktopApplication log --oneline -20` and diffs that change runtime, packaging, I/O, WPF, TLS, or OS assumptions. Use this only as analysis input; do **not** put a Recent code section in the email body.
+5. History on **main only**: `git -C workspace/HostApplication log --oneline -20` and diffs that change runtime, packaging, I/O, WPF, TLS, or OS assumptions. Use this only as analysis input; do **not** put a Recent code section in the email body.
 6. SBOM if present: map packages to files you actually read. A SBOM row is not enough without a code path.
 
 Write a short working map (in your reasoning, not as an extra file): what the app does, how it is built, which OS/runtime APIs it calls, which local files it touches.
@@ -188,7 +188,7 @@ The body must follow [issue-template.md](issue-template.md), include
 
 `<!-- impact:{cluster_key}:Configurations{N} -->`
 
-list each product source repo with its commit under **Impact analysis conducted on source code version**, and cite **at least one path under `workspace/DesktopApplication/`** from `main` (file plus what you read there). "WPF / net9 / SBOM present" is not sufficient evidence.
+list each product source repo with its commit under **Impact analysis conducted on source code version**, and cite **at least one path under `workspace/HostApplication/`** from `main` (file plus what you read there). "WPF / net9 / SBOM present" is not sufficient evidence.
 
 Do **not** include: a GitHub issue sentence, Advisory / Policy / Score columns, an authorization disclaimer, or a Recent code section.
 

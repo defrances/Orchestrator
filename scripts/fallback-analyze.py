@@ -18,10 +18,10 @@ import psirt_scores
 
 REPORT = Path("inputs/report.json")
 OUT_DIR = Path("issues-out")
-APP_DIR = Path(os.environ.get("DA_CHECKOUT") or "workspace/DesktopApplication")
+APP_DIR = Path(os.environ.get("DA_CHECKOUT") or "workspace/HostApplication")
 MAX_CLUSTER_KEYS = 8
 CANDIDATE = "candidate_for_validation"
-DEFAULT_PRODUCT_REPOS = ("defrances/DesktopApplication",)
+DEFAULT_PRODUCT_REPOS = ("defrances/HostApplication",)
 HOLD_POLICY = {"HOLD", "BLOCK"}
 
 CLUSTER_RULES: list[tuple[str, tuple[str, ...]]] = [
@@ -144,21 +144,21 @@ def unique_field(members: list[dict[str, object]], name: str) -> str:
 
 def app_notes() -> str:
     notes = [
-        "`src/DesktopApplication/DesktopApplication.csproj` — `UseWPF`, WinExe, `net9.0-windows`.",
+        "`src/HostApplication/HostApplication.csproj` — `UseWPF`, WinExe, `net9.0-windows`.",
         "`.github/workflows/ci.yml` — `dotnet publish` `--self-contained true` `-r win-x64`.",
-        "`src/DesktopApplication.Core/NoteStore.cs` — `%AppData%\\DesktopApplication\\notes.txt`.",
-        "`src/DesktopApplication.Core/SystemInformation.cs` — `RuntimeInformation` host strings.",
-        "`src/DesktopApplication/app.manifest` — Windows 10 compatibility and `PerMonitorV2`.",
+        "`src/HostApplication.Core/NoteStore.cs` — `%AppData%\\HostApplication\\notes.txt`.",
+        "`src/HostApplication.Core/SystemInformation.cs` — `RuntimeInformation` host strings.",
+        "`src/HostApplication/app.manifest` — Windows 10 compatibility and `PerMonitorV2`.",
     ]
-    tls = APP_DIR / "src" / "DesktopApplication.Core" / "InsecureVendorBulletinClient.cs"
+    tls = APP_DIR / "src" / "HostApplication.Core" / "InsecureVendorBulletinClient.cs"
     if tls.exists():
         notes.append(
-            "`src/DesktopApplication.Core/InsecureVendorBulletinClient.cs` — HTTPS via host Schannel."
+            "`src/HostApplication.Core/InsecureVendorBulletinClient.cs` — HTTPS via host Schannel."
         )
     sbom = (
-        Path("workspace/sbom/DesktopApplication.sbom.spdx.json")
-        if Path("workspace/sbom/DesktopApplication.sbom.spdx.json").exists()
-        else APP_DIR / "artifacts" / "DesktopApplication.sbom.spdx.json"
+        Path("workspace/sbom/HostApplication.sbom.spdx.json")
+        if Path("workspace/sbom/HostApplication.sbom.spdx.json").exists()
+        else APP_DIR / "artifacts" / "HostApplication.sbom.spdx.json"
     )
     if sbom.exists():
         notes.append(f"SBOM present at `{sbom.as_posix()}`.")
@@ -256,7 +256,7 @@ def risk_why(key: str, risk: dict[str, str]) -> str:
             [
                 f"- **Required for the app to keep working: {required}.** "
                 "The published exe still starts without this KB. "
-                "`DesktopApplication.csproj` has no third-party `PackageReference` for host .NET, "
+                "`HostApplication.csproj` has no third-party `PackageReference` for host .NET, "
                 "and CI publishes `--self-contained true`. An OS .NET KB does not patch the bundled runtime.",
                 f"- **If we install: {install}.** "
                 "Putting the KB on the host does not replace bits inside the self-contained exe.",
@@ -271,7 +271,7 @@ def risk_why(key: str, risk: dict[str, str]) -> str:
             [
                 f"- **Required for the app to keep working: {required}.** "
                 "The published exe still starts without this KB. "
-                "`DesktopApplication.csproj` has no third-party `PackageReference` for the patched library, "
+                "`HostApplication.csproj` has no third-party `PackageReference` for the patched library, "
                 "and CI publishes `--self-contained true`. This host KB is not a product runtime patch.",
                 f"- **If we install: {install}.** "
                 "Putting the KB on the host does not replace bits inside the self-contained exe. "
@@ -290,7 +290,7 @@ def risk_why(key: str, risk: dict[str, str]) -> str:
                 f"- **Required for the app to keep working: {required}.** "
                 "The exe still starts without this KB. Notes I/O is product code in `NoteStore.cs`, not a vendor package the process cannot load.",
                 f"- **If we install: {install}.** "
-                "An NTFS host KB does not replace the self-contained exe. `NoteStore` still writes `%AppData%\\DesktopApplication\\notes.txt`.",
+                "An NTFS host KB does not replace the self-contained exe. `NoteStore` still writes `%AppData%\\HostApplication\\notes.txt`.",
                 f"- **If we skip: {skip}.** "
                 "Leaving the KB off leaves host NTFS unpatched near the notes path. The app still runs.",
                 f"- **Compatibility: {compat}.** "
@@ -446,7 +446,7 @@ def product_risk_text(key: str) -> str:
         return "\n".join(
             [
                 "- Affected product functions: local notes read/write.",
-                "- Potential hazards: integrity of `%AppData%\\DesktopApplication\\notes.txt` if NTFS behavior changes.",
+                "- Potential hazards: integrity of `%AppData%\\HostApplication\\notes.txt` if NTFS behavior changes.",
                 "- Failure scenarios: skip — host NTFS stays exposed; install — notes I/O may fail or change path semantics.",
             ]
         )

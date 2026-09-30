@@ -25,7 +25,7 @@ CLUSTER_BODY = """<!-- impact:schannel-tls:uvcs-configuration-1 -->
 
 Impact analysis conducted on source code version:
 
-- https://github.com/defrances/DesktopApplication - commit `abc1234`
+- https://github.com/defrances/HostApplication - commit `abc1234`
 
 ## Updates applicable for this product configuration
 
@@ -39,7 +39,7 @@ Impact analysis conducted on source code version:
 
 ## Technical Impact Assessment
 
-- `src/DesktopApplication.Core/InsecureVendorBulletinClient.cs` — HTTPS via host Schannel
+- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` — HTTPS via host Schannel
 
 ## Cybersecurity impact assessment
 
@@ -373,9 +373,9 @@ class FallbackLinkTests(unittest.TestCase):
                     "explanation": "TLS path.",
                 }
             ],
-            "- `src/DesktopApplication.Core/InsecureVendorBulletinClient.cs`",
+            "- `src/HostApplication.Core/InsecureVendorBulletinClient.cs`",
             fallback.risk_fields("schannel-tls"),
-            source_versions="- https://github.com/defrances/DesktopApplication - commit `abc`",
+            source_versions="- https://github.com/defrances/HostApplication - commit `abc`",
             device="Configurations1",
         )
         self.assertIn(f"[KB5122871]({url})", body)
@@ -408,7 +408,7 @@ class FallbackLinkTests(unittest.TestCase):
         self.assertIn("## Vendor vs product scores", body)
         self.assertIn("| Vendor |", body)
         self.assertIn("| Product |", body)
-        self.assertIn("https://github.com/defrances/DesktopApplication - commit `abc`", body)
+        self.assertIn("https://github.com/defrances/HostApplication - commit `abc`", body)
         self.assertIn("TC-REG-TLS-CALLBACK", body)
         self.assertIn("**Required for the app to keep working: Not required.**", body)
         self.assertIn("**If we skip: Station stays exposed.**", body)

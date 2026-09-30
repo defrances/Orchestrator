@@ -47,14 +47,14 @@ class BuildPagesSiteTests(unittest.TestCase):
                     "body": (
                         "## Technical Impact Assessment\n\n"
                         "### Impacted Components\n\n"
-                        "Host Schannel TLS. Cited `src/DesktopApplication/App.xaml`.\n"
+                        "Host Schannel TLS. Cited `src/HostApplication/App.xaml`.\n"
                     ),
                 },
             )
             _write(
                 work / "pdlc-out" / "analysis.json",
                 {
-                    "product": "DesktopApplication",
+                    "product": "HostApplication",
                     "branch": "main",
                     "sha": "abc1234",
                     "findings": [
@@ -65,7 +65,7 @@ class BuildPagesSiteTests(unittest.TestCase):
                             "evidence": "InsecureVendorBulletinClient accepts any certificate.",
                             "patch_plan": "Validate sslPolicyErrors.",
                             "tests_to_run": ["TC-REG-TLS-CALLBACK"],
-                            "impact_files": ["src/DesktopApplication.Core/InsecureVendorBulletinClient.cs"],
+                            "impact_files": ["src/HostApplication.Core/InsecureVendorBulletinClient.cs"],
                         }
                     ],
                     "os_kb_advice": [
@@ -113,7 +113,7 @@ class BuildPagesSiteTests(unittest.TestCase):
                 work / "artifacts" / "TEST_RESULTS.md",
                 "Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 1 s\n",
             )
-            _write(work / "artifacts" / "release" / "DesktopApplication-20260923T174629Z-9-win-x64.zip", "zip")
+            _write(work / "artifacts" / "release" / "HostApplication-20260923T174629Z-9-win-x64.zip", "zip")
             _write(
                 work / "artifacts" / "ai-usage.json",
                 {
@@ -143,10 +143,10 @@ class BuildPagesSiteTests(unittest.TestCase):
             )
             self.assertEqual(
                 first["sha_url"],
-                "https://github.com/defrances/DesktopApplication/commit/abc1234",
+                "https://github.com/defrances/HostApplication/commit/abc1234",
             )
             self.assertEqual(first["tests"]["passed"], 4)
-            self.assertEqual(first["release"]["zip_name"], "DesktopApplication-20260923T174629Z-9-win-x64.zip")
+            self.assertEqual(first["release"]["zip_name"], "HostApplication-20260923T174629Z-9-win-x64.zip")
             self.assertEqual(first["ai"], {"provider": "agent", "model": "composer-2.5"})
             self.assertEqual(pages.format_ai_usage(first["ai"]), "Analysis used agent, model composer-2.5.")
             self.assertNotIn("tokens", pages.format_ai_usage(first["ai"]).lower())
@@ -195,6 +195,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("assets/data.js", html)
             self.assertIn("Alcon", html)
             self.assertIn("Windows Patch Management", html)
+            self.assertNotIn("Orchestrator · HostApplication", html)
             self.assertNotIn("Orchestrator · DesktopApplication", html)
             app_js = (out2 / "assets" / "app.js").read_text(encoding="utf-8")
             self.assertIn("Alcon", app_js)
@@ -310,7 +311,7 @@ class BuildPagesSiteTests(unittest.TestCase):
 
     def test_parse_test_run_successful_block(self) -> None:
         text = (
-            "Test run for /tmp/DesktopApplication.Tests.dll\n"
+            "Test run for /tmp/HostApplication.Tests.dll\n"
             "Test Run Successful.\n"
             "Total tests: 3\n"
             "     Passed: 3\n"

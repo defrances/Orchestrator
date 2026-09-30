@@ -199,7 +199,7 @@
 
   function displayProduct(run) {
     var raw = String((run && run.product) || "").trim();
-    if (!raw || raw === "DesktopApplication") return "Host Application";
+    if (!raw || raw === "HostApplication" || raw === "DesktopApplication") return "Host Application";
     return raw;
   }
 
