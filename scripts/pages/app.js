@@ -277,10 +277,21 @@
     return line + " " + historyN + " runs in the last 90 days.";
   }
 
-  function configBars(rows) {
+  function periodChartCaption(rows, counts, historyN) {
+    var recommended = (counts && counts.recommended) || 0;
+    var applicable = (counts && counts.applicable) || 0;
+    var line = "Last 90 days: " + applicable + " unique applicable · " +
+      recommended + " recommended to install across " + (rows || []).length +
+      " configurations.";
+    var n = Number(historyN || 0);
+    if (n) return line + " " + n + " runs.";
+    return line;
+  }
+
+  function configBars(rows, emptyText) {
     var list = rows || [];
     if (!list.length) {
-      return '<p class="empty">No configuration counts on this run.</p>';
+      return '<p class="empty">' + esc(emptyText || "No configuration counts on this run.") + "</p>";
     }
     var n = list.length;
     var w = Math.max(640, n * 90);
@@ -342,12 +353,49 @@
     return parts.join("");
   }
 
+  function periodMatrix(run) {
+    var pkgs = uniquePackages(run);
+    var names = [];
+    pkgs.forEach(function (pkg) {
+      (pkg.stations || []).forEach(function (raw) {
+        var name = String(raw || "").trim();
+        if (name && names.indexOf(name) === -1) names.push(name);
+      });
+    });
+    names.sort();
+    if (!names.length || !pkgs.length) return "";
+    var parts = ['<div class="matrix-wrap"><table><thead><tr><th>KB</th>'];
+    names.forEach(function (name) { parts.push("<th>" + esc(configLabel(name)) + "</th>"); });
+    parts.push("</tr></thead><tbody>");
+    pkgs.forEach(function (pkg) {
+      var letters = lettersForKb(run, pkg.kb);
+      var stations = pkg.stations || [];
+      parts.push("<tr><td>" + esc(pkg.kb) + "</td>");
+      names.forEach(function (name) {
+        var hit = stations.some(function (station) {
+          return sameConfig(station, name) || sameConfig(configLabel(station), configLabel(name));
+        });
+        if (!hit) {
+          parts.push("<td>NA</td>");
+          return;
+        }
+        var cluster = clusterForStation(letters.clusters || [], name);
+        var product = cluster ? productFromCluster(cluster).risk : letters.product;
+        parts.push("<td>" + esc((letters.vendor || "NA") + "/" + (product || "NA")) + "</td>");
+      });
+      parts.push("</tr>");
+    });
+    parts.push("</tbody></table></div>");
+    return parts.join("");
+  }
+
   function glance(run) {
     var rows = configUpdateCounts(packages(run));
     var historyN = allSnapshots().length;
+    var counts = uniqueCounts(run);
     var parts = [];
-    parts.push('<p class="chart-cap">' + esc(configChartCaption(rows, run.run_id, historyN)) + "</p>");
-    parts.push(configBars(rows));
+    parts.push('<p class="chart-cap">' + esc(periodChartCaption(rows, counts, historyN)) + "</p>");
+    parts.push(configBars(rows, "No configuration counts in the last 90 days."));
     parts.push('<div class="barLegend"><span><i class="applicable"></i>Applicable</span>' +
       '<span><i class="recommended"></i>Recommended to install</span></div>');
     return parts.join("");
@@ -358,6 +406,78 @@
     Object.keys(snapshots).forEach(function (id) { list.push(snapshots[id]); });
     list.sort(function (a, b) { return String(a.created_at || "").localeCompare(String(b.created_at || "")); });
     return list;
+  }
+
+  function latestSnapshot() {
+    var list = allSnapshots();
+    return list.length ? list[list.length - 1] : null;
+  }
+
+  function latestWinsPackages() {
+    var map = {};
+    allSnapshots().forEach(function (run) {
+      packages(run).forEach(function (item, index) {
+        var kb = String(item.kb || "").trim() || ("row-" + index);
+        map[kb] = item;
+      });
+    });
+    return Object.keys(map).map(function (kb) { return map[kb]; });
+  }
+
+  function clusterPeriodKey(cluster) {
+    var item = cluster || {};
+    var key = String(item.cluster_key || "").trim() || "other";
+    var cfg = String(item.device_id || item.config_label || "").trim();
+    return key + "::" + cfg;
+  }
+
+  function latestWinsClusters() {
+    var map = {};
+    allSnapshots().forEach(function (run) {
+      realClusters(run).forEach(function (item) {
+        map[clusterPeriodKey(item)] = item;
+      });
+    });
+    return Object.keys(map).map(function (key) { return map[key]; });
+  }
+
+  function latestWinsFindings() {
+    var map = {};
+    allSnapshots().forEach(function (run) {
+      ((run && run.findings) || []).forEach(function (item, index) {
+        var id = String((item && (item.id || item.title)) || "").trim() || ("finding-" + index);
+        map[id] = item;
+      });
+    });
+    return Object.keys(map).map(function (key) { return map[key]; });
+  }
+
+  function periodRun() {
+    var latest = latestSnapshot();
+    if (!latest) return null;
+    var run = {};
+    Object.keys(latest).forEach(function (key) { run[key] = latest[key]; });
+    var bundle = {};
+    var src = latest.bundle || {};
+    Object.keys(src).forEach(function (key) { bundle[key] = src[key]; });
+    bundle.packages = latestWinsPackages();
+    run.bundle = bundle;
+    run.clusters = latestWinsClusters();
+    run.findings = latestWinsFindings();
+    return run;
+  }
+
+  function snapshotForKb(kb) {
+    var needle = String(kb || "").trim();
+    var list = allSnapshots();
+    for (var i = list.length - 1; i >= 0; i--) {
+      if (uniqueKbMap(packages(list[i]))[needle]) return list[i];
+    }
+    return currentRun;
+  }
+
+  function managerPeriodRun(run) {
+    return periodRun() || run;
   }
 
   var LETTER_RANK = { NA: 0, L: 1, M: 2, H: 3, C: 4 };
@@ -602,10 +722,10 @@
     }).join("") + "</div>";
   }
 
-  function donutChart(slices, centerLabel) {
+  function donutChart(slices, centerLabel, emptyText) {
     var list = slices || [];
     var total = list.reduce(function (sum, item) { return sum + Number(item.value || 0); }, 0);
-    if (!total) return '<p class="empty">No counts on this run.</p>';
+    if (!total) return '<p class="empty">' + esc(emptyText || "No counts on this run.") + "</p>";
     var start = 0;
     var arcs = "";
     list.forEach(function (item) {
@@ -645,7 +765,7 @@
       { label: "High", value: buckets.High, color: "#3186e5" },
       { label: "Medium", value: buckets.Medium, color: "#8abcf2" },
       { label: "Low", value: buckets.Low, color: "#cbd5e1" }
-    ], "Applicable");
+    ], "Applicable", "No counts in the last 90 days.");
   }
 
   function findingsDonut(run) {
@@ -657,13 +777,13 @@
       else buckets.partial += 1;
     });
     if (!(buckets.present + buckets.absent + buckets.partial)) {
-      return '<p class="empty">No PDLC findings on this run.</p>';
+      return '<p class="empty">No PDLC findings in the last 90 days.</p>';
     }
     return donutChart([
       { label: "present", value: buckets.present, color: "#22a05a" },
       { label: "absent", value: buckets.absent, color: "#d92828" },
       { label: "partial", value: buckets.partial, color: "#f0b429" }
-    ], "Findings");
+    ], "Findings", "No PDLC findings in the last 90 days.");
   }
 
   function pipeline(run) {
@@ -787,7 +907,7 @@
 
   function componentBars(run) {
     var rows = clusterKeyCounts(run).slice(0, 6);
-    if (!rows.length) return '<p class="empty">No impact cluster keys on this run.</p>';
+    if (!rows.length) return '<p class="empty">No impact cluster keys in the last 90 days.</p>';
     var max = rows[0].value || 1;
     return '<div class="components">' + rows.map(function (row) {
       var width = Math.round(row.value / max * 100);
@@ -797,33 +917,35 @@
   }
 
   function managerDashboard(run) {
-    var counts = uniqueCounts(run);
+    var period = managerPeriodRun(run);
+    var counts = uniqueCounts(period);
     var historyN = allSnapshots().length;
-    var rows = filteredPackages(run);
+    var rows = filteredPackages(period);
+    var findings = (period && period.findings) || [];
     return '<div class="pageHead"><div><h1>Patch Management Overview</h1>' +
       "<p>Executive summary of Microsoft Windows updates for Host Application configurations</p></div>" +
       '<div class="period">Last 90 days</div></div>' +
       '<p class="banner">Advisory only. Not an authorization to install, approve, or deploy. HOLD and BLOCK stay. Configurations are synthetic lab fixtures.</p>' +
-      filtersBar(run) +
+      filtersBar(period) +
       '<div class="kpis">' +
       kpi("▣", historyN, "Runs", "in last 90 days") +
-      kpi("◈", counts.applicable, "Applicable patches", "unique KB in this run") +
-      kpi("↓", counts.recommended, "Recommended to install", "unique KB", "red") +
-      kpi("Ⅱ", counts.held, "Held / Do not install", "unique KB", "purple") +
-      kpi("◎", ((run && run.findings) || []).length, "PDLC findings", "this run", "green") +
+      kpi("◈", counts.applicable, "Applicable patches", "unique KB in last 90 days") +
+      kpi("↓", counts.recommended, "Recommended to install", "unique KB in last 90 days", "red") +
+      kpi("Ⅱ", counts.held, "Held / Do not install", "unique KB in last 90 days", "purple") +
+      kpi("◎", findings.length, "PDLC findings", "unique in last 90 days", "green") +
       "</div><div class=\"grid3\">" +
-      panel("Patches by Configuration", glance(run)) +
-      panel("Product findings", findingsDonut(run)) +
-      panel("Severity (applicable)", severityDonut(run)) +
+      panel("Patches by Configuration", glance(period)) +
+      panel("Product findings", findingsDonut(period)) +
+      panel("Severity (applicable)", severityDonut(period)) +
       "</div>" +
-      panel("This run", pipeline(run)) +
-      panel("Latest Patches (this run)", patchTable(run, rows),
+      panel("Period pipeline", pipeline(period)) +
+      panel("Latest Patches (last 90 days)", patchTable(period, rows),
         '<button class="view" data-view-all>View all</button>') +
       '<div class="grid2">' +
       panel("Patch Trend (last 90 days)", trendChart()) +
-      panel("Top impact cluster keys", componentBars(run)) +
+      panel("Top impact cluster keys", componentBars(period)) +
       "</div>" +
-      panel("KB × configurations", '<p class="chart-legend">Vendor risk / product risk. NA = not applicable for this configuration.</p>' + (psirtMatrix(run) || '<p class="empty">No matrix on this run.</p>'));
+      panel("KB × configurations", '<p class="chart-legend">Vendor risk / product risk. NA = not applicable for this configuration.</p>' + (periodMatrix(period) || '<p class="empty">No matrix in the last 90 days.</p>'));
   }
 
   function findPackage(run, kb) {
@@ -1234,9 +1356,13 @@
   }
 
   function patchList(run) {
-    return '<div class="pageHead"><div><h1>Patches</h1><p>All patch findings for this run</p></div></div>' +
-      filtersBar(run) + panel(filteredPackages(run).length + " patches matching current filters",
-        patchTable(run, filteredPackages(run)));
+    var view = role === "manager" ? managerPeriodRun(run) : run;
+    var subtitle = role === "manager"
+      ? "Unique patches in the last 90 days"
+      : "All patch findings for this run";
+    return '<div class="pageHead"><div><h1>Patches</h1><p>' + esc(subtitle) + "</p></div></div>" +
+      filtersBar(view) + panel(filteredPackages(view).length + " patches matching current filters",
+        patchTable(view, filteredPackages(view)));
   }
 
   function releases(run) {
@@ -1431,7 +1557,7 @@
     {
       q: "What is severity?",
       needles: ["severity", "critical", "high", "medium", "low"],
-      answer: "Severity on a KB is the vendor / MSRC rating from FindUpdates. The severity donut counts unique KBs in this run. It is not the product letter score."
+      answer: "Severity on a KB is the vendor / MSRC rating from FindUpdates. The Manager Dashboard severity donut counts unique KBs in the last 90 days. It is not the product letter score."
     },
     {
       q: "What is an impact cluster?",
@@ -1441,7 +1567,7 @@
     {
       q: "What do the KPI numbers mean?",
       needles: ["kpi", "runs", "applicable", "held"],
-      answer: "Runs is how many Orchestrator snapshots are in the last 90 days. Applicable is unique KBs in this run. Recommended to install and Held are unique KBs by include_in_deploy. PDLC findings is the product-finding count."
+      answer: "Runs is how many Orchestrator snapshots are in the last 90 days. Applicable, Recommended to install, and Held are unique KBs in the last 90 days, using the latest verdict per KB. PDLC findings is unique product findings in the last 90 days."
     }
   ];
 
@@ -1516,20 +1642,31 @@
   }
 
   function header(run) {
-    var created = String((run && run.created_at) || "").replace("T", " ").replace("Z", "Z");
+    var latest = latestSnapshot() || run || {};
+    var selectedCreated = String((run && run.created_at) || "").replace("T", " ").replace("Z", "Z");
+    var latestCreated = String(latest.created_at || "").replace("T", " ").replace("Z", "Z");
     var runId = (run && run.run_id) || "";
     var opts = (index.runs || []).map(function (row) {
       return '<option value="' + esc(row.run_id) + '"' +
         (String(row.run_id) === String(runId) ? " selected" : "") +
         ">" + esc(row.label || row.run_id) + "</option>";
     }).join("");
+    var meta;
+    if (role === "manager") {
+      var n = allSnapshots().length;
+      meta = '<div class="runMeta"><div><b>Last snapshot: ' + esc(latestCreated) +
+        "</b><small>Last 90 days · " + n + " runs</small></div></div>";
+    } else {
+      meta = '<div class="runMeta"><div><b>Last run: ' + esc(selectedCreated) +
+        "</b><small>Orchestrator #" + esc(runId) + '</small></div><select id="run-select">' +
+        opts + "</select></div>";
+    }
     return '<header class="topbar"><div class="brand"><div class="alcon">Alcon</div>' +
       '<div class="product">Windows Patch Management</div></div>' +
       '<div class="roleSwitch"><button class="' + (role === "manager" ? "active" : "") +
       '" data-role="manager">Manager View</button><button class="' +
       (role === "engineer" ? "active" : "") + '" data-role="engineer">Engineer View</button></div>' +
-      '<div class="runMeta"><div><b>Last run: ' + esc(created) + "</b><small>Orchestrator #" +
-      esc(runId) + '</small></div><select id="run-select">' + opts + "</select></div></header>";
+      meta + "</header>";
   }
 
   function sidebar() {
@@ -1588,7 +1725,7 @@
         role = "engineer";
         page = "Patches";
         engineerTab = "Overview";
-        paint(run);
+        paint(snapshotForKb(selectedKb) || run);
       });
     });
     shell.querySelectorAll("[data-eng-tab]").forEach(function (btn) {
@@ -1683,7 +1820,11 @@
       updateFooter(null);
       return;
     }
-    pageConfigMap = configNameMap(packages(run));
+    pageConfigMap = configNameMap(packages(
+      (role === "manager" && (page === "Dashboard" || page === "Patches"))
+        ? managerPeriodRun(run)
+        : run
+    ));
     shell.innerHTML = header(run) + '<div class="body">' + sidebar() + '<main class="main">' +
       content(run) + "</main></div>";
     bind(run);
