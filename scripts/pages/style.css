@@ -331,6 +331,30 @@ svg.chart .chart-n { font-size: 11px; fill: #122b52; }
   font-size: 11px;
   gap: 8px;
 }
+.kbLine {
+  display: grid;
+  grid-template-columns: 8.25rem minmax(0, 1fr) 6.75rem 5.25rem;
+  gap: 8px 16px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 11px;
+}
+.kbLine .cves {
+  color: #5d708b;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.kbLine .kbSev,
+.kbLine .kbRec {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1px;
+}
+.kbLine .link {
+  text-align: left;
+  justify-self: start;
+}
 .toast {
   position: fixed;
   right: 24px;
@@ -424,6 +448,7 @@ a { color: inherit; }
   .sidebar { display: none; }
   .kpis, .miniGrid { grid-template-columns: 1fr 1fr; }
   .configRow { grid-template-columns: 1fr; }
+  .kbLine { grid-template-columns: 7.25rem minmax(0, 1fr) 5.75rem 4.75rem; gap: 8px; }
   .topbar { gap: 10px; }
   .runMeta small { display: none; }
   .stepper { overflow: auto; }

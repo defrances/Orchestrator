@@ -1250,9 +1250,11 @@
         : '<p class="empty">No Windows patch bundle on this run.</p>') +
       panel("Included KBs", rows.length
         ? rows.map(function (pkg) {
-          return '<div class="metricLine"><button class="link" data-open-kb="' + esc(pkg.kb) + '">' +
-            esc(pkg.kb) + "</button><span>" + esc((pkg.cve_ids || []).join(", ") || pkg.title || "") +
-            "</span>" + badgeSev(pkg.severity) + recStatus(pkg) + "</div>";
+          return '<div class="kbLine"><button class="link" data-open-kb="' + esc(pkg.kb) + '">' +
+            esc(pkg.kb) + "</button><span class=\"cves\">" +
+            esc((pkg.cve_ids || []).join(", ") || pkg.title || "") +
+            "</span><span class=\"kbSev\">" + badgeSev(pkg.severity) +
+            "</span><span class=\"kbRec\">" + recStatus(pkg) + "</span></div>";
         }).join("")
         : '<p class="empty">No packages on this run.</p>') +
       panel("Host Application package", release.zip_name
