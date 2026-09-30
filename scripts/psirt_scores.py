@@ -175,7 +175,8 @@ def kb_config_matrix(
     for cluster in clusters or []:
         if not isinstance(cluster, dict):
             continue
-        config = str(cluster.get("device_id") or "").strip()
+        config_raw = str(cluster.get("device_id") or "").strip()
+        config = labels.get(config_raw, str(cluster.get("config_label") or config_raw).strip())
         product = product_scores(
             required_for_app=cluster.get("required_for_app"),
             install_risk=cluster.get("install_risk"),

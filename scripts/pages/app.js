@@ -7,6 +7,7 @@
   var page = "Dashboard";
   var engineerTab = "Overview";
   var selectedKb = "";
+  var selectedConfig = "";
   var query = "";
   var severity = "All severities";
   var config = "All configurations";
@@ -184,6 +185,46 @@
     return { applicable: rec + hold, recommended: rec, held: hold };
   }
 
+  function stationCount(bundle) {
+    var counts = (bundle && bundle.counts) || {};
+    if (counts.stations) return Number(counts.stations) || 0;
+    var seen = {};
+    ((bundle && bundle.packages) || []).forEach(function (item) {
+      (item.stations || []).forEach(function (name) {
+        if (name) seen[name] = 1;
+      });
+    });
+    return Object.keys(seen).length;
+  }
+
+  function displayProduct(run) {
+    var raw = String((run && run.product) || "").trim();
+    if (!raw || raw === "DesktopApplication") return "Host Application";
+    return raw;
+  }
+
+  function stationProfiles(run) {
+    return ((run && run.bundle) || {}).stations || [];
+  }
+
+  function stationProfile(run, id) {
+    var needle = String(id || "").trim();
+    var list = stationProfiles(run);
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].device_id || "") === needle) return list[i];
+    }
+    return {};
+  }
+
+  function uniqueStrings(values) {
+    var found = [];
+    (values || []).forEach(function (item) {
+      var text = String(item || "").trim();
+      if (text && found.indexOf(text) === -1) found.push(text);
+    });
+    return found;
+  }
+
   function configUpdateCounts(list) {
     var recommended = {};
     var ignored = {};
@@ -307,33 +348,194 @@
     return list;
   }
 
-  function clustersForKb(run, kb) {
-    var needle = String(kb || "").trim();
-    var pkg = uniqueKbMap(packages(run))[needle];
-    var stations = (pkg && pkg.stations) || [];
-    return realClusters(run).filter(function (item) {
-      var pkgs = item.packages || [];
-      if (pkgs.length && pkgs.indexOf(needle) !== -1) return true;
-      if (String(item.title || "").indexOf(needle) !== -1) return true;
-      if (!pkgs.length && pkg && stations.indexOf(item.device_id) !== -1) return true;
-      return false;
+  var LETTER_RANK = { NA: 0, L: 1, M: 2, H: 3, C: 4 };
+  var RISK_MATRIX = {
+    CC: "C", CH: "H", CM: "H", CL: "M",
+    HC: "C", HH: "H", HM: "M", HL: "M",
+    MC: "H", MH: "M", MM: "M", ML: "L",
+    LC: "H", LH: "M", LM: "L", LL: "L"
+  };
+
+  function letterSeverity(value) {
+    var text = String(value || "").trim().toLowerCase();
+    if (text === "critical" || text === "c") return "C";
+    if (text === "high" || text === "important" || text === "h") return "H";
+    if (text === "medium" || text === "moderate" || text === "m") return "M";
+    if (text === "low" || text === "very low" || text === "none" || text === "l") return "L";
+    return "NA";
+  }
+
+  function vendorLikelihood(kev, exp) {
+    var known = String(kev || "").trim().toLowerCase();
+    if (known === "true" || known === "yes" || known === "1") return "C";
+    var text = String(exp || "").trim().toLowerCase();
+    if (text === "high") return "H";
+    if (text === "medium" || text === "moderate") return "M";
+    if (text === "low" || text === "none") return "L";
+    return "M";
+  }
+
+  function overallRisk(severity, likelihood) {
+    if (!severity || !likelihood || severity === "NA" || likelihood === "NA") return "NA";
+    return RISK_MATRIX[severity + likelihood] || "M";
+  }
+
+  function worstLetter(values) {
+    var best = "NA";
+    (values || []).forEach(function (item) {
+      var letter = String(item || "NA");
+      if ((LETTER_RANK[letter] || 0) > (LETTER_RANK[best] || 0)) best = letter;
+    });
+    return best;
+  }
+
+  function vendorFromPkg(pkg) {
+    var item = pkg || {};
+    if (item.vendor_risk && item.vendor_risk !== "NA") {
+      return {
+        severity: item.vendor_severity || "NA",
+        likelihood: item.vendor_likelihood || "NA",
+        risk: item.vendor_risk
+      };
+    }
+    var sev = letterSeverity(item.severity);
+    var lik = vendorLikelihood(item.known_exploited, item.exploitability);
+    return { severity: sev, likelihood: lik, risk: overallRisk(sev, lik) };
+  }
+
+  function productFromCluster(cluster) {
+    var item = cluster || {};
+    if (item.product_risk && item.product_risk !== "NA") {
+      return {
+        severity: item.product_severity || "NA",
+        likelihood: item.product_likelihood || "NA",
+        risk: item.product_risk
+      };
+    }
+    var required = String(item["required_for_app"] || "").trim();
+    var install = String(item["install_risk"] || "").trim();
+    var skip = String(item["skip_risk"] || "").trim();
+    var sev = "NA";
+    var lik = "NA";
+    if (required === "required" || skip === "app_will_fail") { sev = "C"; lik = "H"; }
+    else if (skip === "no_app_impact") { sev = "L"; lik = "L"; }
+    else if (skip === "stays_vulnerable") { sev = "M"; lik = "M"; }
+    else if (install === "may_break_app" || install === "breaks_app") { sev = "M"; lik = "L"; }
+    else if (required === "not_required") { sev = "L"; lik = "L"; }
+    if (skip === "no_app_impact") return { severity: "L", likelihood: "L", risk: "L" };
+    return { severity: sev, likelihood: lik, risk: overallRisk(sev, lik) };
+  }
+
+  function extractKbs(text) {
+    var found = [];
+    String(text || "").replace(/\bKB\d+\b/gi, function (match) {
+      var kb = match.toUpperCase();
+      if (found.indexOf(kb) === -1) found.push(kb);
+      return match;
+    });
+    return found;
+  }
+
+  function clusterHasKb(cluster, kb) {
+    var needle = String(kb || "").trim().toUpperCase();
+    var pkgs = cluster.packages || [];
+    if (pkgs.some(function (item) { return String(item).toUpperCase() === needle; })) return true;
+    if (extractKbs(cluster.title).indexOf(needle) !== -1) return true;
+    if (extractKbs(cluster.impact).indexOf(needle) !== -1) return true;
+    if (extractKbs(cluster.advisory_id).indexOf(needle) !== -1) return true;
+    if (extractKbs(cluster.body).indexOf(needle) !== -1) return true;
+    return false;
+  }
+
+  function clusterMatchesPkg(cluster, pkg) {
+    var item = pkg || {};
+    if (clusterHasKb(cluster, item.kb)) return true;
+    var device = String(cluster.device_id || "").trim();
+    var named = String(cluster.config_label || "").trim();
+    return (item.stations || []).some(function (raw) {
+      var id = String(raw || "").trim();
+      var label = configLabel(id);
+      return device === id || device === label || named === label || named === id;
     });
   }
 
+  function clustersForKb(run, kb) {
+    var pkg = uniqueKbMap(packages(run))[kb] || { kb: kb, stations: [] };
+    var all = realClusters(run);
+    var direct = all.filter(function (item) { return clusterMatchesPkg(item, pkg); });
+    var keys = {};
+    direct.forEach(function (item) {
+      var key = String(item.cluster_key || "").trim();
+      if (key) keys[key] = 1;
+    });
+    if (!Object.keys(keys).length) return direct;
+    return all.filter(function (item) {
+      return clusterMatchesPkg(item, pkg) || keys[String(item.cluster_key || "").trim()];
+    });
+  }
+
+  function clusterImpactText(cluster) {
+    var raw = String((cluster && cluster.impact) || "").trim();
+    if (raw) return raw;
+    var body = String((cluster && cluster.body) || "").trim();
+    if (body) return body.length > 1200 ? body.slice(0, 1200) + "…" : body;
+    var title = String((cluster && cluster.title) || "");
+    var idx = title.lastIndexOf(" - ");
+    if (idx !== -1) return title.slice(idx + 3).trim();
+    return "";
+  }
+
   function lettersForKb(run, kb) {
+    var pkg = uniqueKbMap(packages(run))[kb] || {};
+    var vendor = vendorFromPkg(pkg);
     var list = clustersForKb(run, kb);
-    var item = list[0] || {};
-    return {
-      vendor: item.vendor_risk || "NA",
-      product: item.product_risk || "NA",
-      vendor_severity: item.vendor_severity || "NA",
-      vendor_likelihood: item.vendor_likelihood || "NA",
-      vendor_risk: item.vendor_risk || "NA",
-      product_severity: item.product_severity || "NA",
-      product_likelihood: item.product_likelihood || "NA",
-      product_risk: item.product_risk || "NA",
-      cluster: item
+    var products = list.map(productFromCluster);
+    var product = {
+      severity: worstLetter(products.map(function (item) { return item.severity; })),
+      likelihood: worstLetter(products.map(function (item) { return item.likelihood; })),
+      risk: worstLetter(products.map(function (item) { return item.risk; }))
     };
+    return {
+      vendor: vendor.risk,
+      product: product.risk,
+      vendor_severity: vendor.severity,
+      vendor_likelihood: vendor.likelihood,
+      vendor_risk: vendor.risk,
+      product_severity: product.severity,
+      product_likelihood: product.likelihood,
+      product_risk: product.risk,
+      cluster: list[0] || {},
+      clusters: list
+    };
+  }
+
+  function impactHtml(text) {
+    var raw = String(text || "").trim();
+    if (!raw) return "";
+    return esc(raw).replace(/\n/g, "<br>");
+  }
+
+  function clusterKeyLabel(key) {
+    var raw = String(key || "").trim();
+    var names = {
+      "shell-launch": "Shell / WinExe",
+      "dwm-wpf": "DWM / Graphics",
+      "schannel-tls": "Schannel / TLS",
+      "win32k-wpf": "Win32k / WPF",
+      "ntfs-notes": "NTFS / notes"
+    };
+    return names[raw] || raw;
+  }
+
+  function clusterKeyCounts(run) {
+    var counts = {};
+    realClusters(run).forEach(function (item) {
+      var key = String(item.cluster_key || "other").trim() || "other";
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).map(function (key) {
+      return { label: key, value: counts[key] };
+    });
   }
 
   function badgeSev(value) {
@@ -362,14 +564,50 @@
     return '<span class="risk ' + esc(t) + '">' + esc(t) + "</span>";
   }
 
-  function panel(title, body) {
-    return '<section class="panel"><div class="panelHead"><h2>' + title + "</h2></div>" + body + "</section>";
+  function panel(title, body, action) {
+    return '<section class="panel"><div class="panelHead"><h2>' + title + "</h2>" +
+      (action || "") + "</div>" + body + "</section>";
+  }
+
+  function miniGrid(rows) {
+    return '<div class="miniGrid">' + (rows || []).map(function (row) {
+      return "<div><span>" + esc(row[0]) + "</span><b>" + esc(text(row[1])) + "</b></div>";
+    }).join("") + "</div>";
   }
 
   function infoRows(rows) {
     return '<div class="info">' + rows.map(function (row) {
       return "<div><span>" + row[0] + "</span><b>" + row[1] + "</b></div>";
     }).join("") + "</div>";
+  }
+
+  function donutChart(slices, centerLabel) {
+    var list = slices || [];
+    var total = list.reduce(function (sum, item) { return sum + Number(item.value || 0); }, 0);
+    if (!total) return '<p class="empty">No counts on this run.</p>';
+    var start = 0;
+    var arcs = "";
+    list.forEach(function (item) {
+      var v = Number(item.value || 0);
+      if (!v) return;
+      var a = v / total * 360;
+      var x1 = 65 + 50 * Math.cos((start - 90) * Math.PI / 180);
+      var y1 = 65 + 50 * Math.sin((start - 90) * Math.PI / 180);
+      var x2 = 65 + 50 * Math.cos((start + a - 90) * Math.PI / 180);
+      var y2 = 65 + 50 * Math.sin((start + a - 90) * Math.PI / 180);
+      arcs += '<path d="M 65 65 L ' + x1 + " " + y1 + " A 50 50 0 " + (a > 180 ? 1 : 0) +
+        " 1 " + x2 + " " + y2 + ' Z" fill="' + item.color + '"></path>';
+      start += a;
+    });
+    return '<div class="donutWrap"><svg class="donut" viewBox="0 0 130 150">' + arcs +
+      '<circle cx="65" cy="65" r="31" fill="white"></circle>' +
+      '<text x="65" y="64" text-anchor="middle" font-size="22" font-weight="800" fill="#18365e">' +
+      total + '</text><text x="65" y="80" text-anchor="middle" font-size="9" fill="#71849c">' +
+      esc(centerLabel || "") + "</text></svg>" +
+      '<div class="legend">' + list.map(function (item) {
+        return "<div><i style=\"background:" + item.color + '"></i><span>' + esc(item.label) +
+          "</span><b>" + item.value + " (" + Math.round(item.value / total * 100) + "%)</b></div>";
+      }).join("") + "</div></div>";
   }
 
   function severityDonut(run) {
@@ -381,50 +619,53 @@
       else if (raw === "medium" || raw === "moderate") buckets.Medium += 1;
       else buckets.Low += 1;
     });
-    var labels = ["Critical", "High", "Medium", "Low"];
-    var vals = labels.map(function (name) { return buckets[name]; });
-    var total = vals.reduce(function (sum, n) { return sum + n; }, 0);
-    if (!total) return '<p class="empty">No severity counts on this run.</p>';
-    var colors = ["#0b57b8", "#3186e5", "#8abcf2", "#cbd5e1"];
-    var start = 0;
-    var arcs = "";
-    vals.forEach(function (v, i) {
-      if (!v) return;
-      var a = v / total * 360;
-      var x1 = 65 + 50 * Math.cos((start - 90) * Math.PI / 180);
-      var y1 = 65 + 50 * Math.sin((start - 90) * Math.PI / 180);
-      var x2 = 65 + 50 * Math.cos((start + a - 90) * Math.PI / 180);
-      var y2 = 65 + 50 * Math.sin((start + a - 90) * Math.PI / 180);
-      arcs += '<path d="M 65 65 L ' + x1 + " " + y1 + " A 50 50 0 " + (a > 180 ? 1 : 0) +
-        " 1 " + x2 + " " + y2 + ' Z" fill="' + colors[i] + '"></path>';
-      start += a;
+    return donutChart([
+      { label: "Critical", value: buckets.Critical, color: "#0b57b8" },
+      { label: "High", value: buckets.High, color: "#3186e5" },
+      { label: "Medium", value: buckets.Medium, color: "#8abcf2" },
+      { label: "Low", value: buckets.Low, color: "#cbd5e1" }
+    ], "Applicable");
+  }
+
+  function findingsDonut(run) {
+    var buckets = { present: 0, absent: 0, partial: 0 };
+    ((run && run.findings) || []).forEach(function (item) {
+      var raw = String(item.countermeasure || "").trim().toLowerCase();
+      if (raw === "present") buckets.present += 1;
+      else if (raw === "absent") buckets.absent += 1;
+      else buckets.partial += 1;
     });
-    return '<div class="donutWrap"><svg class="donut" viewBox="0 0 130 150">' + arcs +
-      '<circle cx="65" cy="65" r="31" fill="white"></circle>' +
-      '<text x="65" y="64" text-anchor="middle" font-size="22" font-weight="800" fill="#18365e">' +
-      total + '</text><text x="65" y="80" text-anchor="middle" font-size="9" fill="#71849c">Applicable</text></svg>' +
-      '<div class="legend">' + labels.map(function (label, i) {
-        return "<div><i style=\"background:" + colors[i] + '"></i><span>' + label +
-          "</span><b>" + vals[i] + " (" + Math.round(vals[i] / total * 100) + "%)</b></div>";
-      }).join("") + "</div></div>";
+    if (!(buckets.present + buckets.absent + buckets.partial)) {
+      return '<p class="empty">No PDLC findings on this run.</p>';
+    }
+    return donutChart([
+      { label: "present", value: buckets.present, color: "#22a05a" },
+      { label: "absent", value: buckets.absent, color: "#d92828" },
+      { label: "partial", value: buckets.partial, color: "#f0b429" }
+    ], "Findings");
   }
 
   function pipeline(run) {
     var pkgN = uniquePackages(run).length;
     var clusterN = realClusters(run).length;
     var tests = (run && run.tests) || {};
-    var testBit = tests.outcome ? String(tests.outcome) + " " + text(tests.passed, "0") + "/" + text(tests.total, "0") : "not in this snapshot";
-    var bundleId = ((run && run.bundle) || {}).bundle_id || "not in this snapshot";
+    var findings = (run && run.findings) || [];
+    var evidenceN = findings.filter(function (item) { return String(item.evidence || "").trim(); }).length;
+    var testBit = tests.outcome
+      ? String(tests.outcome) + " " + text(tests.passed, "0") + "/" + text(tests.total, "0")
+      : "not in this snapshot";
+    var bundleId = ((run && run.bundle) || {}).bundle_id || "";
     var rows = [
-      ["Packages", pkgN, Math.max(pkgN, 1)],
-      ["Impact clusters", clusterN, Math.max(pkgN, clusterN, 1)],
-      ["Host Application tests", tests.outcome ? Number(tests.passed || 0) : 0, Math.max(Number(tests.total || 0), 1)],
-      ["Bundle", bundleId && bundleId !== "not in this snapshot" ? 1 : 0, 1]
+      ["Packages", pkgN, Math.max(pkgN, 1), String(pkgN)],
+      ["Impact clusters", clusterN, Math.max(clusterN, 1), String(clusterN)],
+      ["Tests", tests.outcome ? Number(tests.passed || 0) : 0, Math.max(Number(tests.total || 0), 1), testBit],
+      ["Findings with evidence", evidenceN, Math.max(findings.length, 1), evidenceN + "/" + findings.length],
+      ["Bundle", bundleId ? 1 : 0, 1, bundleId ? "yes" : "—"]
     ];
     return '<div class="pipelineRows">' + rows.map(function (row) {
       var pct = Math.round(row[1] / row[2] * 100);
       return '<div class="pipe"><span>' + row[0] + "</span><div><i style=\"width:" + pct +
-        '%"></i></div><b>' + esc(String(row[0] === "Bundle" ? (bundleId === "not in this snapshot" ? "—" : "yes") : (row[0] === "Host Application tests" ? testBit : row[1]))) + "</b></div>";
+        '%"></i></div><b>' + esc(String(row[3])) + "</b></div>";
     }).join("") + "</div>";
   }
 
@@ -523,6 +764,17 @@
       "</b><span>" + esc(note) + "</span></div></div>";
   }
 
+  function componentBars(run) {
+    var rows = clusterKeyCounts(run).slice(0, 6);
+    if (!rows.length) return '<p class="empty">No impact cluster keys on this run.</p>';
+    var max = rows[0].value || 1;
+    return '<div class="components">' + rows.map(function (row) {
+      var width = Math.round(row.value / max * 100);
+      return "<div><span>" + esc(clusterKeyLabel(row.label)) + "</span><div><i style=\"width:" + width +
+        '%"></i></div><b>' + row.value + "</b></div>";
+    }).join("") + "</div>";
+  }
+
   function managerDashboard(run) {
     var counts = uniqueCounts(run);
     var historyN = allSnapshots().length;
@@ -537,16 +789,20 @@
       kpi("◈", counts.applicable, "Applicable patches", "unique KB in this run") +
       kpi("↓", counts.recommended, "Recommended to install", "unique KB", "red") +
       kpi("Ⅱ", counts.held, "Held / Do not install", "unique KB", "purple") +
+      kpi("◎", ((run && run.findings) || []).length, "PDLC findings", "this run", "green") +
       "</div><div class=\"grid3\">" +
       panel("Patches by Configuration", glance(run)) +
+      panel("Product findings", findingsDonut(run)) +
       panel("Severity (applicable)", severityDonut(run)) +
       "</div>" +
       panel("This run", pipeline(run)) +
-      panel("Latest Patches (this run)", patchTable(run, rows)) +
+      panel("Latest Patches (this run)", patchTable(run, rows),
+        '<button class="view" data-view-all>View all</button>') +
       '<div class="grid2">' +
       panel("Patch Trend (last 90 days)", trendChart()) +
-      panel("KB × configurations", '<p class="chart-legend">Vendor risk / product risk. NA = not applicable for this configuration.</p>' + (psirtMatrix(run) || '<p class="empty">No matrix on this run.</p>')) +
-      "</div>";
+      panel("Top impact cluster keys", componentBars(run)) +
+      "</div>" +
+      panel("KB × configurations", '<p class="chart-legend">Vendor risk / product risk. NA = not applicable for this configuration.</p>' + (psirtMatrix(run) || '<p class="empty">No matrix on this run.</p>'));
   }
 
   function findPackage(run, kb) {
@@ -554,30 +810,148 @@
     return map[kb] || uniquePackages(run)[0] || null;
   }
 
+  function impactBlocks(run, pkg) {
+    var letters = lettersForKb(run, pkg.kb);
+    var list = letters.clusters || [];
+    if (!list.length) {
+      return '<p class="empty">No impact cluster for this KB in this snapshot.</p>';
+    }
+    return list.map(function (cluster) {
+      var body = impactHtml(clusterImpactText(cluster));
+      return "<div class=\"tech\"><b>" + esc(cluster.title || cluster.cluster_key) + "</b>" +
+        "<p class=\"chart-cap\">" + esc(cluster.cluster_key || "") + " · " +
+        esc(cluster.config_label || configLabel(cluster.device_id)) +
+        (cluster.packages && cluster.packages.length ? " · " + esc(cluster.packages.join(", ")) : "") +
+        "</p>" +
+        (body ? "<p>" + body + "</p>" : "") + scoreList(cluster) + "</div>";
+    }).join("");
+  }
+
+  function clusterForStation(list, id) {
+    var label = configLabel(id);
+    var rows = list || [];
+    for (var i = 0; i < rows.length; i++) {
+      var item = rows[i];
+      if (item.device_id === id || item.device_id === label || item.config_label === label || item.config_label === id) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  function citedFileList(run, clusters) {
+    var found = [];
+    function add(path) {
+      var text = String(path || "").trim();
+      if (text && found.indexOf(text) === -1) found.push(text);
+    }
+    (clusters || []).forEach(function (cluster) {
+      String((cluster && cluster.body) || (cluster && cluster.impact) || "").replace(/`([^`]+)`/g, function (_, path) {
+        add(path);
+        return _;
+      });
+      ((cluster && cluster.impact_files) || []).forEach(add);
+    });
+    ((run && run.findings) || []).forEach(function (item) {
+      (item.impact_files || []).forEach(add);
+    });
+    if (!found.length) return "";
+    return '<div class="tech">' + found.map(function (path) {
+      return "<code>" + esc(path) + "</code>";
+    }).join("") + "</div>";
+  }
+
+  function testSnippet(run) {
+    var tests = (run && run.tests) || {};
+    var planned = [];
+    ((run && run.findings) || []).forEach(function (item) {
+      (item.tests_to_run || []).forEach(function (row) {
+        if (planned.indexOf(row) === -1) planned.push(row);
+      });
+    });
+    var bits = [];
+    if (tests.outcome) {
+      bits.push(String(tests.outcome) + " " + text(tests.passed, "0") + "/" + text(tests.total, "0"));
+    }
+    planned.forEach(function (row) { bits.push(row); });
+    if (!bits.length) return '<p class="empty">not in this snapshot</p>';
+    return "<p>" + bits.map(function (row) { return esc(row); }).join(" · ") + "</p>";
+  }
+
+  function engineerBack() {
+    return '<div class="detailActions"><button class="ghost" data-all-patches>← All Patches</button></div>';
+  }
+
+  function engineerStepper(run) {
+    var tests = (run && run.tests) || {};
+    var findings = (run && run.findings) || [];
+    var bundle = (run && run.bundle) || {};
+    var release = (run && run.release) || {};
+    var flags = [
+      uniquePackages(run).length > 0,
+      realClusters(run).length > 0,
+      Boolean(tests.outcome),
+      findings.length > 0 || Boolean(release.zip_name) || Boolean(bundle.bundle_id)
+    ];
+    var labels = ["Packages", "Impact clusters", "Tests", "Findings or zip"];
+    var current = -1;
+    var i;
+    for (i = 0; i < flags.length; i++) {
+      if (!flags[i]) { current = i; break; }
+    }
+    return '<div class="stepper">' + labels.map(function (name, idx) {
+      var cls = "step";
+      if (flags[idx] && (current === -1 || idx < current)) cls += " done";
+      else if (idx === current) cls += " current";
+      return '<div class="' + cls + '">' + esc(name) + "</div>";
+    }).join("") + "</div>";
+  }
+
+  function engineerHead(run, headingHtml) {
+    return engineerBack() + headingHtml + engineerStepper(run) + engineerTabs();
+  }
+
   function engineerOverview(run, pkg) {
     if (!pkg) return '<p class="empty">No patch selected.</p>';
     var letters = lettersForKb(run, pkg.kb);
-    var cluster = letters.cluster || {};
-    return '<div class="breadcrumb">Patches / ' + esc(pkg.kb) + "</div>" +
+    var list = letters.clusters || [];
+    var cluster = list[0] || {};
+    var installSkip = cluster.cluster_key
+      ? [scoreLabel(cluster.install_risk), scoreLabel(cluster.skip_risk)]
+      : ["not in this snapshot", "not in this snapshot"];
+    return engineerHead(run,
       '<div class="pageHead"><div><div class="titleLine"><h1>' + esc(pkg.kb) + "</h1>" +
       badgeSev(pkg.severity) + recStatus(pkg) + "</div><p>" + esc(pkg.title) +
-      " · " + esc((pkg.cve_ids || [])[0] || "—") + "</p></div>" +
+      " · " + esc((pkg.cve_ids || [])[0] || "—") +
+      (list.length ? " · " + list.length + " impact cluster(s)" : "") + "</p></div>" +
       '<div class="recommend"><div><small>Recommendation</small><b>' +
       (pkg.include_in_deploy ? "Install" : "Hold / Do not install") +
-      "</b><span>Advisory only</span></div></div></div>" +
-      engineerTabs() +
+      "</b><span>Advisory only</span></div></div></div>") +
+      '<div class="callout"><b>Next action</b><p>Review impact analysis and test coverage for this KB. Advisory only.</p>' +
+      '<div class="actionRow"><button class="secondary" data-eng-tab="Impact Analysis">Impact Analysis</button>' +
+      '<button class="secondary" data-eng-tab="Test Coverage">Test Coverage</button></div></div>' +
       '<div class="engineGrid">' +
       panel("Patch Details", infoRows([
         ["KB number", esc(pkg.kb)],
         ["Title", esc(pkg.title)],
         ["CVE", esc((pkg.cve_ids || []).join(", ") || "—")],
         ["Severity", esc(pkg.severity || "—")],
+        ["Action", esc(pkg.action || "—")],
+        ["KEV", esc(pkg.known_exploited || "—")],
+        ["Exploitability", esc(pkg.exploitability || "—")],
+        ["OS products", esc((pkg.os_products || []).join(", ") || "—")],
+        ["Deployment groups", esc((pkg.deployment_groups || []).join(", ") || "—")],
         ["Official", pkg.official_url ? link(pkg.official_url, "MSRC") : "—"],
         ["Vendor", "Microsoft (MSRC)"]
       ])) +
       panel("Affected Configurations · " + (pkg.stations || []).length,
         '<div class="configList">' + (pkg.stations || []).map(function (id) {
-          return "<div><b>" + esc(configLabel(id)) + "</b><span>" + esc(id) + "</span></div>";
+          var profile = stationProfile(run, id);
+          var bits = [profile.os_product, profile.os_build, profile.device_role].filter(Boolean);
+          return "<div><b>" + esc(configLabel(id)) + "</b><span>" + esc(id) +
+            (bits.length ? " · " + esc(bits.join(" · ")) : "") +
+            '</span><button class="view" data-open-config="' + esc(id) +
+            '">Open configuration</button></div>';
         }).join("") + "</div>") +
       panel("Vendor vs Product Risk",
         '<table><thead><tr><th></th><th>Severity</th><th>Likelihood</th><th>Risk</th></tr></thead><tbody>' +
@@ -585,29 +959,33 @@
         "</td><td>" + risk(letters.vendor_risk) + "</td></tr>" +
         "<tr><th>Product</th><td>" + risk(letters.product_severity) + "</td><td>" + risk(letters.product_likelihood) +
         "</td><td>" + risk(letters.product_risk) + "</td></tr></tbody></table>") +
-      panel("Technical Impact", cluster.title
-        ? "<p>" + esc(cluster.title) + "</p><p class=\"chart-cap\">" + esc(cluster.cluster_key || "") +
-          " · " + esc(configLabel(cluster.device_id)) + "</p>" + scoreList(cluster)
-        : '<p class="empty">No impact cluster for this KB in this snapshot.</p>') +
+      panel("Technical Impact", impactBlocks(run, pkg) + citedFileList(run, list)) +
+      panel("Test Coverage", testSnippet(run)) +
       panel("Install vs Skip", '<div class="installSkip"><div class="install"><h3>If we install</h3><ul><li>' +
-        esc(scoreLabel(cluster.install_risk)) + "</li></ul></div><div class=\"skip\"><h3>If we skip</h3><ul><li>" +
-        esc(scoreLabel(cluster.skip_risk)) + "</li></ul></div></div>") +
+        esc(installSkip[0]) + "</li></ul></div><div class=\"skip\"><h3>If we skip</h3><ul><li>" +
+        esc(installSkip[1]) + "</li></ul></div></div>") +
       "</div>";
   }
 
   function engineerTabs() {
     return '<div class="tabs">' +
-      ["Overview", "Impact Analysis", "Affected Configurations", "Test Coverage", "Dependencies", "History"].map(function (name) {
+      ["Overview", "Impact Analysis", "Affected Configurations", "Test Coverage", "Dependencies", "Release and Evidence", "History"].map(function (name) {
         return '<button class="' + (engineerTab === name ? "active" : "") + '" data-eng-tab="' +
           name + '">' + name + "</button>";
       }).join("") + "</div>";
   }
 
+  function filledScore(cluster, field) {
+    if (cluster && cluster.cluster_key) return scoreLabel(cluster[field]);
+    return "not in this snapshot";
+  }
+
   function impactPage(run, pkg) {
     var letters = lettersForKb(run, pkg.kb);
     var cluster = letters.cluster || {};
-    return '<div class="pageHead"><div><h1>Impact Analysis</h1><p>' + esc(pkg.kb) + " · " +
-      esc(pkg.title) + "</p></div></div>" + engineerTabs() +
+    return engineerHead(run, '<div class="pageHead"><div><h1>Impact Analysis</h1><p>' + esc(pkg.kb) + " · " +
+      esc(pkg.title) + (letters.clusters && letters.clusters.length ? " · " + letters.clusters.length + " cluster(s)" : "") +
+      "</p></div></div>") +
       panel("Vendor vs Product Risk",
         "<table><tr><th></th><th>Severity</th><th>Likelihood</th><th>Risk</th></tr>" +
         "<tr><th>Vendor</th><td>" + risk(letters.vendor_severity) + "</td><td>" + risk(letters.vendor_likelihood) +
@@ -615,69 +993,221 @@
         "<tr><th>Product</th><td>" + risk(letters.product_severity) + "</td><td>" + risk(letters.product_likelihood) +
         "</td><td>" + risk(letters.product_risk) + "</td></tr></table>") +
       panel("Decision Logic", infoRows([
-        ["If we install", esc(scoreLabel(cluster.install_risk))],
-        ["If we skip", esc(scoreLabel(cluster.skip_risk))],
-        ["Compatibility", esc(scoreLabel(cluster.compatibility))],
-        ["Recommendation", pkg.include_in_deploy ? "Install" : "Hold / Do not install"]
+        ["If we install", esc(filledScore(cluster, "install_risk"))],
+        ["If we skip", esc(filledScore(cluster, "skip_risk"))],
+        ["Compatibility", esc(filledScore(cluster, "compatibility"))],
+        ["Required for app", esc(filledScore(cluster, "required_for_app"))],
+        ["Recommendation", pkg.include_in_deploy ? "Install" : "Hold / Do not install"],
+        ["Action", esc(pkg.action || "not in this snapshot")]
       ])) +
-      (cluster.title ? panel("Cluster", scoreList(cluster)) : "");
+      panel("Technical Impact", impactBlocks(run, pkg) + citedFileList(run, letters.clusters || []));
   }
 
   function affectedPage(run, pkg) {
-    return '<div class="pageHead"><div><h1>Affected Configurations</h1><p>' + esc(pkg.kb) +
-      " is applicable to " + (pkg.stations || []).length + " configurations</p></div></div>" +
-      engineerTabs() +
-      panel("Configuration Scope", (pkg.stations || []).map(function (id) {
-        return '<div class="configDetail"><div class="configDetailHead"><div><b>' +
-          esc(configLabel(id)) + '</b><span style="display:block;color:#71849c;font-size:10px;margin-top:3px">' +
-          esc(id) + "</span></div></div></div>";
+    var list = lettersForKb(run, pkg.kb).clusters || [];
+    var stations = pkg.stations || [];
+    return engineerHead(run, '<div class="pageHead"><div><h1>Affected Configurations</h1><p>' + esc(pkg.kb) +
+      " is applicable to " + stations.length + " configurations</p></div></div>") +
+      panel("Configuration Scope", stations.map(function (id) {
+        var label = configLabel(id);
+        var profile = stationProfile(run, id);
+        var cluster = clusterForStation(list, id);
+        var open = selectedConfig === id;
+        var osProduct = profile.os_product || (pkg.os_products || []).join(", ");
+        var detail = "";
+        if (open) {
+          detail = '<div class="configDetail"><div class="configDetailBody">' +
+            miniGrid([
+              ["OS product", osProduct],
+              ["OS build", profile.os_build],
+              ["Model", profile.model],
+              ["Device role", profile.device_role],
+              ["Deployment group", profile.deployment_group]
+            ]) +
+            (cluster
+              ? (clusterImpactText(cluster) ? "<p>" + impactHtml(clusterImpactText(cluster)) + "</p>" : "") +
+                scoreList(cluster)
+              : '<p class="empty">No impact cluster for this configuration.</p>') +
+            "</div></div>";
+        }
+        return '<button class="configRow" data-select-config="' + esc(id) + '"><b>' +
+          esc(label) + "</b><span>" + esc(id) + "</span>" + recStatus(pkg) + "</button>" + detail;
       }).join("") || '<p class="empty">No configurations on this KB.</p>');
   }
 
   function testPage(run, pkg) {
     var tests = (run && run.tests) || {};
-    return '<div class="pageHead"><div><h1>Test Coverage</h1><p>' + esc(pkg.kb) +
-      " · Host Application Smoke / Regression</p></div></div>" + engineerTabs() +
+    var planned = [];
+    ((run && run.findings) || []).forEach(function (item) {
+      (item.tests_to_run || []).forEach(function (row) {
+        if (planned.indexOf(row) === -1) planned.push(row);
+      });
+    });
+    return engineerHead(run, '<div class="pageHead"><div><h1>Test Coverage</h1><p>' + esc(pkg.kb) +
+      " · Host Application Smoke / Regression</p></div></div>") +
       panel("This run", tests.outcome
         ? infoRows([
           ["Filter", esc(tests.filter || "Smoke|Regression")],
           ["Outcome", esc(tests.outcome)],
           ["Passed", esc(String(tests.passed))],
+          ["Failed", esc(String(tests.failed))],
+          ["Skipped", esc(String(tests.skipped || 0))],
           ["Total", esc(String(tests.total))]
         ])
-        : '<p class="empty">not in this snapshot</p>');
+        : '<p class="empty">not in this snapshot</p>') +
+      panel("PDLC tests to run", planned.length
+        ? "<ul>" + planned.map(function (row) { return "<li>" + esc(row) + "</li>"; }).join("") + "</ul>"
+        : '<p class="empty">No PDLC test ids in this snapshot.</p>') +
+      panel("Findings in this snapshot", ((run && run.findings) || []).length
+        ? ((run && run.findings) || []).map(function (item) {
+          return '<div class="metricLine"><b>' + esc(item.id) + "</b><span>" +
+            esc(item.countermeasure || "—") + " · " + esc(item.title || "") + "</span></div>";
+        }).join("")
+        : '<p class="empty">No PDLC findings on this run.</p>');
   }
 
   function dependenciesPage(run) {
-    return '<div class="pageHead"><div><h1>Dependencies</h1><p>Run metadata for Host Application</p></div></div>' +
-      engineerTabs() +
+    var keys = clusterKeyCounts(run);
+    var advice = (run && run.os_kb_advice) || [];
+    var osProducts = uniqueStrings(packages(run).reduce(function (all, pkg) {
+      return all.concat(pkg.os_products || []);
+    }, []).concat(stationProfiles(run).map(function (item) { return item.os_product; })));
+    var groups = uniqueStrings(packages(run).reduce(function (all, pkg) {
+      return all.concat(pkg.deployment_groups || []);
+    }, []).concat(stationProfiles(run).map(function (item) { return item.deployment_group; })));
+    return engineerHead(run, '<div class="pageHead"><div><h1>Dependencies</h1><p>Host Application and host KB coupling</p></div></div>') +
       panel("Links", infoRows([
+        ["Product", esc(displayProduct(run))],
+        ["Branch", esc(run.branch || "main")],
         ["Host Application SHA", run.sha_url ? link(run.sha_url, run.sha) : esc(run.sha || "—")],
         ["FindUpdates run", run.findupdates_url ? link(run.findupdates_url, run.findupdates_run_id) : esc(run.findupdates_run_id || "—")],
         ["Orchestrator run", run.run_url ? link(run.run_url, run.run_id) : esc(run.run_id || "—")]
       ])) +
-      panel("Host vs product", '<p class="empty">Component inventory is not in this snapshot.</p>');
+      panel("Host OS products", osProducts.length
+        ? "<ul>" + osProducts.map(function (row) { return "<li>" + esc(row) + "</li>"; }).join("") + "</ul>"
+        : '<p class="empty">No OS product names in this snapshot.</p>') +
+      panel("Deployment groups", groups.length
+        ? "<ul>" + groups.map(function (row) { return "<li>" + esc(row) + "</li>"; }).join("") + "</ul>"
+        : '<p class="empty">No deployment groups in this snapshot.</p>') +
+      panel("Impact cluster keys", keys.length
+        ? keys.map(function (row) {
+          return '<div class="metricLine"><b>' + esc(clusterKeyLabel(row.label)) + "</b><span>" + row.value + " clusters</span></div>";
+        }).join("")
+        : '<p class="empty">No cluster keys on this run.</p>') +
+      panel("Host KB advice", advice.length
+        ? "<ul>" + advice.map(function (row) { return "<li>" + esc(row) + "</li>"; }).join("") + "</ul>"
+        : '<p class="empty">No os_kb_advice in this snapshot.</p>');
+  }
+
+  function releaseEvidencePage(run, pkg) {
+    var bundle = (run && run.bundle) || {};
+    var tests = (run && run.tests) || {};
+    var release = (run && run.release) || {};
+    var findings = (run && run.findings) || [];
+    var evidenceN = findings.filter(function (item) { return String(item.evidence || "").trim(); }).length;
+    var checks = [
+      ["Bundle", Boolean(bundle.bundle_id), bundle.bundle_id || "missing"],
+      ["Host Application zip", Boolean(release.zip_name), release.zip_name || "missing"],
+      ["SHA", Boolean(run.sha), run.sha || "missing"],
+      ["Tests outcome", Boolean(tests.outcome), tests.outcome || "missing"],
+      ["Findings evidence", evidenceN > 0, evidenceN + "/" + findings.length]
+    ];
+    return engineerHead(run, '<div class="pageHead"><div><h1>Release and Evidence</h1><p>' +
+      esc(pkg.kb) + " · snapshot artifacts</p></div></div>") +
+      panel("Present in this snapshot", '<div class="timeline">' + checks.map(function (row) {
+        return '<div class="timelineItem"><div class="dot ' + (row[1] ? "done" : "pending") +
+          '"></div><div>' + esc(row[0]) + "</div><div>" + esc(String(row[2])) + "</div></div>";
+      }).join("") + "</div>") +
+      panel("Bundle", bundle.bundle_id
+        ? infoRows([
+          ["Bundle", esc(bundle.bundle_id)],
+          ["Generated", esc(bundle.generated || "—")],
+          ["FindUpdates", bundle.findupdates_html_url
+            ? link(bundle.findupdates_html_url, bundle.findupdates_run_id)
+            : esc(run.findupdates_run_id || "—")]
+        ])
+        : '<p class="empty">No Windows patch bundle on this run.</p>') +
+      panel("Host Application zip", release.zip_name
+        ? infoRows([
+          ["Zip", esc(release.zip_name)],
+          ["SHA", run.sha_url ? link(run.sha_url, run.sha) : esc(run.sha || "—")]
+        ])
+        : '<p class="empty">No application zip on this run.</p>') +
+      panel("Tests", tests.outcome
+        ? infoRows([
+          ["Filter", esc(tests.filter || "—")],
+          ["Outcome", esc(tests.outcome)],
+          ["Passed", esc(String(tests.passed))],
+          ["Failed", esc(String(tests.failed))],
+          ["Total", esc(String(tests.total))]
+        ])
+        : '<p class="empty">not in this snapshot</p>') +
+      panel("Finding evidence", findings.length
+        ? findings.map(function (item) {
+          return '<div class="tech"><b>' + esc(item.id) + " · " + esc(item.countermeasure || "—") +
+            "</b><p>" + esc(item.title || "") + "</p>" +
+            (item.evidence ? "<p>" + esc(item.evidence) + "</p>" : "") +
+            (item.patch_plan && item.patch_plan !== "none" ? "<p>" + esc(item.patch_plan) + "</p>" : "") +
+            "</div>";
+        }).join("")
+        : '<p class="empty">No PDLC findings on this run.</p>');
   }
 
   function historyPage(run, pkg) {
     var bundle = (run && run.bundle) || {};
-    return '<div class="pageHead"><div><h1>Patch History</h1><p>Run metadata for ' +
-      esc(pkg.kb) + "</p></div></div>" + engineerTabs() +
-      panel("Run Metadata", infoRows([
+    var kb = pkg && pkg.kb;
+    var rows = allSnapshots().map(function (item) {
+      var found = uniqueKbMap(packages(item))[kb] || null;
+      return {
+        run_id: item.run_id,
+        created_at: item.created_at,
+        conclusion: item.conclusion,
+        findupdates: item.findupdates_run_id,
+        findupdates_url: item.findupdates_url,
+        run_url: item.run_url,
+        found: found
+      };
+    });
+    return engineerHead(run, '<div class="pageHead"><div><h1>Patch History</h1><p>90-day snapshots for ' +
+      esc(kb || "this KB") + "</p></div></div>") +
+      panel("This run", infoRows([
         ["Created", esc(run.created_at)],
+        ["Workflow", esc(run.workflow || "—")],
+        ["Conclusion", esc(run.conclusion || "—")],
         ["Orchestrator run", run.run_url ? link(run.run_url, run.run_id) : esc(run.run_id)],
         ["FindUpdates run", run.findupdates_url ? link(run.findupdates_url, run.findupdates_run_id) : esc(run.findupdates_run_id || "—")],
         ["Host Application SHA", run.sha_url ? link(run.sha_url, run.sha) : esc(run.sha || "—")],
-        ["Bundle", esc(bundle.bundle_id || "not in this snapshot")]
-      ]));
+        ["Bundle", esc(bundle.bundle_id || "not in this snapshot")],
+        ["Action", esc((pkg && pkg.action) || "—")],
+        ["Analysis", esc(formatAiUsage(run.ai))]
+      ])) +
+      panel("This KB across loaded runs", rows.length
+        ? '<div class="timeline">' + rows.map(function (row) {
+          var found = row.found;
+          var cls = found ? (found.include_in_deploy ? "done" : "") : "pending";
+          var rec = found ? (found.include_in_deploy ? "Install" : "Hold / Do not install") : "not in this run";
+          var fu = row.findupdates_url
+            ? link(row.findupdates_url, row.findupdates || "FindUpdates")
+            : esc(row.findupdates || "—");
+          var runLink = row.run_url ? link(row.run_url, row.run_id) : esc(row.run_id);
+          return '<div class="timelineItem"><div class="dot ' + cls + '"></div><div>' +
+            esc(String(row.created_at || "").replace("T", " ")) +
+            "<small>" + runLink + "</small></div><div>" +
+            esc(row.conclusion || "—") + " · FindUpdates " + fu + " · " + esc(rec) +
+            (found && found.action ? " · " + esc(found.action) : "") +
+            "</div></div>";
+        }).join("") + "</div>"
+        : '<p class="empty">History will grow with later runs.</p>');
   }
 
   function engineerPage(run) {
     var pkg = findPackage(run, selectedKb);
+    if (!pkg) return engineerOverview(run, pkg);
     if (engineerTab === "Impact Analysis") return impactPage(run, pkg);
     if (engineerTab === "Affected Configurations") return affectedPage(run, pkg);
     if (engineerTab === "Test Coverage") return testPage(run, pkg);
     if (engineerTab === "Dependencies") return dependenciesPage(run);
+    if (engineerTab === "Release and Evidence") return releaseEvidencePage(run, pkg);
     if (engineerTab === "History") return historyPage(run, pkg);
     return engineerOverview(run, pkg);
   }
@@ -693,39 +1223,80 @@
     var tests = (run && run.tests) || {};
     var release = (run && run.release) || {};
     var counts = uniqueCounts(run);
-    return '<div class="pageHead"><div><h1>Releases</h1><p>Bundle and test facts from this snapshot</p></div></div>' +
+    var rows = uniquePackages(run);
+    return '<div class="pageHead"><div><h1>Releases</h1><p>Bundle, Host Application zip, and tests from this snapshot</p></div></div>' +
+      (bundle.bundle_id
+        ? '<div class="releaseHeader"><div><b>' + esc(bundle.bundle_id) + "</b><span>" +
+          esc(bundle.generated || "") + "</span></div></div>" +
+          miniGrid([
+            ["Bundle date", bundle.generated],
+            ["Configurations", String(stationCount(bundle))],
+            ["Recommended", String(counts.recommended)],
+            ["Held", String(counts.held)]
+          ])
+        : "") +
       panel("Windows patch bundle", bundle.bundle_id
         ? infoRows([
           ["Bundle", esc(bundle.bundle_id)],
           ["Generated", esc(bundle.generated || "—")],
           ["Recommended", String(counts.recommended)],
           ["Held", String(counts.held)],
+          ["Configurations", String(stationCount(bundle))],
+          ["FindUpdates", bundle.findupdates_html_url ? link(bundle.findupdates_html_url, bundle.findupdates_run_id) : esc(run.findupdates_run_id || "—")],
+          ["Workflow", esc(run.workflow || "—")],
+          ["Conclusion", esc(run.conclusion || "—")],
           ["Artifacts", "KB manifest + APPLY.ps1"]
         ])
         : '<p class="empty">No Windows patch bundle on this run.</p>') +
+      panel("Included KBs", rows.length
+        ? rows.map(function (pkg) {
+          return '<div class="metricLine"><button class="link" data-open-kb="' + esc(pkg.kb) + '">' +
+            esc(pkg.kb) + "</button><span>" + esc((pkg.cve_ids || []).join(", ") || pkg.title || "") +
+            "</span>" + badgeSev(pkg.severity) + recStatus(pkg) + "</div>";
+        }).join("")
+        : '<p class="empty">No packages on this run.</p>') +
       panel("Host Application package", release.zip_name
-        ? infoRows([["Zip", esc(release.zip_name)]])
+        ? infoRows([
+          ["Zip", esc(release.zip_name)],
+          ["SHA", run.sha_url ? link(run.sha_url, run.sha) : esc(run.sha || "—")]
+        ])
         : '<p class="empty">No application zip on this run.</p>') +
       panel("Tests", tests.outcome
-        ? infoRows([["Outcome", esc(tests.outcome)], ["Passed", esc(String(tests.passed))], ["Total", esc(String(tests.total))]])
+        ? infoRows([["Filter", esc(tests.filter || "—")], ["Outcome", esc(tests.outcome)], ["Passed", esc(String(tests.passed))], ["Failed", esc(String(tests.failed))], ["Total", esc(String(tests.total))]])
         : '<p class="empty">not in this snapshot</p>');
   }
 
   function configurations(run) {
     var names = Object.keys(pageConfigMap).sort();
     if (!names.length) return '<div class="pageHead"><div><h1>Configurations</h1></div></div><p class="empty">No configurations on this run.</p>';
+    var selected = selectedConfig && pageConfigMap[selectedConfig] ? selectedConfig : names[0];
     var html = '<div class="pageHead"><div><h1>Configurations</h1><p>Approved lab configurations and patch applicability</p></div></div>';
     names.forEach(function (id) {
       var label = pageConfigMap[id];
       var rows = uniquePackages(run).filter(function (pkg) {
         return labeledStations(pkg.stations).indexOf(label) !== -1;
       });
-      html += panel(label, "<p class=\"chart-cap\">" + esc(id) + " · " + rows.length +
-        " relevant patches</p>" + rows.map(function (pkg) {
+      html += '<button class="configRow" data-select-config="' + esc(id) + '"><b>' +
+        esc(label) + "</b><span>" + esc(id) + " · " + rows.length + " patches</span></button>";
+    });
+    var profile = stationProfile(run, selected);
+    var selectedRows = uniquePackages(run).filter(function (pkg) {
+      return labeledStations(pkg.stations).indexOf(pageConfigMap[selected]) !== -1;
+    });
+    html += panel(pageConfigMap[selected],
+      miniGrid([
+        ["OS product", profile.os_product],
+        ["OS build", profile.os_build],
+        ["Model", profile.model],
+        ["Device role", profile.device_role],
+        ["Deployment group", profile.deployment_group]
+      ]) +
+      (selectedRows.length
+        ? selectedRows.map(function (pkg) {
           return '<div class="metricLine"><button class="link" data-open-kb="' + esc(pkg.kb) + '">' +
             esc(pkg.kb) + "</button>" + badgeSev(pkg.severity) + recStatus(pkg) + "</div>";
-        }).join(""));
-    });
+        }).join("")
+        : '<p class="empty">No patches for this configuration.</p>'));
     return html;
   }
 
@@ -733,10 +1304,16 @@
     var findings = (run && run.findings) || [];
     return '<div class="pageHead"><div><h1>Reports</h1><p>Product PDLC findings from this snapshot</p></div></div>' +
       (findings.length
-        ? panel("PDLC findings", findings.map(function (item) {
-          return '<div class="metricLine"><b>' + esc(item.id) + "</b><span>" + esc(item.title) +
-            "</span><span>" + esc(item.countermeasure) + "</span></div>";
-        }).join(""))
+        ? findings.map(function (item) {
+          var rows = [];
+          if (item.patch_plan && item.patch_plan !== "none") rows.push(["Patch plan", esc(item.patch_plan)]);
+          if ((item.impact_files || []).length) rows.push(["Cited files", esc(item.impact_files.join(", "))]);
+          if ((item.tests_to_run || []).length) rows.push(["Tests", esc(item.tests_to_run.join(", "))]);
+          return panel(esc(item.id) + " · " + esc(item.countermeasure || "—"),
+            "<p><b>" + esc(item.title) + "</b></p>" +
+            (item.evidence ? "<p>" + esc(item.evidence) + "</p>" : "") +
+            (rows.length ? infoRows(rows) : ""));
+        }).join("")
         : '<p class="empty">No PDLC findings on this run.</p>');
   }
 
@@ -836,6 +1413,29 @@
         engineerTab = btn.getAttribute("data-eng-tab");
         role = "engineer";
         page = "Patches";
+        paint(run);
+      });
+    });
+    shell.querySelectorAll("[data-view-all], [data-all-patches]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        page = "Patches";
+        selectedKb = "";
+        engineerTab = "Overview";
+        paint(run);
+      });
+    });
+    shell.querySelectorAll("[data-open-config]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        selectedConfig = btn.getAttribute("data-open-config") || "";
+        role = "engineer";
+        page = "Patches";
+        engineerTab = "Affected Configurations";
+        paint(run);
+      });
+    });
+    shell.querySelectorAll("[data-select-config]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        selectedConfig = btn.getAttribute("data-select-config") || "";
         paint(run);
       });
     });

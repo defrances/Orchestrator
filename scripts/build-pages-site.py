@@ -205,6 +205,120 @@ def score_rows(cluster: dict[str, object] | None) -> list[tuple[str, str]]:
     return rows
 
 
+KB_RE = re.compile(r"\bKB\d+\b", re.IGNORECASE)
+
+
+def extract_kb_ids(*parts: object) -> list[str]:
+    found: list[str] = []
+    for part in parts:
+        for match in KB_RE.findall(str(part or "")):
+            kb = match.upper()
+            if kb not in found:
+                found.append(kb)
+    return found
+
+
+def impact_excerpt(body: object) -> str:
+    text = re.sub(r"<!--.*?-->", "", str(body or ""), flags=re.S).strip()
+    if not text:
+        return ""
+    match = re.search(
+        r"## Technical Impact Assessment\s*(.*?)\s*(?=^## |\Z)",
+        text,
+        flags=re.S | re.M,
+    )
+    if not match:
+        match = re.search(
+            r"### Impacted Components\s*(.*?)\s*(?=### |\n## |\Z)",
+            text,
+            flags=re.S,
+        )
+    chunk = (match.group(1) if match else text).strip()
+    if len(chunk) > 1200:
+        return chunk[:1200].rstrip() + "…"
+    return chunk
+
+
+def attach_vendor_letters(packages: list[dict[str, object]] | None) -> None:
+    for item in packages or []:
+        if not isinstance(item, dict):
+            continue
+        vendor = psirt_scores.vendor_scores(
+            severity=item.get("severity"),
+            known_exploited=item.get("known_exploited"),
+            exploitability=item.get("exploitability"),
+        )
+        item["vendor_severity"] = vendor["severity"]
+        item["vendor_likelihood"] = vendor["likelihood"]
+        item["vendor_risk"] = vendor["risk"]
+
+
+def enrich_clusters(
+    clusters: list[dict[str, object]] | None,
+    packages: list[dict[str, object]] | None,
+) -> list[dict[str, object]]:
+    rows = [item for item in (clusters or []) if isinstance(item, dict)]
+    pkgs = [item for item in (packages or []) if isinstance(item, dict)]
+    names: list[str] = []
+    for item in pkgs:
+        names.extend(str(name).strip() for name in (item.get("stations") or []) if str(name).strip())
+    labels = config_display_names(names)
+    for cluster in rows:
+        kbs = [str(item).strip() for item in (cluster.get("packages") or []) if str(item).strip()]
+        for kb in extract_kb_ids(
+            cluster.get("title"),
+            cluster.get("impact"),
+            cluster.get("advisory_id"),
+            cluster.get("body"),
+        ):
+            if kb not in kbs:
+                kbs.append(kb)
+        cluster["packages"] = kbs
+        if not str(cluster.get("impact") or "").strip():
+            title = str(cluster.get("title") or "")
+            marker = " - "
+            if marker in title:
+                cluster["impact"] = title.rsplit(marker, 1)[-1].strip()
+        config_raw = str(cluster.get("device_id") or "").strip()
+        cluster["config_label"] = labels.get(config_raw, config_raw)
+    by_key: dict[str, list[str]] = {}
+    for cluster in rows:
+        key = str(cluster.get("cluster_key") or "").strip()
+        if not key:
+            continue
+        slot = by_key.setdefault(key, [])
+        for kb in cluster.get("packages") or []:
+            text = str(kb).strip()
+            if text and text not in slot:
+                slot.append(text)
+    for cluster in rows:
+        key = str(cluster.get("cluster_key") or "").strip()
+        if not cluster.get("packages") and key and by_key.get(key):
+            cluster["packages"] = list(by_key[key])
+        kbs = [str(item).strip() for item in (cluster.get("packages") or []) if str(item).strip()]
+        members = [item for item in pkgs if str(item.get("kb") or "").strip() in kbs]
+        if members and not cluster.get("vendor_risk"):
+            letters = psirt_scores.scores_from_members(
+                members,
+                required_for_app=cluster.get("required_for_app"),
+                install_risk=cluster.get("install_risk"),
+                skip_risk=cluster.get("skip_risk"),
+                compatibility=cluster.get("compatibility"),
+            )
+            cluster.update(letters)
+        elif not cluster.get("product_risk"):
+            product = psirt_scores.product_scores(
+                required_for_app=cluster.get("required_for_app"),
+                install_risk=cluster.get("install_risk"),
+                skip_risk=cluster.get("skip_risk"),
+                compatibility=cluster.get("compatibility"),
+            )
+            cluster["product_severity"] = product["severity"]
+            cluster["product_likelihood"] = product["likelihood"]
+            cluster["product_risk"] = product["risk"]
+    return rows
+
+
 def kb_config_matrix(
     packages: list[dict[str, object]] | None,
     clusters: list[dict[str, object]] | None = None,
@@ -213,7 +327,9 @@ def kb_config_matrix(
     for item in packages or []:
         if isinstance(item, dict):
             names.extend(str(name).strip() for name in (item.get("stations") or []) if str(name).strip())
-    return psirt_scores.kb_config_matrix(packages, config_display_names(names), clusters)
+    labels = config_display_names(names)
+    filled = enrich_clusters(list(clusters or []), list(packages or []))
+    return psirt_scores.kb_config_matrix(packages, labels, filled)
 
 
 def _cluster_from_issue(path: Path, payload: dict) -> dict[str, object] | None:
@@ -244,6 +360,8 @@ def _cluster_from_issue(path: Path, payload: dict) -> dict[str, object] | None:
         "product_severity": str(payload.get("product_severity") or ""),
         "product_likelihood": str(payload.get("product_likelihood") or ""),
         "product_risk": str(payload.get("product_risk") or ""),
+        "body": str(payload.get("body") or ""),
+        "impact": impact_excerpt(payload.get("body") or ""),
     }
     if not cluster["product_risk"]:
         product = psirt_scores.product_scores(
@@ -292,25 +410,92 @@ def collect_findings(workspace: Path) -> tuple[list[dict[str, object]], dict[str
                 "id": str(item.get("id") or ""),
                 "title": str(item.get("title") or ""),
                 "countermeasure": str(item.get("countermeasure") or ""),
+                "evidence": str(item.get("evidence") or ""),
+                "patch_plan": str(item.get("patch_plan") or ""),
+                "tests_to_run": [str(row).strip() for row in (item.get("tests_to_run") or []) if str(row).strip()],
+                "impact_files": [str(row).strip() for row in (item.get("impact_files") or []) if str(row).strip()],
             }
         )
+    advice = [
+        str(row).strip()
+        for row in (payload.get("os_kb_advice") or [])
+        if str(row).strip()
+    ]
     meta = {
         "product": str(payload.get("product") or "DesktopApplication"),
         "branch": str(payload.get("branch") or "main"),
         "sha": str(payload.get("sha") or ""),
         "tests_filter": str(payload.get("tests_filter") or "Smoke|Regression"),
+        "os_kb_advice": advice,
     }
     return findings, meta
+
+
+def _station_profile(payload: object) -> dict[str, object] | None:
+    if not isinstance(payload, dict):
+        return None
+    device_id = str(payload.get("device_id") or "").strip()
+    if not device_id:
+        return None
+    return {
+        "device_id": device_id,
+        "model": str(payload.get("model") or ""),
+        "device_role": str(payload.get("device_role") or ""),
+        "os_product": str(payload.get("os_product") or ""),
+        "os_build": str(payload.get("os_build") or ""),
+        "deployment_group": str(payload.get("deployment_group") or ""),
+    }
+
+
+def collect_station_profiles(workspace: Path, manifest_path: Path | None) -> list[dict[str, object]]:
+    folders: list[Path] = []
+    if manifest_path is not None:
+        folders.append(manifest_path.parent / "stations")
+    found = _first_dir(workspace, "stations")
+    if found is not None:
+        folders.append(found)
+    profiles: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        for path in sorted(folder.glob("*.json")):
+            row = _station_profile(_read_json(path))
+            device_id = str((row or {}).get("device_id") or "")
+            if row and device_id not in seen:
+                seen.add(device_id)
+                profiles.append(row)
+    return profiles
+
+
+def _stations_from_zip(archive: zipfile.ZipFile) -> list[dict[str, object]]:
+    profiles: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for name in archive.namelist():
+        if not name.startswith("stations/") or not name.endswith(".json"):
+            continue
+        try:
+            payload = json.loads(archive.read(name))
+        except (json.JSONDecodeError, KeyError):
+            continue
+        row = _station_profile(payload)
+        device_id = str((row or {}).get("device_id") or "")
+        if row and device_id not in seen:
+            seen.add(device_id)
+            profiles.append(row)
+    return profiles
 
 
 def collect_bundle(workspace: Path) -> dict[str, object] | None:
     manifest_path = _first_file(workspace, "BUNDLE_MANIFEST.json")
     payload = _read_json(manifest_path) if manifest_path else None
+    zip_stations: list[dict[str, object]] = []
     if not isinstance(payload, dict):
         for zip_path in sorted(workspace.rglob("windows-patch-bundle-*.zip")):
             try:
                 with zipfile.ZipFile(zip_path) as archive:
                     payload = json.loads(archive.read("BUNDLE_MANIFEST.json"))
+                    zip_stations = _stations_from_zip(archive)
                 break
             except (KeyError, json.JSONDecodeError, zipfile.BadZipFile):
                 continue
@@ -332,9 +517,23 @@ def collect_bundle(workspace: Path) -> dict[str, object] | None:
                 "cve_ids": list(item.get("cve_ids") or []),
                 "known_exploited": str(item.get("known_exploited") or ""),
                 "exploitability": str(item.get("exploitability") or ""),
+                "advisory_id": str(item.get("advisory_id") or ""),
+                "os_products": [str(row).strip() for row in (item.get("os_products") or []) if str(row).strip()],
+                "deployment_groups": [
+                    str(row).strip() for row in (item.get("deployment_groups") or []) if str(row).strip()
+                ],
             }
         )
     packages = sort_packages(packages)
+    attach_vendor_letters(packages)
+    stations = collect_station_profiles(workspace, manifest_path)
+    if zip_stations:
+        seen = {str(item.get("device_id") or "") for item in stations}
+        for row in zip_stations:
+            device_id = str(row.get("device_id") or "")
+            if device_id and device_id not in seen:
+                seen.add(device_id)
+                stations.append(row)
     return {
         "bundle_id": str(payload.get("bundle_id") or ""),
         "generated": str(payload.get("generated") or ""),
@@ -342,6 +541,7 @@ def collect_bundle(workspace: Path) -> dict[str, object] | None:
         "findupdates_html_url": str(payload.get("findupdates_html_url") or ""),
         "counts": payload.get("counts") if isinstance(payload.get("counts"), dict) else {},
         "packages": packages,
+        "stations": stations,
     }
 
 
@@ -493,6 +693,49 @@ def bundle_summary(bundle: dict[str, object] | None, *, run_id: str = "") -> str
 def config_display_names(names: list[str] | None) -> dict[str, str]:
     unique = sorted({str(name).strip() for name in (names or []) if str(name).strip()})
     return {name: f"Configurations{index}" for index, name in enumerate(unique, start=1)}
+
+
+def cluster_matches_package(
+    cluster: dict[str, object] | None,
+    package: dict[str, object] | None,
+    labels: dict[str, str] | None = None,
+) -> bool:
+    item = cluster or {}
+    pkg = package or {}
+    kb = str(pkg.get("kb") or "").strip().upper()
+    listed = {str(row).strip().upper() for row in (item.get("packages") or []) if str(row).strip()}
+    if kb and kb in listed:
+        return True
+    found = extract_kb_ids(item.get("title"), item.get("impact"), item.get("advisory_id"), item.get("body"))
+    if kb and kb in {row.upper() for row in found}:
+        return True
+    names = labels or {}
+    device = str(item.get("device_id") or "").strip()
+    named = str(item.get("config_label") or "").strip()
+    for raw in pkg.get("stations") or []:
+        station = str(raw or "").strip()
+        if not station:
+            continue
+        label = names.get(station, station)
+        if device in {station, label} or named in {station, label}:
+            return True
+    return False
+
+
+def clusters_for_kb(
+    clusters: list[dict[str, object]] | None,
+    package: dict[str, object] | None,
+    labels: dict[str, str] | None = None,
+) -> list[dict[str, object]]:
+    pkg = package or {}
+    names = labels or config_display_names(
+        [str(row).strip() for row in (pkg.get("stations") or []) if str(row).strip()]
+    )
+    return [
+        item
+        for item in (clusters or [])
+        if isinstance(item, dict) and cluster_matches_package(item, pkg, names)
+    ]
 
 
 def config_update_counts(packages: list[dict[str, object]] | None) -> list[dict[str, object]]:
@@ -720,6 +963,11 @@ def snapshot_from_workspace(workspace: Path, *, env: dict[str, str] | None = Non
         fu_url = f"{server}/{fu_repo}/actions/runs/{fu_run}"
     sha = collect_sha(workspace, meta)
     created = _iso()
+    pkg_rows = list((bundle or {}).get("packages") or []) if bundle else []
+    clusters = enrich_clusters(clusters, pkg_rows)
+    if bundle:
+        attach_vendor_letters(pkg_rows)
+        bundle["packages"] = pkg_rows
     return {
         "schema_version": 1,
         "run_id": str(run_id),
@@ -737,6 +985,7 @@ def snapshot_from_workspace(workspace: Path, *, env: dict[str, str] | None = Non
         "cluster_count": len(clusters),
         "no_clusters": none_marker or not clusters,
         "findings": findings,
+        "os_kb_advice": list(meta.get("os_kb_advice") or []),
         "bundle": bundle,
         "psirt_matrix": kb_config_matrix((bundle or {}).get("packages") if bundle else [], clusters),
         "tests": tests,
@@ -763,6 +1012,23 @@ def load_history(history_dir: Path) -> list[dict[str, object]]:
         if isinstance(latest, dict) and latest.get("run_id"):
             snapshots.append(latest)
     return snapshots
+
+
+def enrich_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
+    bundle = snapshot.get("bundle")
+    packages: list[dict[str, object]] = []
+    if isinstance(bundle, dict):
+        packages = [item for item in (bundle.get("packages") or []) if isinstance(item, dict)]
+        attach_vendor_letters(packages)
+        bundle["packages"] = packages
+        snapshot["bundle"] = bundle
+    clusters = enrich_clusters(
+        [item for item in (snapshot.get("clusters") or []) if isinstance(item, dict)],
+        packages,
+    )
+    snapshot["clusters"] = clusters
+    snapshot["psirt_matrix"] = kb_config_matrix(packages, clusters)
+    return snapshot
 
 
 def merge_history(
@@ -805,6 +1071,8 @@ def write_site(out: Path, snapshots: list[dict[str, object]]) -> dict[str, objec
     if data.exists():
         shutil.rmtree(data)
     history.mkdir(parents=True)
+    snapshots = [enrich_snapshot(item) for item in snapshots]
+    latest = snapshots[0]
     for item in snapshots:
         run_id = str(item["run_id"])
         (history / f"{run_id}.json").write_text(json.dumps(item, indent=2) + "\n", encoding="utf-8")

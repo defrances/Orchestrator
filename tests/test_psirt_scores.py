@@ -71,6 +71,34 @@ class PsirtScoresTests(unittest.TestCase):
         self.assertIn("/", matrix["rows"][0]["cells"][1])
         self.assertNotEqual(matrix["rows"][0]["cells"][1], "NA")
 
+    def test_matrix_joins_numbered_device_id_to_synthetic_columns(self) -> None:
+        labels = {
+            "SYNTHETIC-CT-IMG-01": "Configurations1",
+            "SYNTHETIC-LAB-24H2-01": "Configurations2",
+        }
+        matrix = psirt.kb_config_matrix(
+            [
+                {
+                    "kb": "KB5099414",
+                    "severity": "critical",
+                    "stations": ["SYNTHETIC-CT-IMG-01", "SYNTHETIC-LAB-24H2-01"],
+                }
+            ],
+            labels,
+            [
+                {
+                    "device_id": "Configurations1",
+                    "packages": ["KB5099414"],
+                    "required_for_app": "not_required",
+                    "install_risk": "may_break_app",
+                    "skip_risk": "stays_vulnerable",
+                    "compatibility": "compatible",
+                }
+            ],
+        )
+        self.assertEqual(matrix["rows"][0]["cells"][0], "H / M")
+        self.assertEqual(matrix["rows"][0]["cells"][1], "H / —")
+
 
 if __name__ == "__main__":
     unittest.main()

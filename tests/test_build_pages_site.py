@@ -36,13 +36,19 @@ class BuildPagesSiteTests(unittest.TestCase):
             _write(
                 work / "issues-out" / "01-schannel-tls-SYNTHETIC-W11-24H2-01.json",
                 {
-                    "title": "[Impact] schannel-tls on SYNTHETIC-W11-24H2-01",
+                    "title": "[Impact] KB5002916 on Configurations1 - Schannel TLS host path",
                     "cluster_key": "schannel-tls",
-                    "device_id": "SYNTHETIC-W11-24H2-01",
+                    "device_id": "Configurations1",
+                    "packages": [],
                     "required_for_app": "not_required",
                     "install_risk": "compatible",
                     "skip_risk": "stays_vulnerable",
                     "compatibility": "compatible",
+                    "body": (
+                        "## Technical Impact Assessment\n\n"
+                        "### Impacted Components\n\n"
+                        "Host Schannel TLS. Cited `src/DesktopApplication/App.xaml`.\n"
+                    ),
                 },
             )
             _write(
@@ -51,7 +57,20 @@ class BuildPagesSiteTests(unittest.TestCase):
                     "product": "DesktopApplication",
                     "branch": "main",
                     "sha": "abc1234",
-                    "findings": [{"id": "VR-TLS-001", "title": "TLS", "countermeasure": "present"}],
+                    "findings": [
+                        {
+                            "id": "VR-TLS-001",
+                            "title": "TLS",
+                            "countermeasure": "present",
+                            "evidence": "InsecureVendorBulletinClient accepts any certificate.",
+                            "patch_plan": "Validate sslPolicyErrors.",
+                            "tests_to_run": ["TC-REG-TLS-CALLBACK"],
+                            "impact_files": ["src/DesktopApplication.Core/InsecureVendorBulletinClient.cs"],
+                        }
+                    ],
+                    "os_kb_advice": [
+                        "Host Schannel KBs stay a station recommendation and are not in the application zip."
+                    ],
                     "tests_filter": "Smoke|Regression",
                 },
             )
@@ -71,8 +90,23 @@ class BuildPagesSiteTests(unittest.TestCase):
                             "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-81955",
                             "stations": ["SYNTHETIC-W11-24H2-01"],
                             "cve_ids": ["CVE-2026-81955"],
+                            "known_exploited": "false",
+                            "exploitability": "low",
+                            "os_products": ["Windows 11 Version 24H2 for x64-based Systems"],
+                            "deployment_groups": ["pacs-validate"],
                         }
                     ],
+                },
+            )
+            _write(
+                work / "artifacts" / "windows-bundle" / "demo" / "stations" / "SYNTHETIC-W11-24H2-01.json",
+                {
+                    "device_id": "SYNTHETIC-W11-24H2-01",
+                    "model": "PACS-Validate-24H2",
+                    "device_role": "pacs-review-workstation",
+                    "os_product": "Windows 11 Version 24H2 for x64-based Systems",
+                    "os_build": "10.0.26100.4200",
+                    "deployment_group": "pacs-validate",
                 },
             )
             _write(
@@ -118,6 +152,18 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertNotIn("tokens", pages.format_ai_usage(first["ai"]).lower())
             self.assertNotIn("cost", pages.format_ai_usage(first["ai"]).lower())
             self.assertEqual([pkg["kb"] for pkg in first["bundle"]["packages"]], ["KB5002916"])
+            self.assertEqual(first["clusters"][0]["packages"], ["KB5002916"])
+            self.assertIn("Host Schannel TLS", first["clusters"][0]["impact"])
+            self.assertIn("Host Schannel TLS", first["clusters"][0]["body"])
+            self.assertEqual(first["bundle"]["packages"][0]["os_products"], [
+                "Windows 11 Version 24H2 for x64-based Systems"
+            ])
+            self.assertEqual(first["clusters"][0]["config_label"], "Configurations1")
+            self.assertEqual(first["bundle"]["packages"][0]["vendor_severity"], "H")
+            self.assertEqual(first["bundle"]["packages"][0]["vendor_likelihood"], "L")
+            self.assertEqual(first["findings"][0]["evidence"][:24], "InsecureVendorBulletinCl")
+            self.assertTrue(first["os_kb_advice"][0].startswith("Host Schannel"))
+            self.assertEqual(first["bundle"]["stations"][0]["os_build"], "10.0.26100.4200")
             self.assertNotIn(".exe", json.dumps(first))
             first["created_at"] = "2026-09-23T17:46:29Z"
 
@@ -197,14 +243,37 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertNotIn("Test gate", app_js)
             self.assertNotIn("Release package", app_js)
             self.assertNotIn("exe is not offered here", app_js)
-            self.assertNotIn('["Conclusion"', app_js)
-            self.assertNotIn('["Workflow"', app_js)
+            self.assertIn('["Conclusion"', app_js)
+            self.assertIn('["Workflow"', app_js)
             self.assertIn("kb-search", app_js)
             self.assertIn("Search KB or title", app_js)
             self.assertIn("function configNameMap", app_js)
             self.assertIn('"Configurations"', app_js)
             self.assertNotIn(".replace(/^SYNTHETIC-/", app_js)
-            self.assertIn("Configurations are synthetic lab fixtures", app_js)
+            self.assertIn("function clusterMatchesPkg", app_js)
+            self.assertIn("function filledScore", app_js)
+            self.assertNotIn("KB5082052", app_js)
+            self.assertIn("function clusterImpactText", app_js)
+            self.assertIn("This KB across loaded runs", app_js)
+            self.assertIn("function displayProduct", app_js)
+            self.assertIn("PDLC findings", app_js)
+            self.assertIn("Host OS products", app_js)
+            self.assertIn("Release and Evidence", app_js)
+            self.assertIn("function clusterKeyLabel", app_js)
+            self.assertIn('class="stepper"', app_js)
+            self.assertIn('class="timeline"', app_js)
+            self.assertIn('class="callout"', app_js)
+            self.assertIn("View all", app_js)
+            self.assertIn("All Patches", app_js)
+            self.assertNotIn("Run now", app_js)
+            self.assertNotIn("CTConsole", app_js)
+            self.assertNotIn("KB5082052", app_js)
+            css = (out2 / "assets" / "style.css").read_text(encoding="utf-8")
+            self.assertIn(".stepper", css)
+            self.assertIn(".timeline", css)
+            self.assertIn(".callout", css)
+            self.assertIn(".configRow", css)
+            self.assertIn("repeat(5, 1fr)", css)
             data_js = (out2 / "assets" / "data.js").read_text(encoding="utf-8")
             self.assertIn('"10"', data_js)
             self.assertIn('"9"', data_js)
@@ -455,6 +524,144 @@ class BuildPagesSiteTests(unittest.TestCase):
             clusters, none_marker = pages.collect_clusters(work)
             self.assertEqual(clusters, [])
             self.assertTrue(none_marker)
+
+    def test_extract_kb_and_impact_excerpt(self) -> None:
+        self.assertEqual(pages.extract_kb_ids("[Impact] KB5099414 on Configurations1 - Shell"), ["KB5099414"])
+        self.assertEqual(
+            pages.extract_kb_ids("dwm-wpf", "See KB5093998 and kb5099535"),
+            ["KB5093998", "KB5099535"],
+        )
+        body = (
+            "## Updates applicable for this product configuration\n\n"
+            "table\n\n"
+            "## Technical Impact Assessment\n\n"
+            "### Impacted Components\n\n"
+            "Host Shell launch path.\n\n"
+            "### Potential Risks\n\n"
+            "If we skip: Configuration stays exposed.\n\n"
+            "## Cybersecurity impact assessment\n\n"
+            "CVE text\n"
+        )
+        excerpt = pages.impact_excerpt(body)
+        self.assertIn("Host Shell launch path", excerpt)
+        self.assertIn("If we skip", excerpt)
+        self.assertNotIn("Cybersecurity", excerpt)
+
+    def test_enrich_snapshot_fills_empty_packages_and_sibling_keys(self) -> None:
+        snapshot = pages.enrich_snapshot(
+            {
+                "run_id": "old",
+                "clusters": [
+                    {
+                        "title": "[Impact] KB5099414 on Configurations1 - Shell may change exe launch",
+                        "device_id": "Configurations1",
+                        "cluster_key": "shell-launch",
+                        "packages": None,
+                        "required_for_app": "not_required",
+                        "install_risk": "may_break_app",
+                        "skip_risk": "stays_vulnerable",
+                        "compatibility": "compatible",
+                    },
+                    {
+                        "title": "[Impact] shell-launch on Configurations2 - Shell may change exe launch",
+                        "device_id": "Configurations2",
+                        "cluster_key": "shell-launch",
+                        "packages": [],
+                        "required_for_app": "not_required",
+                        "install_risk": "may_break_app",
+                        "skip_risk": "stays_vulnerable",
+                        "compatibility": "compatible",
+                    },
+                ],
+                "bundle": {
+                    "packages": [
+                        {
+                            "kb": "KB5099414",
+                            "severity": "CRITICAL",
+                            "known_exploited": "false",
+                            "exploitability": "low",
+                            "stations": ["SYNTHETIC-CT-IMG-01", "SYNTHETIC-LAB-24H2-01"],
+                        }
+                    ]
+                },
+            }
+        )
+        clusters = {item["device_id"]: item for item in snapshot["clusters"]}
+        self.assertEqual(clusters["Configurations1"]["packages"], ["KB5099414"])
+        self.assertEqual(clusters["Configurations2"]["packages"], ["KB5099414"])
+        self.assertIn("Shell may change exe launch", clusters["Configurations1"]["impact"])
+        self.assertEqual(snapshot["bundle"]["packages"][0]["vendor_severity"], "C")
+        matrix = snapshot["psirt_matrix"]
+        self.assertEqual(matrix["columns"], ["Configurations1", "Configurations2"])
+        self.assertNotIn("NA", matrix["rows"][0]["cells"][0])
+        self.assertIn("/", matrix["rows"][0]["cells"][0])
+
+    def test_kb_config_matrix_maps_numbered_device_ids(self) -> None:
+        matrix = pages.kb_config_matrix(
+            [
+                {
+                    "kb": "KB5099414",
+                    "severity": "HIGH",
+                    "stations": ["SYNTHETIC-LAB-24H2-01"],
+                },
+                {
+                    "kb": "KB2",
+                    "severity": "LOW",
+                    "stations": ["SYNTHETIC-CT-IMG-01"],
+                },
+            ],
+            [
+                {
+                    "device_id": "Configurations2",
+                    "packages": ["KB5099414"],
+                    "required_for_app": "not_required",
+                    "install_risk": "compatible",
+                    "skip_risk": "no_app_impact",
+                    "compatibility": "compatible",
+                }
+            ],
+        )
+        self.assertEqual(matrix["columns"], ["Configurations1", "Configurations2"])
+        by_kb = {row["kb"]: row["cells"] for row in matrix["rows"]}
+        self.assertEqual(by_kb["KB5099414"][0], "NA")
+        self.assertIn("L", by_kb["KB5099414"][1])
+        self.assertEqual(by_kb["KB2"][1], "NA")
+
+    def test_cluster_joins_numbered_device_id_to_synthetic_station(self) -> None:
+        labels = pages.config_display_names(["SYNTHETIC-US-01", "SYNTHETIC-LAB-24H2-01"])
+        cluster = {
+            "title": "[Impact] shell-launch on Configurations1",
+            "device_id": "Configurations1",
+            "packages": [],
+            "cluster_key": "shell-launch",
+        }
+        pkg = {
+            "kb": "KB5002916",
+            "stations": ["SYNTHETIC-LAB-24H2-01"],
+        }
+        self.assertEqual(labels["SYNTHETIC-LAB-24H2-01"], "Configurations1")
+        self.assertTrue(pages.cluster_matches_package(cluster, pkg, labels))
+        matched = pages.clusters_for_kb([cluster], pkg, labels)
+        self.assertEqual(len(matched), 1)
+        other = {
+            "kb": "KB5002916",
+            "stations": ["SYNTHETIC-US-01"],
+        }
+        self.assertFalse(pages.cluster_matches_package(cluster, other, labels))
+
+    def test_package_without_cluster_gets_vendor_letter(self) -> None:
+        rows = [
+            {
+                "kb": "KB5002916",
+                "severity": "HIGH",
+                "known_exploited": "false",
+                "exploitability": "low",
+            }
+        ]
+        pages.attach_vendor_letters(rows)
+        self.assertEqual(rows[0]["vendor_severity"], "H")
+        self.assertEqual(rows[0]["vendor_likelihood"], "L")
+        self.assertNotEqual(rows[0]["vendor_risk"], "NA")
 
 
 if __name__ == "__main__":
