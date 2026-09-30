@@ -347,8 +347,9 @@
     var historyN = allSnapshots().length;
     var parts = [];
     parts.push('<p class="chart-cap">' + esc(configChartCaption(rows, run.run_id, historyN)) + "</p>");
-    parts.push('<p class="chart-legend">Blue applicable for our platform · red recommended to install</p>');
     parts.push(configBars(rows));
+    parts.push('<div class="barLegend"><span><i class="applicable"></i>Applicable</span>' +
+      '<span><i class="recommended"></i>Recommended to install</span></div>');
     return parts.join("");
   }
 

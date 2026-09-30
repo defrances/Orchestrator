@@ -211,6 +211,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("function configUpdateCounts", app_js)
             self.assertIn("applicable for our platform", app_js)
             self.assertIn("recommended to install", app_js)
+            self.assertIn("barLegend", app_js)
             self.assertIn('fill="#ef3e4e"', app_js)
             self.assertIn('fill="#0b57b8"', app_js)
             self.assertIn("Configurations", app_js)
