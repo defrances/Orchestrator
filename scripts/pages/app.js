@@ -754,11 +754,11 @@
   function severityDonut(run) {
     var buckets = { Critical: 0, High: 0, Medium: 0, Low: 0 };
     uniquePackages(run).forEach(function (item) {
-      var raw = String(item.severity || "").toLowerCase();
-      if (raw === "critical") buckets.Critical += 1;
-      else if (raw === "high" || raw === "important") buckets.High += 1;
-      else if (raw === "medium" || raw === "moderate") buckets.Medium += 1;
-      else buckets.Low += 1;
+      var bucket = severityBucket(item.severity);
+      if (bucket === "CRITICAL") buckets.Critical += 1;
+      else if (bucket === "HIGH") buckets.High += 1;
+      else if (bucket === "MEDIUM") buckets.Medium += 1;
+      else if (bucket === "LOW") buckets.Low += 1;
     });
     return donutChart([
       { label: "Critical", value: buckets.Critical, color: "#0b57b8" },
@@ -853,19 +853,63 @@
       esc(first) + "</span><span>" + esc(last) + "</span></div></div>";
   }
 
-  function filteredPackages(run) {
-    return uniquePackages(run).filter(function (pkg) {
-      var hay = (pkg.kb + " " + pkg.title).toLowerCase();
-      if (query && hay.indexOf(query.toLowerCase()) === -1) return false;
-      if (severity !== "All severities") {
-        if (String(pkg.severity || "").toUpperCase() !== severity) return false;
-      }
-      if (config !== "All configurations") {
-        var labels = labeledStations(pkg.stations);
-        if (labels.indexOf(config) === -1) return false;
-      }
-      return true;
+  function copyRecord(src) {
+    var out = {};
+    Object.keys(src || {}).forEach(function (key) { out[key] = src[key]; });
+    return out;
+  }
+
+  function severityBucket(value) {
+    var raw = String(value || "").trim().toLowerCase();
+    if (raw === "critical") return "CRITICAL";
+    if (raw === "high" || raw === "important") return "HIGH";
+    if (raw === "medium" || raw === "moderate") return "MEDIUM";
+    if (raw === "low" || raw === "very low" || raw === "none") return "LOW";
+    return "LOW";
+  }
+
+  function packageOnConfig(pkg, wanted) {
+    if (!wanted || wanted === "All configurations") return true;
+    var stations = (pkg && pkg.stations) || [];
+    for (var i = 0; i < stations.length; i++) {
+      var station = stations[i];
+      if (sameConfig(configLabel(station), wanted) || sameConfig(station, wanted)) return true;
+    }
+    return false;
+  }
+
+  function packageMatchesFilters(pkg) {
+    var item = pkg || {};
+    var hay = (item.kb + " " + (item.title || "")).toLowerCase();
+    if (query && hay.indexOf(String(query).toLowerCase()) === -1) return false;
+    if (severity !== "All severities" && severityBucket(item.severity) !== severity) return false;
+    return packageOnConfig(item, config);
+  }
+
+  function scopedPackage(pkg) {
+    if (config === "All configurations") return pkg;
+    var copy = copyRecord(pkg);
+    copy.stations = (pkg.stations || []).filter(function (station) {
+      return sameConfig(configLabel(station), config) || sameConfig(station, config);
     });
+    return copy;
+  }
+
+  function filteredPackages(run) {
+    return uniquePackages(run).filter(packageMatchesFilters).map(scopedPackage);
+  }
+
+  function filteredScope(run) {
+    var src = run || {};
+    var pkgs = filteredPackages(src);
+    var scoped = copyRecord(src);
+    var bundle = copyRecord(src.bundle);
+    bundle.packages = pkgs;
+    scoped.bundle = bundle;
+    scoped.clusters = realClusters(src).filter(function (item) {
+      return pkgs.some(function (pkg) { return clusterMatchesPkg(item, pkg); });
+    });
+    return scoped;
   }
 
   function patchTable(run, rows) {
@@ -918,9 +962,10 @@
 
   function managerDashboard(run) {
     var period = managerPeriodRun(run);
-    var counts = uniqueCounts(period);
+    var scoped = filteredScope(period);
+    var counts = uniqueCounts(scoped);
     var historyN = allSnapshots().length;
-    var rows = filteredPackages(period);
+    var rows = uniquePackages(scoped);
     var findings = (period && period.findings) || [];
     return '<div class="pageHead"><div><h1>Patch Management Overview</h1>' +
       "<p>Executive summary of Microsoft Windows updates for Host Application configurations</p></div>" +
@@ -934,18 +979,18 @@
       kpi("Ⅱ", counts.held, "Held / Do not install", "unique KB in last 90 days", "purple") +
       kpi("◎", findings.length, "PDLC findings", "unique in last 90 days", "green") +
       "</div><div class=\"grid3\">" +
-      panel("Patches by Configuration", glance(period)) +
+      panel("Patches by Configuration", glance(scoped)) +
       panel("Product findings", findingsDonut(period)) +
-      panel("Severity (applicable)", severityDonut(period)) +
+      panel("Severity (applicable)", severityDonut(scoped)) +
       "</div>" +
-      panel("Period pipeline", pipeline(period)) +
-      panel("Latest Patches (last 90 days)", patchTable(period, rows),
+      panel("Period pipeline", pipeline(scoped)) +
+      panel("Latest Patches (last 90 days)", patchTable(scoped, rows),
         '<button class="view" data-view-all>View all</button>') +
       '<div class="grid2">' +
       panel("Patch Trend (last 90 days)", trendChart()) +
-      panel("Top impact cluster keys", componentBars(period)) +
+      panel("Top impact cluster keys", componentBars(scoped)) +
       "</div>" +
-      panel("KB × configurations", '<p class="chart-legend">Vendor risk / product risk. NA = not applicable for this configuration.</p>' + (periodMatrix(period) || '<p class="empty">No matrix in the last 90 days.</p>'));
+      panel("KB × configurations", '<p class="chart-legend">Vendor risk / product risk. NA = not applicable for this configuration.</p>' + (periodMatrix(scoped) || '<p class="empty">No matrix in the last 90 days.</p>'));
   }
 
   function findPackage(run, kb) {
@@ -1357,12 +1402,14 @@
 
   function patchList(run) {
     var view = role === "manager" ? managerPeriodRun(run) : run;
+    var scoped = filteredScope(view);
+    var rows = uniquePackages(scoped);
     var subtitle = role === "manager"
       ? "Unique patches in the last 90 days"
       : "All patch findings for this run";
     return '<div class="pageHead"><div><h1>Patches</h1><p>' + esc(subtitle) + "</p></div></div>" +
-      filtersBar(view) + panel(filteredPackages(view).length + " patches matching current filters",
-        patchTable(view, filteredPackages(view)));
+      filtersBar(view) + panel(rows.length + " patches matching current filters",
+        patchTable(scoped, rows));
   }
 
   function releases(run) {
