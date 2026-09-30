@@ -131,6 +131,8 @@ body { margin: 0; }
 .kpi.red strong, .kpi.red b { color: #d92828; }
 .kpi.purple .kpiIcon { background: #eee9ff; color: #6a4bd8; }
 .kpi.green .kpiIcon { background: #def7e8; color: #09934d; }
+.kpi.gray .kpiIcon { background: #e8eef5; color: #526a86; }
+.kpi.gray { background: #f7f9fc; }
 .grid3 { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 12px; }
 .grid2 { display: grid; grid-template-columns: 1.8fr 1fr; gap: 12px; }
 .panel { padding: 14px; margin-bottom: 12px; }
@@ -208,8 +210,14 @@ svg.chart .chart-n { font-size: 11px; fill: #122b52; }
 .badge.low { background: #e8eef5; color: #526a86; }
 .badge.install { background: #dff7e8; color: #087a3f; }
 .badge.hold { background: #fff0c7; color: #956600; }
-.status.to-install, .status.install { background: #ffe3e3; color: #c72626; }
-.status.hold { background: #fff0c7; color: #8e6200; }
+.badge.expedite { background: #ffe1e1; color: #d92323; }
+.badge.qualify { background: #e4f0ff; color: #0b57b8; }
+.badge.defer { background: #fff0c7; color: #956600; }
+.badge.close { background: #e8eef5; color: #526a86; }
+.status.to-install, .status.install, .status.expedite { background: #ffe3e3; color: #c72626; }
+.status.qualify { background: #e4f0ff; color: #0b57b8; }
+.status.hold, .status.defer { background: #fff0c7; color: #8e6200; }
+.status.close { background: #e8eef5; color: #526a86; }
 .risk { width: 22px; padding: 3px 0; }
 .risk.C, .risk.H { background: #ffe0e0; color: #d12222; }
 .risk.M { background: #fff0cf; color: #a56800; }

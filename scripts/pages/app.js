@@ -12,6 +12,7 @@
   var query = "";
   var severity = "All severities";
   var config = "All configurations";
+  var decision = "All decisions";
   var pageConfigMap = {};
   var SEV = { critical: 0, high: 1, important: 1, medium: 2, moderate: 2, low: 3 };
 
@@ -691,6 +692,47 @@
       : '<span class="status hold">Hold</span>';
   }
 
+  function isExpedite(pkg) {
+    var item = pkg || {};
+    if (!item.include_in_deploy) return false;
+    var action = String(item.action || "").trim();
+    if (action === "do_not_install" || action === "not_in_scope") return false;
+    var kev = String(item.known_exploited || "").trim().toLowerCase();
+    if (kev === "true" || kev === "yes" || kev === "1") return true;
+    if (severityBucket(item.severity) === "CRITICAL") return true;
+    return String(item.exploitability || "").trim().toLowerCase() === "high";
+  }
+
+  function patchDecision(pkg) {
+    var action = String((pkg && pkg.action) || "").trim();
+    if (action === "not_in_scope") return "Close";
+    if (!pkg || !pkg.include_in_deploy || action === "do_not_install") return "Defer";
+    if (isExpedite(pkg)) return "Expedite";
+    return "Qualify";
+  }
+
+  function decisionCounts(run) {
+    var counts = { Close: 0, Defer: 0, Qualify: 0, Expedite: 0 };
+    uniquePackages(run).forEach(function (pkg) {
+      counts[patchDecision(pkg)] += 1;
+    });
+    return counts;
+  }
+
+  function decisionClass(name) {
+    return String(name || "").toLowerCase();
+  }
+
+  function decisionBadge(pkg) {
+    var name = patchDecision(pkg);
+    return '<span class="badge ' + decisionClass(name) + '">' + esc(name) + "</span>";
+  }
+
+  function decisionStatus(pkg) {
+    var name = patchDecision(pkg);
+    return '<span class="status ' + decisionClass(name) + '">' + esc(name) + "</span>";
+  }
+
   function actionLabel(action) {
     var raw = String(action || "").trim();
     if (!raw) return "—";
@@ -698,6 +740,16 @@
     if (raw === "do_not_install") return "Do not install";
     if (raw === "not_in_scope") return "Not in scope";
     return raw.replace(/_/g, " ");
+  }
+
+  function decisionDonut(run) {
+    var counts = decisionCounts(run);
+    return donutChart([
+      { label: "Expedite", value: counts.Expedite, color: "#ef3e4e" },
+      { label: "Qualify", value: counts.Qualify, color: "#0b57b8" },
+      { label: "Defer", value: counts.Defer, color: "#f0b429" },
+      { label: "Close", value: counts.Close, color: "#94a3b8" }
+    ], "Decisions", "No patch decisions in the last 90 days.");
   }
 
   function risk(letter) {
@@ -883,6 +935,7 @@
     var hay = (item.kb + " " + (item.title || "")).toLowerCase();
     if (query && hay.indexOf(String(query).toLowerCase()) === -1) return false;
     if (severity !== "All severities" && severityBucket(item.severity) !== severity) return false;
+    if (decision !== "All decisions" && patchDecision(item) !== decision) return false;
     return packageOnConfig(item, config);
   }
 
@@ -914,15 +967,15 @@
 
   function patchTable(run, rows) {
     if (!rows.length) return '<p class="empty">No patches match the selected filters.</p>';
-    var html = '<div style="overflow:auto"><table><thead><tr><th>KB</th><th>Title</th><th>Severity</th><th>Recommendation</th><th>Config</th><th>CVEs</th><th>Vendor</th><th>Product</th><th>Status</th><th></th></tr></thead><tbody>';
+    var html = '<div style="overflow:auto"><table><thead><tr><th>KB</th><th>Title</th><th>Severity</th><th>Decision</th><th>Config</th><th>CVEs</th><th>Vendor</th><th>Product</th><th>Status</th><th></th></tr></thead><tbody>';
     rows.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       html += "<tr><td><button class=\"link\" data-open-kb=\"" + esc(pkg.kb) + "\">" + esc(pkg.kb) +
         "</button></td><td>" + esc(pkg.title) + "</td><td>" + badgeSev(pkg.severity) +
-        "</td><td>" + recBadge(pkg) + "</td><td>" + esc(labeledStations(pkg.stations)) +
+        "</td><td>" + decisionBadge(pkg) + "</td><td>" + esc(labeledStations(pkg.stations)) +
         "</td><td>" + esc((pkg.cve_ids || []).join(", ") || "—") +
         "</td><td>" + risk(letters.vendor) + "</td><td>" + risk(letters.product) +
-        "</td><td>" + recStatus(pkg) + "</td><td><button class=\"view\" data-open-kb=\"" +
+        "</td><td>" + decisionStatus(pkg) + "</td><td><button class=\"view\" data-open-kb=\"" +
         esc(pkg.kb) + "\">View</button></td></tr>";
     });
     return html + "</tbody></table></div>";
@@ -931,6 +984,7 @@
   function filtersBar(run) {
     var names = configNames();
     var sevOpts = ["All severities", "CRITICAL", "HIGH", "MEDIUM", "LOW"];
+    var decisionOpts = ["All decisions", "Expedite", "Qualify", "Defer", "Close"];
     return '<div class="filters"><div class="search"><input id="kb-search" placeholder="Search KB or title" value="' +
       esc(query) + '"></div><select id="config-filter"><option>All configurations</option>' +
       names.map(function (name) {
@@ -939,6 +993,10 @@
       '</select><select id="severity-filter">' +
       sevOpts.map(function (name) {
         return "<option" + (severity === name ? " selected" : "") + ">" + esc(name) + "</option>";
+      }).join("") +
+      '</select><select id="decision-filter">' +
+      decisionOpts.map(function (name) {
+        return "<option" + (decision === name ? " selected" : "") + ">" + esc(name) + "</option>";
       }).join("") +
       "</select></div>";
   }
@@ -963,10 +1021,9 @@
   function managerDashboard(run) {
     var period = managerPeriodRun(run);
     var scoped = filteredScope(period);
-    var counts = uniqueCounts(scoped);
+    var decisions = decisionCounts(scoped);
     var historyN = allSnapshots().length;
     var rows = uniquePackages(scoped);
-    var findings = (period && period.findings) || [];
     return '<div class="pageHead"><div><h1>Patch Management Overview</h1>' +
       "<p>Executive summary of Microsoft Windows updates for Host Application configurations</p></div>" +
       '<div class="period">Last 90 days</div></div>' +
@@ -974,14 +1031,14 @@
       filtersBar(period) +
       '<div class="kpis">' +
       kpi("▣", historyN, "Runs", "in last 90 days") +
-      kpi("◈", counts.applicable, "Applicable patches", "unique KB in last 90 days") +
-      kpi("↓", counts.recommended, "Recommended to install", "unique KB in last 90 days", "red") +
-      kpi("Ⅱ", counts.held, "Held / Do not install", "unique KB in last 90 days", "purple") +
-      kpi("◎", findings.length, "PDLC findings", "unique in last 90 days", "green") +
+      kpi("↓", decisions.Expedite, "Expedite", "unique KB in last 90 days", "red") +
+      kpi("◈", decisions.Qualify, "Qualify", "unique KB in last 90 days") +
+      kpi("Ⅱ", decisions.Defer, "Defer", "unique KB in last 90 days", "purple") +
+      kpi("◎", decisions.Close, "Close", "unique KB in last 90 days", "gray") +
       "</div><div class=\"grid3\">" +
       panel("Patches by Configuration", glance(scoped)) +
       panel("Product findings", findingsDonut(period)) +
-      panel("Severity (applicable)", severityDonut(scoped)) +
+      panel("Patch decisions", decisionDonut(scoped)) +
       "</div>" +
       panel("Period pipeline", pipeline(scoped)) +
       panel("Latest Patches (last 90 days)", patchTable(scoped, rows),
@@ -1109,12 +1166,12 @@
       : ["not in this snapshot", "not in this snapshot"];
     return engineerHead(run,
       '<div class="pageHead"><div><div class="titleLine"><h1>' + esc(pkg.kb) + "</h1>" +
-      badgeSev(pkg.severity) + recStatus(pkg) + "</div><p>" + esc(pkg.title) +
+      badgeSev(pkg.severity) + decisionStatus(pkg) + "</div><p>" + esc(pkg.title) +
       " · " + esc((pkg.cve_ids || [])[0] || "—") +
       (list.length ? " · " + list.length + " impact cluster(s)" : "") + "</p></div>" +
-      '<div class="recommend"><div><small>Recommendation</small><b>' +
-      (pkg.include_in_deploy ? "Install" : "Hold / Do not install") +
-      "</b><span>Advisory only</span></div></div></div>") +
+      '<div class="recommend"><div><small>Decision</small><b>' +
+      esc(patchDecision(pkg)) +
+      "</b><span>Advisory only. HOLD and BLOCK stay.</span></div></div></div>") +
       '<div class="callout"><b>Next action</b><p>Review impact analysis and test coverage for this KB. Advisory only.</p>' +
       '<div class="actionRow"><button class="secondary" data-eng-tab="Impact Analysis">Impact Analysis</button>' +
       '<button class="secondary" data-eng-tab="Test Coverage">Test Coverage</button></div></div>' +
@@ -1125,6 +1182,7 @@
         ["CVE", esc((pkg.cve_ids || []).join(", ") || "—")],
         ["Severity", esc(pkg.severity || "—")],
         ["Action", esc(actionLabel(pkg.action))],
+        ["Decision", esc(patchDecision(pkg))],
         ["KEV", esc(pkg.known_exploited || "—")],
         ["Exploitability", esc(pkg.exploitability || "—")],
         ["OS products", esc((pkg.os_products || []).join(", ") || "—")],
@@ -1219,7 +1277,7 @@
             "</div></div>";
         }
         return '<button class="configRow" data-select-config="' + esc(id) + '"><b>' +
-          esc(label) + "</b><span>" + esc(id) + "</span>" + recStatus(pkg) + "</button>" + detail;
+          esc(label) + "</b><span>" + esc(id) + "</span>" + decisionStatus(pkg) + "</button>" + detail;
       }).join("") || '<p class="empty">No configurations on this KB.</p>');
   }
 
@@ -1448,7 +1506,7 @@
             esc(pkg.kb) + "</button><span class=\"cves\">" +
             esc((pkg.cve_ids || []).join(", ") || pkg.title || "") +
             "</span><span class=\"kbSev\">" + badgeSev(pkg.severity) +
-            "</span><span class=\"kbRec\">" + recStatus(pkg) + "</span></div>";
+            "</span><span class=\"kbRec\">" + decisionStatus(pkg) + "</span></div>";
         }).join("")
         : '<p class="empty">No packages on this run.</p>') +
       panel("Host Application package", release.zip_name
@@ -1490,7 +1548,7 @@
       (selectedRows.length
         ? selectedRows.map(function (pkg) {
           return '<div class="metricLine"><button class="link" data-open-kb="' + esc(pkg.kb) + '">' +
-            esc(pkg.kb) + "</button>" + badgeSev(pkg.severity) + recStatus(pkg) + "</div>";
+            esc(pkg.kb) + "</button>" + badgeSev(pkg.severity) + decisionStatus(pkg) + "</div>";
         }).join("")
         : '<p class="empty">No patches for this configuration.</p>'));
     return html;
@@ -1539,12 +1597,12 @@
     {
       q: "What does Action mean?",
       needles: ["candidate for validation", "candidate_for_validation", "action", "do not install", "do_not_install", "not in scope", "not_in_scope"],
-      answer: "Action is the FindUpdates catalogue verdict for that KB. Recommended to validate means the KB is a candidate to test on the lab configuration. Do not install means hold it. Not in scope means this product path does not use that update. This page does not authorize install."
+      answer: "Action is the FindUpdates catalogue verdict for that KB. Recommended to validate means the KB is a candidate to test on the lab configuration. Do not install means hold it. Not in scope means this product path does not use that update. Close, Defer, Qualify, and Expedite are the manager patch decisions derived from that verdict. This page does not authorize install."
     },
     {
       q: "What is Install vs Hold?",
       needles: ["install", "hold", "recommended to install", "do not install"],
-      answer: "Install and Hold come from include_in_deploy on this run. Install means recommended for the lab configuration. Hold means do not install. HOLD and BLOCK from FindUpdates stay. The page is advisory only."
+      answer: "Install and Hold come from include_in_deploy. Install maps to Qualify or Expedite. Hold maps to Defer. Not in scope maps to Close. HOLD and BLOCK from FindUpdates stay. The page is advisory only."
     },
     {
       q: "What is Config1?",
@@ -1604,7 +1662,7 @@
     {
       q: "What is severity?",
       needles: ["severity", "critical", "high", "medium", "low"],
-      answer: "Severity on a KB is the vendor / MSRC rating from FindUpdates. The Manager Dashboard severity donut counts unique KBs in the last 90 days. It is not the product letter score."
+      answer: "Severity on a KB is the vendor / MSRC rating from FindUpdates. The severity filter on Manager Dashboard uses that rating. It is not the product letter score."
     },
     {
       q: "What is an impact cluster?",
@@ -1612,9 +1670,14 @@
       answer: "An impact cluster groups how a KB couples to Host Application on a configuration (for example Schannel / TLS). The engineer card shows that impact text and install vs skip scores."
     },
     {
+      q: "What are Close, Defer, Qualify, and Expedite?",
+      needles: ["close", "defer", "qualify", "expedite", "patch decision", "decision"],
+      answer: "Those are patch decisions on this advisory report. Close means the KB was assessed and is not continuing: not in scope or not applicable. Defer means do not install now; HOLD and BLOCK stay. This page does not store a review date. Qualify means the KB goes to the normal lab test queue. Expedite means the same queue with priority for Critical, KEV, or high exploitability. This page does not authorize install."
+    },
+    {
       q: "What do the KPI numbers mean?",
-      needles: ["kpi", "runs", "applicable", "held"],
-      answer: "Runs is how many Orchestrator snapshots are in the last 90 days. Applicable, Recommended to install, and Held are unique KBs in the last 90 days, using the latest verdict per KB. PDLC findings is unique product findings in the last 90 days."
+      needles: ["kpi", "runs", "applicable", "held", "expedite", "qualify", "defer", "close"],
+      answer: "Runs is how many Orchestrator snapshots are in the last 90 days. Expedite, Qualify, Defer, and Close are unique KB patch decisions in the last 90 days, using the latest verdict per KB. PDLC findings stay on the Product findings chart."
     }
   ];
 
@@ -1651,6 +1714,7 @@
       "What are PDLC findings?",
       "What are Product findings?",
       "What does Action mean?",
+      "What are Close, Defer, Qualify, and Expedite?",
       "What is Install vs Hold?",
       "What is Config1?",
       "What is vendor vs product risk?",
@@ -1831,6 +1895,13 @@
     if (sev) {
       sev.addEventListener("change", function () {
         severity = sev.value;
+        paint(run);
+      });
+    }
+    var dec = document.getElementById("decision-filter");
+    if (dec) {
+      dec.addEventListener("change", function () {
+        decision = dec.value;
         paint(run);
       });
     }
