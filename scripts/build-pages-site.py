@@ -9,9 +9,15 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+import psirt_scores
 
 RETENTION_DAYS = 90
 SKIP_ISSUE_NAMES = {"none.json", "missing-report.json", "summary.json", "ai-usage.json"}
@@ -148,7 +154,22 @@ SCORE_FIELD_HINTS = {
     "install_risk": "What happens to the app if we put the KB on the configuration?",
     "skip_risk": "What happens if we leave the KB off the configuration?",
     "compatibility": "Does current main work with these vendor bits?",
+    "vendor_severity": "Microsoft / FindUpdates severity as C H M L.",
+    "vendor_likelihood": "KEV is C. High exploitability is H. Unknown is M.",
+    "vendor_risk": "Combined vendor severity and likelihood.",
+    "product_severity": "How severe this is for the published exe on this configuration.",
+    "product_likelihood": "How reachable the issue is on this configuration. Often L when the component is not loaded.",
+    "product_risk": "Product risk may be L even when vendor risk is C.",
 }
+
+PSIRT_FIELDS = (
+    ("vendor_severity", "Vendor severity"),
+    ("vendor_likelihood", "Vendor likelihood"),
+    ("vendor_risk", "Vendor risk"),
+    ("product_severity", "Product severity"),
+    ("product_likelihood", "Product likelihood"),
+    ("product_risk", "Product risk"),
+)
 
 
 def score_label(value: object) -> str:
@@ -178,7 +199,20 @@ def risk_chart_caption(counts: dict[str, int] | None) -> str:
 
 def score_rows(cluster: dict[str, object] | None) -> list[tuple[str, str]]:
     item = cluster or {}
-    return [(label, score_label(item.get(key))) for key, label in SCORE_FIELDS]
+    rows = [(label, score_label(item.get(key))) for key, label in SCORE_FIELDS]
+    rows.extend((label, str(item.get(key) or "NA")) for key, label in PSIRT_FIELDS)
+    return rows
+
+
+def kb_config_matrix(
+    packages: list[dict[str, object]] | None,
+    clusters: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    names: list[str] = []
+    for item in packages or []:
+        if isinstance(item, dict):
+            names.extend(str(name).strip() for name in (item.get("stations") or []) if str(name).strip())
+    return psirt_scores.kb_config_matrix(packages, config_display_names(names), clusters)
 
 
 def _cluster_from_issue(path: Path, payload: dict) -> dict[str, object] | None:
@@ -193,7 +227,7 @@ def _cluster_from_issue(path: Path, payload: dict) -> dict[str, object] | None:
         return None
     if cluster_key in {"missing-report", "summary"}:
         return None
-    return {
+    cluster = {
         "title": str(payload.get("title") or path.stem),
         "device_id": str(payload.get("device_id") or ""),
         "cluster_key": cluster_key or path.stem,
@@ -202,7 +236,25 @@ def _cluster_from_issue(path: Path, payload: dict) -> dict[str, object] | None:
         "install_risk": str(payload.get("install_risk") or ""),
         "skip_risk": str(payload.get("skip_risk") or ""),
         "compatibility": str(payload.get("compatibility") or ""),
+        "packages": [str(item).strip() for item in (payload.get("packages") or []) if str(item).strip()],
+        "vendor_severity": str(payload.get("vendor_severity") or ""),
+        "vendor_likelihood": str(payload.get("vendor_likelihood") or ""),
+        "vendor_risk": str(payload.get("vendor_risk") or ""),
+        "product_severity": str(payload.get("product_severity") or ""),
+        "product_likelihood": str(payload.get("product_likelihood") or ""),
+        "product_risk": str(payload.get("product_risk") or ""),
     }
+    if not cluster["product_risk"]:
+        product = psirt_scores.product_scores(
+            required_for_app=cluster["required_for_app"],
+            install_risk=cluster["install_risk"],
+            skip_risk=cluster["skip_risk"],
+            compatibility=cluster["compatibility"],
+        )
+        cluster["product_severity"] = product["severity"]
+        cluster["product_likelihood"] = product["likelihood"]
+        cluster["product_risk"] = product["risk"]
+    return cluster
 
 
 def collect_clusters(workspace: Path) -> tuple[list[dict[str, object]], bool]:
@@ -277,6 +329,8 @@ def collect_bundle(workspace: Path) -> dict[str, object] | None:
                 "official_url": str(item.get("official_url") or ""),
                 "stations": list(item.get("stations") or []),
                 "cve_ids": list(item.get("cve_ids") or []),
+                "known_exploited": str(item.get("known_exploited") or ""),
+                "exploitability": str(item.get("exploitability") or ""),
             }
         )
     packages = sort_packages(packages)
@@ -683,6 +737,7 @@ def snapshot_from_workspace(workspace: Path, *, env: dict[str, str] | None = Non
         "no_clusters": none_marker or not clusters,
         "findings": findings,
         "bundle": bundle,
+        "psirt_matrix": kb_config_matrix((bundle or {}).get("packages") if bundle else [], clusters),
         "tests": tests,
         "release": release,
         "ai": ai,
@@ -984,6 +1039,10 @@ select { display: block; margin-top: 0.35rem; min-width: 22rem; max-width: 100%;
   letter-spacing: 0;
 }
 .info:hover .tip, .info:focus .tip, .info:focus-within .tip { display: block; }
+.score-list { display: grid; gap: 0.25rem; }
+.matrix-wrap { overflow-x: auto; margin: 1rem 0 1.2rem; }
+.matrix-wrap table { min-width: 36rem; }
+.matrix-wrap th, .matrix-wrap td { font-size: 0.78rem; white-space: nowrap; }
 .risk-rows { display: grid; gap: 0.4rem; }
 .risk-row { display: grid; grid-template-columns: 1.1rem 7.6rem 1fr auto; gap: 0.4rem; align-items: center; }
 .risk-lab { font-size: 0.75rem; color: var(--muted); line-height: 1.2rem; }
@@ -1371,7 +1430,13 @@ APP_JS = r"""(function () {
     required_for_app: "Does the product on main need this KB to keep working?",
     install_risk: "What happens to the app if we put the KB on the configuration?",
     skip_risk: "What happens if we leave the KB off the configuration?",
-    compatibility: "Does current main work with these vendor bits?"
+    compatibility: "Does current main work with these vendor bits?",
+    vendor_severity: "Microsoft / FindUpdates severity as C H M L.",
+    vendor_likelihood: "KEV is C. High exploitability is H. Unknown is M.",
+    vendor_risk: "Combined vendor severity and likelihood.",
+    product_severity: "How severe this is for the published exe on this configuration.",
+    product_likelihood: "How reachable the issue is on this configuration. Often L when the component is not loaded.",
+    product_risk: "Product risk may be L even when vendor risk is C."
   };
 
   function infoTip(text) {
@@ -1413,12 +1478,23 @@ APP_JS = r"""(function () {
   }
 
   function scoreRows(cluster) {
-    return [
+    var rows = [
       ["Required for app", scoreLabel(cluster && cluster.required_for_app), SCORE_FIELD_HINTS.required_for_app],
       ["If we install", scoreLabel(cluster && cluster.install_risk), SCORE_FIELD_HINTS.install_risk],
       ["If we skip", scoreLabel(cluster && cluster.skip_risk), SCORE_FIELD_HINTS.skip_risk],
       ["Compatibility", scoreLabel(cluster && cluster.compatibility), SCORE_FIELD_HINTS.compatibility]
     ];
+    [
+      ["Vendor severity", "vendor_severity"],
+      ["Vendor likelihood", "vendor_likelihood"],
+      ["Vendor risk", "vendor_risk"],
+      ["Product severity", "product_severity"],
+      ["Product likelihood", "product_likelihood"],
+      ["Product risk", "product_risk"]
+    ].forEach(function (item) {
+      rows.push([item[0], (cluster && cluster[item[1]]) || "NA", SCORE_FIELD_HINTS[item[1]]]);
+    });
+    return rows;
   }
 
   function scoreList(cluster) {
@@ -1573,6 +1649,31 @@ APP_JS = r"""(function () {
     return svg + "</svg>";
   }
 
+  function psirtMatrix(run) {
+    var matrix = (run && run.psirt_matrix) || {};
+    var columns = matrix.columns || [];
+    var rows = matrix.rows || [];
+    if (!columns.length || !rows.length) {
+      return "";
+    }
+    var parts = ['<section class="chart-wide"><h3>KB × configurations</h3>'];
+    parts.push('<p class="chart-legend">Vendor risk / product risk. NA = not applicable for this configuration.</p>');
+    parts.push('<div class="matrix-wrap"><table><thead><tr><th>KB</th>');
+    columns.forEach(function (name) {
+      parts.push("<th>" + esc(name) + "</th>");
+    });
+    parts.push("</tr></thead><tbody>");
+    rows.forEach(function (row) {
+      parts.push("<tr><td>" + esc(row.kb) + "</td>");
+      (row.cells || []).forEach(function (cell) {
+        parts.push("<td>" + esc(cell) + "</td>");
+      });
+      parts.push("</tr>");
+    });
+    parts.push("</tbody></table></div></section>");
+    return parts.join("");
+  }
+
   function glance(run) {
     var rows = configUpdateCounts(((run.bundle || {}).packages) || []);
     var historyN = allSnapshots().length;
@@ -1581,6 +1682,7 @@ APP_JS = r"""(function () {
     parts.push('<p class="chart-legend">Black applicable for our platform · red recommended to install</p>');
     parts.push(configBars(rows));
     parts.push("</section>");
+    parts.push(psirtMatrix(run));
     return parts.join("");
   }
 

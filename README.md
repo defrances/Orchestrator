@@ -47,8 +47,10 @@ Vendor impact is **not** “the CVE is Critical”. A row is in scope only if a 
 | `install_risk` | Risk **if the KB is installed** |
 | `skip_risk` | Risk **if the KB is skipped** |
 | `compatibility` | Current `main` vs the proposed host bits |
+| Vendor severity / likelihood / risk | C H M L from FindUpdates severity, KEV, and exploitability |
+| Product severity / likelihood / risk | Same letters for this configuration. Product risk may be L when vendor risk is C |
 
-Self-contained publish means an OS .NET KB almost never patches the bundled runtime (`os-dotnet` → `not_required`, `skip_risk: no_app_impact`). Rows that share a numbered configuration (**Configurations1** …) + `cluster_key` + the same four scores and Recommendation become **one** email. Number configurations from sorted lab `device_id` values, same order as the GitHub Page. Cap 8 `cluster_key` values; each key produces one mail per configuration that has rows.
+Self-contained publish means an OS .NET KB almost never patches the bundled runtime (`os-dotnet` → `not_required`, `skip_risk: no_app_impact`). Rows that share a numbered configuration (**Configurations1** …) + `cluster_key` + the same four scores and Recommendation become **one** email. Number configurations from sorted lab `device_id` values, same order as the GitHub Page. Cap 8 `cluster_key` values; each key produces one mail per configuration that has rows. GitHub Pages also shows a KB × configuration grid: vendor risk / product risk, or **NA** when that KB does not apply.
 
 Product PDLC uses the docs as the finding list. Those files can lag `main` (for example VR-TLS-001 still marked open after the TLS callback was tightened). Station KB rows are not product vulnerabilities.
 
@@ -64,7 +66,7 @@ Subject: `[Impact] {patch name} on Configurations{N} - {description}`. Patch nam
 | One status mail | No clusters |
 | One Windows patch bundle mail | After the bundle README exists |
 
-Body sections: source-code versions (product repos + commit), updates applicable for this product configuration (`Title`, `Package`, `CVEs`, `Recommendation`), product configuration specification, technical impact assessment (impacted components, potential risks), cybersecurity impact assessment, product risk assessment, test planning (recommended regression suite, gap analysis), recommendation.
+Body sections: source-code versions (product repos + commit), updates applicable for this product configuration (`Title`, `Package`, `CVEs`, `Recommendation`), product configuration specification, vendor vs product scores (C/H/M/L), technical impact assessment (impacted components, potential risks), cybersecurity impact assessment, product risk assessment, test planning (recommended regression suite, gap analysis), recommendation.
 
 Recommendation display (FindUpdates `action` is unchanged in JSON):
 

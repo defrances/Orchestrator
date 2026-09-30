@@ -170,9 +170,9 @@ Skip:
 
 `issues-out/01-<cluster_key>-Configurations1.json`
 
-Required keys: `title`, `body`, `advisory_id`, `device_id`, `cluster_key`, `labels`, `required_for_app`, `install_risk`, `skip_risk`, `compatibility`.
+Required keys: `title`, `body`, `advisory_id`, `device_id`, `cluster_key`, `packages`, `labels`, `required_for_app`, `install_risk`, `skip_risk`, `compatibility`, `vendor_severity`, `vendor_likelihood`, `vendor_risk`, `product_severity`, `product_likelihood`, `product_risk`.
 
-Set `advisory_id` to the same value as `cluster_key`. Set `device_id` to `Configurations1`, `Configurations2`, … (the numbered label, not a synthetic station id).
+Set `advisory_id` to the same value as `cluster_key`. Set `device_id` to `Configurations1`, `Configurations2`, … (the numbered label, not a synthetic station id). Set `packages` to the distinct KB ids for this configuration. Vendor likelihood: KEV → `C`, high exploitability → `H`, unknown → `M`, low/none → `L`. Product risk may be `L` when vendor risk is `C`.
 
 Patch name in the title: the cluster's `package` (KB) when every distinct update row shares one package; otherwise `cluster_key`.
 

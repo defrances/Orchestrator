@@ -405,7 +405,9 @@ class FallbackLinkTests(unittest.TestCase):
         self.assertNotIn("### Risks\n", body)
         self.assertIn("## Recommendation", body)
         self.assertIn("Configurations1", body)
-        self.assertNotIn("UVCS configuration 1", body)
+        self.assertIn("## Vendor vs product scores", body)
+        self.assertIn("| Vendor |", body)
+        self.assertIn("| Product |", body)
         self.assertIn("https://github.com/defrances/DesktopApplication - commit `abc`", body)
         self.assertIn("TC-REG-TLS-CALLBACK", body)
         self.assertIn("**Required for the app to keep working: Not required.**", body)
@@ -433,6 +435,9 @@ class FallbackLinkTests(unittest.TestCase):
                     "os_product": "Windows 11",
                     "cve_ids": ["CVE-1"],
                     "risk_score": 80,
+                    "severity": "high",
+                    "known_exploited": "false",
+                    "exploitability": "low",
                     "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-1",
                 },
                 {
@@ -443,12 +448,18 @@ class FallbackLinkTests(unittest.TestCase):
                     "os_product": "Windows 11",
                     "cve_ids": ["CVE-1"],
                     "risk_score": 80,
+                    "severity": "high",
+                    "known_exploited": "false",
+                    "exploitability": "low",
                     "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-1",
                 },
             ],
         }
         issues, overflow = fallback.build_cluster_issues(payload)
         self.assertEqual(overflow, [])
+        self.assertIn("vendor_likelihood", issues[0])
+        self.assertIn("product_risk", issues[0])
+        self.assertEqual(issues[0]["packages"], ["KB5122871"])
         self.assertEqual(
             [item["device_id"] for item in issues],
             ["Configurations1", "Configurations2"],

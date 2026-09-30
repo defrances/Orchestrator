@@ -154,6 +154,9 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("function glance", app_js)
             self.assertIn("90 days", app_js)
             self.assertIn("function configBars", app_js)
+            self.assertIn("KB × configurations", app_js)
+            self.assertIn("NA = not applicable", app_js)
+            self.assertIn("Vendor risk", app_js)
             self.assertIn("function configUpdateCounts", app_js)
             self.assertIn("applicable for our platform", app_js)
             self.assertIn("recommended to install", app_js)
@@ -303,6 +306,27 @@ class BuildPagesSiteTests(unittest.TestCase):
         self.assertIn("4 runs in the last 90 days", long)
         self.assertNotIn("still open", long)
 
+    def test_kb_config_matrix_marks_na(self) -> None:
+        matrix = pages.kb_config_matrix(
+            [
+                {
+                    "kb": "KB1",
+                    "severity": "HIGH",
+                    "stations": ["SYNTHETIC-CT-IMG-01", "SYNTHETIC-LAB-24H2-01"],
+                },
+                {
+                    "kb": "KB2",
+                    "severity": "LOW",
+                    "stations": ["SYNTHETIC-LAB-24H2-01"],
+                },
+            ]
+        )
+        self.assertEqual(matrix["columns"], ["Configurations1", "Configurations2"])
+        by_kb = {row["kb"]: row["cells"] for row in matrix["rows"]}
+        self.assertNotEqual(by_kb["KB1"][0], "NA")
+        self.assertEqual(by_kb["KB2"][0], "NA")
+        self.assertNotEqual(by_kb["KB2"][1], "NA")
+
     def test_ai_usage_line(self) -> None:
         self.assertEqual(
             pages.format_ai_usage(None),
@@ -354,10 +378,16 @@ class BuildPagesSiteTests(unittest.TestCase):
                 "install_risk": "compatible",
                 "skip_risk": "stays_vulnerable",
                 "compatibility": "compatible",
+                "vendor_severity": "C",
+                "vendor_likelihood": "H",
+                "vendor_risk": "H",
+                "product_severity": "L",
+                "product_likelihood": "L",
+                "product_risk": "L",
             }
         )
         self.assertEqual(
-            rows,
+            rows[:4],
             [
                 ("Required for app", "Not required"),
                 ("If we install", "Compatible with the app"),
@@ -365,6 +395,8 @@ class BuildPagesSiteTests(unittest.TestCase):
                 ("Compatibility", "Compatible with the app"),
             ],
         )
+        self.assertEqual(rows[6], ("Vendor risk", "H"))
+        self.assertEqual(rows[9], ("Product risk", "L"))
         self.assertEqual(pages.chart_risk_label("stays_vulnerable"), "Skip: still exposed")
         self.assertIn("configuration stays exposed", pages.RISK_HINTS["stays_vulnerable"])
         self.assertIn(

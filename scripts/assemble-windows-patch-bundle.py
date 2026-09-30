@@ -103,6 +103,8 @@ def _group_packages(items: list[dict]) -> list[dict]:
                 "action": action,
                 "include_in_deploy": action == CANDIDATE,
                 "severity": str(row.get("severity") or ""),
+                "known_exploited": str(row.get("known_exploited") or ""),
+                "exploitability": str(row.get("exploitability") or ""),
                 "stations": [],
                 "deployment_groups": [],
                 "os_products": [],
@@ -117,6 +119,12 @@ def _group_packages(items: list[dict]) -> list[dict]:
         product = str(row.get("os_product") or "").strip()
         if product and product not in slot["os_products"]:
             slot["os_products"].append(product)
+        kev = str(row.get("known_exploited") or "").strip()
+        if kev and not slot.get("known_exploited"):
+            slot["known_exploited"] = kev
+        exp = str(row.get("exploitability") or "").strip()
+        if exp and not slot.get("exploitability"):
+            slot["exploitability"] = exp
         for cve in row.get("cve_ids") or []:
             text = str(cve).strip()
             if text and text not in slot["cve_ids"]:

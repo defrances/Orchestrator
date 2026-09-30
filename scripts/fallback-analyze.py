@@ -7,8 +7,14 @@ import json
 import os
 import re
 import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+import psirt_scores
 
 REPORT = Path("inputs/report.json")
 OUT_DIR = Path("issues-out")
@@ -523,6 +529,27 @@ def recommendation_text(
     )
 
 
+def score_table(scores: dict[str, str] | None) -> str:
+    item = scores or {}
+    return (
+        "| | Severity | Likelihood | Risk |\n"
+        "| --- | --- | --- | --- |\n"
+        f"| Vendor | {item.get('vendor_severity') or 'NA'} | "
+        f"{item.get('vendor_likelihood') or 'NA'} | {item.get('vendor_risk') or 'NA'} |\n"
+        f"| Product | {item.get('product_severity') or 'NA'} | "
+        f"{item.get('product_likelihood') or 'NA'} | {item.get('product_risk') or 'NA'} |"
+    )
+
+
+def member_packages(members: list[dict[str, object]]) -> list[str]:
+    packages: list[str] = []
+    for item in unique_updates(members):
+        pkg = str(item.get("package") or "").strip()
+        if pkg and pkg not in packages:
+            packages.append(pkg)
+    return packages
+
+
 def issue_body(
     key: str,
     members: list[dict[str, object]],
@@ -531,6 +558,7 @@ def issue_body(
     source_versions: str | None = None,
     device: str | None = None,
     log: str | None = None,
+    scores: dict[str, str] | None = None,
 ) -> str:
     del log
     config_name = (device or "").strip() or "Configurations1"
@@ -546,6 +574,13 @@ def issue_body(
             )
         )
     versions = source_versions if source_versions is not None else source_version_lines()
+    letters = scores or psirt_scores.scores_from_members(
+        members,
+        required_for_app=risk.get("required_for_app"),
+        install_risk=risk.get("install_risk"),
+        skip_risk=risk.get("skip_risk"),
+        compatibility=risk.get("compatibility"),
+    )
     return f"""<!-- impact:{key}:{config_name} -->
 
 {versions}
@@ -564,6 +599,12 @@ def issue_body(
 - OS: {unique_field(members, "os_product")} build {unique_field(members, "os_build")}
 - Clinical criticality: {unique_field(members, "clinical_criticality")}
 - Network exposure: {unique_field(members, "network_exposure")}
+
+## Vendor vs product scores
+
+{score_table(letters)}
+
+Letters are C / H / M / L. Vendor comes from FindUpdates severity, KEV, and exploitability. Product is allowed to be lower when the patched component is not loaded.
 
 ## Technical Impact Assessment
 
@@ -645,17 +686,26 @@ def build_cluster_issues(
         for config_name in sorted(by_config, key=config_sort_key):
             config_members = by_config[config_name]
             risk = risk_fields(key)
+            letters = psirt_scores.scores_from_members(
+                config_members,
+                required_for_app=risk["required_for_app"],
+                install_risk=risk["install_risk"],
+                skip_risk=risk["skip_risk"],
+                compatibility=risk["compatibility"],
+            )
             issues.append(
                 {
                     "title": issue_title(key, config_members, config_name),
                     "advisory_id": key,
                     "device_id": config_name,
                     "cluster_key": key,
+                    "packages": member_packages(config_members),
                     "labels": ["vendor-update-impact", f"product-config:{config_name}"],
                     "required_for_app": risk["required_for_app"],
                     "install_risk": risk["install_risk"],
                     "skip_risk": risk["skip_risk"],
                     "compatibility": risk["compatibility"],
+                    **letters,
                     "body": issue_body(
                         key,
                         config_members,
@@ -663,6 +713,7 @@ def build_cluster_issues(
                         risk,
                         source_versions=versions,
                         device=config_name,
+                        scores=letters,
                     ),
                 }
             )
