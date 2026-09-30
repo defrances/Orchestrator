@@ -230,6 +230,8 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("Vendor risk", app_js)
             self.assertIn("Vendor name", app_js)
             self.assertIn("function vendorName", app_js)
+            self.assertIn("function officialLink", app_js)
+            self.assertIn('target="_blank"', app_js)
             self.assertIn("NVIDIA", app_js)
             self.assertNotIn("Nvideo", app_js)
             self.assertNotIn("Microsoft (MSRC)", app_js)

@@ -76,6 +76,19 @@
     return '<a href="' + esc(href) + '">' + esc(label) + "</a>";
   }
 
+  function officialHref(pkg) {
+    var href = String((pkg && pkg.official_url) || "").trim();
+    if (!/^https:\/\//i.test(href)) return "";
+    return href;
+  }
+
+  function officialLink(pkg, label) {
+    var href = officialHref(pkg);
+    if (!href) return esc(label);
+    return '<a class="link" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' +
+      esc(label) + "</a>";
+  }
+
   function infoTip(text) {
     return '<span class="info-tip" tabindex="0"><span class="info-mark">i</span><span class="tip">' +
       esc(text) + "</span></span>";
@@ -385,7 +398,8 @@
     pkgs.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       var stations = pkg.stations || [];
-      parts.push("<tr><td>" + esc(pkg.kb) + "</td><td>" + esc(vendorName(pkg)) + "</td>");
+      parts.push("<tr><td>" + officialLink(pkg, pkg.kb) + "</td><td>" +
+        officialLink(pkg, vendorName(pkg)) + "</td>");
       names.forEach(function (name) {
         var hit = stations.some(function (station) {
           return sameConfig(station, name) || sameConfig(configLabel(station), configLabel(name));
@@ -985,7 +999,7 @@
     rows.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       html += "<tr><td><button class=\"link\" data-open-kb=\"" + esc(pkg.kb) + "\">" + esc(pkg.kb) +
-        "</button></td><td>" + esc(pkg.title) + "</td><td>" + esc(vendorName(pkg)) +
+        "</button></td><td>" + esc(pkg.title) + "</td><td>" + officialLink(pkg, vendorName(pkg)) +
         "</td><td>" + badgeSev(pkg.severity) +
         "</td><td>" + decisionBadge(pkg) + "</td><td>" + esc(labeledStations(pkg.stations)) +
         "</td><td>" + esc((pkg.cve_ids || []).join(", ") || "—") +
@@ -1202,7 +1216,7 @@
         ["Exploitability", esc(pkg.exploitability || "—")],
         ["OS products", esc((pkg.os_products || []).join(", ") || "—")],
         ["Deployment groups", esc((pkg.deployment_groups || []).join(", ") || "—")],
-        ["Official", pkg.official_url ? link(pkg.official_url, vendorName(pkg) === "Microsoft" ? "MSRC" : "Official") : "—"],
+        ["Official", officialHref(pkg) ? officialLink(pkg, vendorName(pkg) === "Microsoft" ? "MSRC" : "Official") : "—"],
         ["Vendor name", esc(vendorName(pkg))]
       ])) +
       panel("Affected Configurations · " + (pkg.stations || []).length,
@@ -1628,7 +1642,7 @@
     {
       q: "What is Vendor name?",
       needles: ["vendor name", "supplier", "nvidia", "intel"],
-      answer: "Vendor name is the update supplier from the FindUpdates catalogue: Microsoft, Intel, or NVIDIA. It is not the vendor risk letter. Vendor risk is still C H M L."
+      answer: "Vendor name is the update supplier from the FindUpdates catalogue: Microsoft, Intel, or NVIDIA. It is not the vendor risk letter. Vendor risk is still C H M L. If the snapshot has an official https URL, Vendor name and the matrix KB open that vendor page."
     },
     {
       q: "What is vendor vs product risk?",
