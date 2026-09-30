@@ -398,8 +398,7 @@
     pkgs.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       var stations = pkg.stations || [];
-      parts.push("<tr><td>" + officialLink(pkg, pkg.kb) + "</td><td>" +
-        officialLink(pkg, vendorName(pkg)) + "</td>");
+      parts.push("<tr><td>" + officialLink(pkg, pkg.kb) + "</td><td>" + esc(vendorName(pkg)) + "</td>");
       names.forEach(function (name) {
         var hit = stations.some(function (station) {
           return sameConfig(station, name) || sameConfig(configLabel(station), configLabel(name));
@@ -999,7 +998,7 @@
     rows.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       html += "<tr><td><button class=\"link\" data-open-kb=\"" + esc(pkg.kb) + "\">" + esc(pkg.kb) +
-        "</button></td><td>" + esc(pkg.title) + "</td><td>" + officialLink(pkg, vendorName(pkg)) +
+        "</button></td><td>" + esc(pkg.title) + "</td><td>" + esc(vendorName(pkg)) +
         "</td><td>" + badgeSev(pkg.severity) +
         "</td><td>" + decisionBadge(pkg) + "</td><td>" + esc(labeledStations(pkg.stations)) +
         "</td><td>" + esc((pkg.cve_ids || []).join(", ") || "—") +
@@ -1642,7 +1641,7 @@
     {
       q: "What is Vendor name?",
       needles: ["vendor name", "supplier", "nvidia", "intel"],
-      answer: "Vendor name is the update supplier from the FindUpdates catalogue: Microsoft, Intel, or NVIDIA. It is not the vendor risk letter. Vendor risk is still C H M L. If the snapshot has an official https URL, Vendor name and the matrix KB open that vendor page."
+      answer: "Vendor name is the update supplier from the FindUpdates catalogue: Microsoft, Intel, or NVIDIA. It is not the vendor risk letter. Vendor risk is still C H M L. If the snapshot has an official https URL, the matrix KB opens that vendor page."
     },
     {
       q: "What is vendor vs product risk?",
