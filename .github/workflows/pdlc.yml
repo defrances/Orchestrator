@@ -71,7 +71,7 @@ jobs:
       - name: Checkout Orchestrator
         uses: actions/checkout@v4
 
-      - name: Checkout DesktopApplication main
+      - name: Checkout Host Application main
         uses: actions/checkout@v4
         with:
           repository: defrances/DesktopApplication
@@ -80,7 +80,7 @@ jobs:
           path: workspace/DesktopApplication
           fetch-depth: 0
 
-      - name: Inventory DesktopApplication main
+      - name: Inventory Host Application main
         run: python3 scripts/inventory-desktop-application.py
 
       - name: Copy PDLC corpus into inputs

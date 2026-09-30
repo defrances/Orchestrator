@@ -205,7 +205,7 @@ def main() -> int:
     ensure_label(
         IMPACT_LABEL,
         "B60205",
-        "Vendor update may affect DesktopApplication on a workstation",
+        "Vendor update may affect Host Application on a workstation",
     )
     payloads = load_issue_payloads(OUT_DIR)
     if not payloads:

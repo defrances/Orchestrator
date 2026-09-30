@@ -144,7 +144,7 @@ def score_finding(
         "patch_plan": (
             "none"
             if countermeasure == "present"
-            else f"Address `{finding_id}` in the cited files on DesktopApplication main. Orchestrator does not apply product patches."
+            else f"Address `{finding_id}` in the cited files on Host Application main. Orchestrator does not apply product patches."
         ),
     }
 

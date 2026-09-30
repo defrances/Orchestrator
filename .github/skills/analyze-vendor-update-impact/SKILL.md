@@ -1,6 +1,6 @@
 ---
 name: analyze-vendor-update-impact
-description: Analyze FindUpdates station report JSON against DesktopApplication main, score install vs skip risk, cluster same-coupling CVEs into one analysis file per numbered configuration, then write JSON under issues-out/. Do not open GitHub Issues. Use when given findupdates-report-json or report.json.
+description: Analyze FindUpdates station report JSON against Host Application main, score install vs skip risk, cluster same-coupling CVEs into one analysis file per numbered configuration, then write JSON under issues-out/. Do not open GitHub Issues. Use when given findupdates-report-json or report.json.
 ---
 
 # Analyze vendor update impact
@@ -86,7 +86,7 @@ After the full-repo pass, score remaining rows, then **cluster** (do not file on
 
 ## Coupling to this codebase
 
-DesktopApplication on `main` is a small self-contained WPF client. OS vendor rows are in scope only when you can name a **file on main** that would feel the change.
+Host Application on `main` is a small self-contained WPF client. OS vendor rows are in scope only when you can name a **file on main** that would feel the change.
 
 Typical couplings from this repo (use only if the file supports it):
 

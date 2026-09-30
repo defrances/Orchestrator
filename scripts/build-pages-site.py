@@ -947,7 +947,7 @@ INDEX_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <header>
-    <p class="kicker">Orchestrator · Desktop Application</p>
+    <p class="kicker">Orchestrator · Host Application</p>
     <h1>Vendor impact and PDLC</h1>
     <p class="banner">Advisory only. Not an authorization to install, approve, or deploy. HOLD and BLOCK stay. Configurations are synthetic lab fixtures.</p>
     <label class="history">
@@ -1728,7 +1728,7 @@ APP_JS = r"""(function () {
         var href = run.findupdates_url || (run.findupdates_run_id ? "https://github.com/defrances/FindUpdates/actions/runs/" + run.findupdates_run_id : "");
         return href ? link(href, run.findupdates_run_id) : esc(text(run.findupdates_run_id));
       })()],
-      ["Desktop Application SHA", (function () {
+      ["Host Application SHA", (function () {
         var href = run.sha_url || (run.sha ? "https://github.com/defrances/DesktopApplication/commit/" + run.sha : "");
         return href ? link(href, run.sha) : esc(run.sha);
       })()],

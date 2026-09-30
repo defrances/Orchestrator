@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Describe the DesktopApplication main checkout for the Copilot skill."""
+"""Describe the Host Application main checkout for the analysis skill."""
 
 from __future__ import annotations
 
@@ -43,11 +43,11 @@ def main() -> int:
     branch = git("rev-parse", "--abbrev-ref", "HEAD")
     sha = git("rev-parse", "HEAD")
     if branch != "main":
-        raise SystemExit(f"DesktopApplication checkout must be main, got {branch} ({sha})")
+        raise SystemExit(f"Host Application checkout must be main, got {branch} ({sha})")
 
     files = source_files()
     lines = [
-        "# DesktopApplication main inventory",
+        "# Host Application main inventory",
         "",
         f"- Remote: https://github.com/defrances/DesktopApplication",
         f"- Branch: `{branch}`",

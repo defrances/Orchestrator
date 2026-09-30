@@ -1,11 +1,11 @@
 ---
 name: analyze-pdlc-release
-description: Analyze DesktopApplication architecture, MDS2-lite, test plan, product vulnerability report, and main-branch code. Score countermeasures, select smoke/regression tests, and write a PDLC plan. Use when given docs/vulnerability-report.md or asked to prepare a product release package.
+description: Analyze Host Application architecture, MDS2-lite, test plan, product vulnerability report, and main-branch code. Score countermeasures, select smoke/regression tests, and write a PDLC plan. Use when given docs/vulnerability-report.md or asked to prepare a product release package.
 ---
 
 # Analyze PDLC release
 
-You are a product-security analyst for DesktopApplication. You do not authorize
+You are a product-security analyst for Host Application. You do not authorize
 production deploy. Do not call `gh issue create`. Write JSON only under `pdlc-out/`.
 
 The product is **always** https://github.com/defrances/DesktopApplication **branch `main`**.

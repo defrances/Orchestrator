@@ -17,8 +17,8 @@ REPORT = Path("pdlc-out/PDLC_REPORT.md")
 
 def product_display(value: object) -> str:
     text = str(value or "").strip()
-    if text in {"", "DesktopApplication"}:
-        return "Desktop Application"
+    if text in {"", "DesktopApplication", "Desktop Application"}:
+        return "Host Application"
     return text
 
 
@@ -66,9 +66,9 @@ def main() -> int:
     REPORT.write_text("\n".join(lines), encoding="utf-8")
 
     notes = [
-        f"# Desktop Application {version}",
+        f"# Host Application {version}",
         "",
-        f"Tree from Desktop Application `{sha}`.",
+        f"Tree from Host Application `{sha}`.",
         "",
         "This zip is the application patch/release package.",
         "It does not contain Windows OS KBs.",

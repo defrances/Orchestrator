@@ -91,7 +91,7 @@ jobs:
           echo "It downloads findupdates-report-json from FindUpdates run ${FU_RUN_ID:-<latest>}."
           echo "It does not start FindUpdates and does not create GitHub Issues."
 
-      - name: Checkout DesktopApplication main
+      - name: Checkout Host Application main
         uses: actions/checkout@v4
         with:
           repository: defrances/DesktopApplication
@@ -100,7 +100,7 @@ jobs:
           path: workspace/DesktopApplication
           fetch-depth: 0
 
-      - name: Inventory DesktopApplication main
+      - name: Inventory Host Application main
         run: python3 scripts/inventory-desktop-application.py
 
       - name: Copy PDLC corpus into inputs
@@ -130,7 +130,7 @@ jobs:
         continue-on-error: true
         run: bash scripts/download-findupdates-report.sh
 
-      - name: Download latest DesktopApplication SBOM
+      - name: Download latest Host Application SBOM
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -146,7 +146,7 @@ jobs:
               --jq '.[0].databaseId // empty'
           )"
           if [ -z "${run_id}" ]; then
-            echo "No successful DesktopApplication CI run found for SBOM."
+            echo "No successful Host Application CI run found for SBOM."
             exit 0
           fi
           gh run download "${run_id}" \

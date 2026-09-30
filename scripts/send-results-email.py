@@ -37,7 +37,7 @@ def _never_log_secret(value: str) -> None:
 
 def desktop_sha(app_dir: Path) -> str:
     if not (app_dir / ".git").exists():
-        return "(Desktop Application checkout not available)"
+        return "(Host Application checkout not available)"
     result = subprocess.run(
         ["git", "-C", str(app_dir), "rev-parse", "HEAD"],
         check=False,
@@ -46,7 +46,7 @@ def desktop_sha(app_dir: Path) -> str:
     )
     sha = (result.stdout or "").strip()
     if result.returncode != 0 or not sha:
-        return "(unable to read Desktop Application HEAD)"
+        return "(unable to read Host Application HEAD)"
     return sha
 
 

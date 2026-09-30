@@ -1,10 +1,10 @@
 # Orchestrator
 
-Control plane for [DesktopApplication](https://github.com/defrances/DesktopApplication). This repository does **not** start [FindUpdates](https://github.com/defrances/FindUpdates). Detect notifies here after it uploads `findupdates-report-json`.
+Control plane for [Host Application](https://github.com/defrances/DesktopApplication). This repository does **not** start [FindUpdates](https://github.com/defrances/FindUpdates). Detect notifies here after it uploads `findupdates-report-json`.
 
 One workflow, [Vendor impact and PDLC](.github/workflows/orchestrate.yml), runs after `findupdates-complete` (or from **Run workflow**):
 
-1. Checkout DesktopApplication `main` and copy `docs/` into `inputs/`
+1. Checkout Host Application `main` and copy `docs/` into `inputs/`
 2. Score **vendor impact** (station KB rows vs code/SBOM on `main`)
 3. Score **product PDLC** (docs corpus vs `main`; station KBs are not product findings)
 4. Run Smoke + Regression on that tree (release gate, not a product patch)
@@ -19,14 +19,14 @@ Orchestrator does not apply product code patches and does not create GitHub Issu
 sequenceDiagram
   participant FU as FindUpdates
   participant Orch as Orchestrator
-  participant DA as DesktopApplication
+  participant HA as Host Application
   participant Mail as GmailSMTP
   FU->>FU: detect.yml live or fixtures
   FU->>FU: upload findupdates-report-json
   FU->>Orch: repository_dispatch findupdates-complete plus run_id
   Note over Orch: Vendor impact and PDLC
   Orch->>FU: download findupdates-report-json
-  Orch->>DA: checkout main
+  Orch->>HA: checkout main
   Orch->>Orch: vendor analysis and PDLC
   Orch->>Orch: tests, app zip, Windows KB bundle
   Orch->>Mail: cluster emails plus bundle README
@@ -36,7 +36,7 @@ sequenceDiagram
 
 | Analysis | Input | Question | Output |
 | --- | --- | --- | --- |
-| Vendor impact | `inputs/report.json` + DesktopApplication `main` + optional SBOM | Does this host KB couple to a **file on main**? | `issues-out/` → one email per cluster |
+| Vendor impact | `inputs/report.json` + Host Application `main` + optional SBOM | Does this host KB couple to a **file on main**? | `issues-out/` → one email per cluster |
 | Product PDLC | `docs/architecture.md`, `mds2.md`, `test-plan.md`, `vulnerability-report.md` + `main` | Is each product finding's countermeasure present / absent / partial? | `pdlc-out/analysis.json` |
 
 Vendor impact is **not** “the CVE is Critical”. A row is in scope only if a path on `main` would feel the change (`InsecureVendorBulletinClient`, WPF/`app.manifest`, `NoteStore`, self-contained publish). Scores:
@@ -106,7 +106,7 @@ Skills (same for every provider):
 
 Fine-grained PAT (or classic `repo` PAT):
 
-- [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions) — download FindUpdates artifacts, checkout DesktopApplication
+- [Orchestrator secrets](https://github.com/defrances/Orchestrator/settings/secrets/actions) — download FindUpdates artifacts, checkout Host Application
 - [FindUpdates secrets](https://github.com/defrances/FindUpdates/settings/secrets/actions) — `repository_dispatch` into this repo
 
 | Repository | Permissions |
@@ -170,5 +170,5 @@ python scripts/build-pages-site.py --workspace <run-dir> --history <gh-pages-che
 | [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload report, notify this repo |
 | [Vendor impact and PDLC](.github/workflows/orchestrate.yml) | Orchestrator | One follow-through run, then Pages |
 | [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Manual product-only package |
-| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | DesktopApplication | Build, test, SBOM |
-| [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | DesktopApplication | Versioned win-x64 zip from that repo |
+| [CI](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/ci.yml) | Host Application | Build, test, SBOM |
+| [Release package](https://github.com/defrances/DesktopApplication/blob/main/.github/workflows/release.yml) | Host Application | Versioned win-x64 zip from that repo |
