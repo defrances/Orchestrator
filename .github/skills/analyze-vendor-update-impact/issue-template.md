@@ -21,7 +21,7 @@ Map FindUpdates `action` to Recommendation display only (do not rewrite `report.
 
 ## Product Configuration Specification
 
-- Product configuration: `{config_label}` (`Configurations1`, `Configurations2`, … — never a synthetic station id)
+- Product configuration: `{config_label}` (`Config1`, `Config2`, … — never a synthetic station id)
 - Model / role: `{model}` / `{device_role}`
 - Deployment group: `{deployment_group}`
 - OS: `{os_product}` build `{os_build}`
@@ -37,7 +37,7 @@ Map FindUpdates `action` to Recommendation display only (do not rewrite `report.
 
 Vendor severity is FindUpdates/MSRC. Vendor likelihood: KEV → C, high exploitability → H, unknown → M, low/none → L. Product letters may be **lower** than vendor when the published exe does not load the patched component (`no_app_impact` → product risk L). Do not invent CIA 0–5 scores.
 
-Do not put synthetic station ids in the subject. Use the numbered label (`Configurations1`). If several report rows share this numbered configuration, summarize shared OS / role values instead of listing each device.
+Do not put synthetic station ids in the subject. Use the numbered label (`Config1`). If several report rows share this numbered configuration, summarize shared OS / role values instead of listing each device.
 
 ## Technical Impact Assessment
 

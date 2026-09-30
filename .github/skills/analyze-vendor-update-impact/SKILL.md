@@ -5,13 +5,13 @@ description: Analyze FindUpdates station report JSON against Host Application ma
 
 # Analyze vendor update impact
 
-You write design-control evidence for each lab configuration **Configurations1**, **Configurations2**, … (sorted lab `device_id` values, same order as the GitHub Page).
+You write design-control evidence for each lab configuration **Config1**, **Config2**, … (sorted lab `device_id` values, same order as the GitHub Page).
 FindUpdates and this workflow collect facts; they are not the product tool-validation procedure and they do not authorize install.
 Do not call `gh issue create`. Write JSON files only under `issues-out/`. Results are emailed.
 
 The application under analysis is **always** https://github.com/defrances/HostApplication **branch `main`**.
 Do not analyze another branch, a single project file, or "the idea of a WPF app".
-Keep repository folder names (`HostApplication`) as they are on disk. Do not put synthetic station ids (`SYNTHETIC-…`) in the email subject. Use `Configurations1`, `Configurations2`, … instead.
+Keep repository folder names (`HostApplication`) as they are on disk. Do not put synthetic station ids (`SYNTHETIC-…`) in the email subject. Use `Config1`, `Config2`, … instead.
 
 ## Inputs
 
@@ -133,11 +133,11 @@ Rules:
 
 Reviewers need **one card per coupling per numbered configuration**, not one card per CVE and not one card that collapses every lab configuration into a single name.
 
-Number configurations from the FindUpdates report: take every distinct lab `device_id` (and `stations` entries), sort them, and label them `Configurations1`, `Configurations2`, … in that order. This must match the GitHub Page.
+Number configurations from the FindUpdates report: take every distinct lab `device_id` (and `stations` entries), sort them, and label them `Config1`, `Config2`, … in that order. This must match the GitHub Page.
 
 After scoring, group rows that share **all** of:
 
-- the same numbered configuration (`Configurations1` …)
+- the same numbered configuration (`Config1` …)
 - the same `cluster_key` (same cited files, same failure mode)
 - the same four risk fields
 - the same Recommendation (`Install - High Prio` / `Low Prio`)
@@ -150,9 +150,9 @@ Do **not** file a second analysis because:
 - titles differ only by DoS / EoP / RCE / bypass on the same host stack
 - `risk_score` differs while the cited files and recommendation stay the same
 
-Do **not** merge Configurations1 with Configurations2 even when the coupling paragraph would be the same.
+Do **not** merge Config1 with Config2 even when the coupling paragraph would be the same.
 
-Split into two files when the **cited files**, **Install vs Low Prio recommendation**, or **numbered configuration** actually differ (for example HOLD vs `candidate_for_validation`, or `os-dotnet` Low Prio vs `schannel-tls` Install - High Prio, or the same KB on Configurations2 and Configurations6).
+Split into two files when the **cited files**, **Install vs Low Prio recommendation**, or **numbered configuration** actually differ (for example HOLD vs `candidate_for_validation`, or `os-dotnet` Low Prio vs `schannel-tls` Install - High Prio, or the same KB on Config2 and Config6).
 
 Prefer `candidate_for_validation` when choosing which member rows to keep. File a Low Prio cluster when installing would be harmful **or** the app is explicitly not affected (`os-dotnet`) and reviewers must not treat the KB as a product patch.
 
@@ -162,31 +162,31 @@ Skip:
 
 - `not_in_scope` unless `main` still targets that OS/package
 - Media/codec/network CVEs with no caller on `main`
-- Duplicate `cluster_key` + `ConfigurationsN` pairs
+- Duplicate `cluster_key` + `ConfigN` pairs
 - Files whose only evidence is "it is a Windows WPF app"
 - Extra files that would repeat an already-written coupling paragraph **for the same configuration**
 
 ## Output files
 
-`issues-out/01-<cluster_key>-Configurations1.json`
+`issues-out/01-<cluster_key>-Config1.json`
 
 Required keys: `title`, `body`, `advisory_id`, `device_id`, `cluster_key`, `packages`, `labels`, `required_for_app`, `install_risk`, `skip_risk`, `compatibility`, `vendor_severity`, `vendor_likelihood`, `vendor_risk`, `product_severity`, `product_likelihood`, `product_risk`.
 
-Set `advisory_id` to the same value as `cluster_key`. Set `device_id` to `Configurations1`, `Configurations2`, … (the numbered label, not a synthetic station id). Set `packages` to the distinct KB ids for this configuration. Vendor likelihood: KEV → `C`, high exploitability → `H`, unknown → `M`, low/none → `L`. Product risk may be `L` when vendor risk is `C`.
+Set `advisory_id` to the same value as `cluster_key`. Set `device_id` to `Config1`, `Config2`, … (the numbered label, not a synthetic station id). Set `packages` to the distinct KB ids for this configuration. Vendor likelihood: KEV → `C`, high exploitability → `H`, unknown → `M`, low/none → `L`. Product risk may be `L` when vendor risk is `C`.
 
 Patch name in the title: the cluster's `package` (KB) when every distinct update row shares one package; otherwise `cluster_key`.
 
 Title format:
 
-`[Impact] {patch name} on Configurations{N} - {short description}`
+`[Impact] {patch name} on Config{N} - {short description}`
 
 `{short description}` describes the coupling, not one CVE (for example `Schannel TLS path has no defense in depth`, `Win32k may change WPF DPI`, `OS .NET KB does not patch bundled runtime`).
 
-Labels must include `vendor-update-impact` and `product-config:Configurations{N}`.
+Labels must include `vendor-update-impact` and `product-config:Config{N}`.
 
 The body must follow [issue-template.md](issue-template.md), include
 
-`<!-- impact:{cluster_key}:Configurations{N} -->`
+`<!-- impact:{cluster_key}:Config{N} -->`
 
 list each product source repo with its commit under **Impact analysis conducted on source code version**, and cite **at least one path under `workspace/HostApplication/`** from `main` (file plus what you read there). "WPF / net9 / SBOM present" is not sufficient evidence.
 

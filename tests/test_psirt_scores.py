@@ -40,8 +40,8 @@ class PsirtScoresTests(unittest.TestCase):
 
     def test_matrix_uses_na_when_configuration_does_not_apply(self) -> None:
         labels = {
-            "SYNTHETIC-CT-IMG-01": "Configurations1",
-            "SYNTHETIC-LAB-24H2-01": "Configurations2",
+            "SYNTHETIC-CT-IMG-01": "Config1",
+            "SYNTHETIC-LAB-24H2-01": "Config2",
         }
         matrix = psirt.kb_config_matrix(
             [
@@ -56,7 +56,7 @@ class PsirtScoresTests(unittest.TestCase):
             labels,
             [
                 {
-                    "device_id": "Configurations2",
+                    "device_id": "Config2",
                     "packages": ["KB1"],
                     "required_for_app": "not_required",
                     "install_risk": "compatible",
@@ -65,7 +65,7 @@ class PsirtScoresTests(unittest.TestCase):
                 }
             ],
         )
-        self.assertEqual(matrix["columns"], ["Configurations1", "Configurations2"])
+        self.assertEqual(matrix["columns"], ["Config1", "Config2"])
         self.assertEqual(matrix["rows"][0]["kb"], "KB1")
         self.assertEqual(matrix["rows"][0]["cells"][0], "NA")
         self.assertIn("/", matrix["rows"][0]["cells"][1])
@@ -73,8 +73,8 @@ class PsirtScoresTests(unittest.TestCase):
 
     def test_matrix_joins_numbered_device_id_to_synthetic_columns(self) -> None:
         labels = {
-            "SYNTHETIC-CT-IMG-01": "Configurations1",
-            "SYNTHETIC-LAB-24H2-01": "Configurations2",
+            "SYNTHETIC-CT-IMG-01": "Config1",
+            "SYNTHETIC-LAB-24H2-01": "Config2",
         }
         matrix = psirt.kb_config_matrix(
             [
@@ -87,7 +87,7 @@ class PsirtScoresTests(unittest.TestCase):
             labels,
             [
                 {
-                    "device_id": "Configurations1",
+                    "device_id": "Config1",
                     "packages": ["KB5099414"],
                     "required_for_app": "not_required",
                     "install_risk": "may_break_app",

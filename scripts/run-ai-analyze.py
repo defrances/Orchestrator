@@ -30,7 +30,7 @@ VENDOR_PROMPT = """Follow .github/skills/analyze-vendor-update-impact/SKILL.md.
 
 Analyze Host Application (workspace/HostApplication) on branch main (see workspace/host-application-inventory.md).
 Read every source file listed in that inventory before writing analysis JSON.
-The numbered configuration labels are Configurations1, Configurations2, … from sorted lab device_id values (same order as the GitHub Page).
+The numbered configuration labels are Config1, Config2, … from sorted lab device_id values (same order as the GitHub Page).
 Score install_risk, skip_risk, required_for_app, and compatibility against libraries and logic on main.
 Also set vendor_severity, vendor_likelihood, vendor_risk, product_severity, product_likelihood, and product_risk as C/H/M/L. Vendor likelihood: KEV is C, high exploitability is H, unknown is M. Product risk may be L when vendor risk is C.
 Cluster rows that share the same numbered configuration, cluster_key, risk fields, and Recommendation into ONE analysis file.

@@ -355,8 +355,21 @@ svg.chart .chart-n { font-size: 11px; fill: #122b52; }
   text-align: left;
   justify-self: start;
 }
-.toast {
-  position: fixed;
+.qaForm { display: flex; gap: 8px; flex-wrap: wrap; }
+.qaForm input {
+  flex: 1;
+  min-width: 16rem;
+  border: 1px solid #ccd9e7;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+}
+.qaChips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.qaResult { border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.45; }
+.qaResult b { display: block; margin-bottom: 6px; }
+.qaResult p { margin: 0; }
+.qaResult.ok { background: #f5f9ff; border: 1px solid #d9e6f5; }
+.qaResult.out { background: #fff8e8; border: 1px solid #f0dda8; color: #8b6300; }
   right: 24px;
   bottom: 24px;
   background: #073d82;

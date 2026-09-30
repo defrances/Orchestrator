@@ -8,6 +8,7 @@
   var engineerTab = "Overview";
   var selectedKb = "";
   var selectedConfig = "";
+  var qaQuestion = "";
   var query = "";
   var severity = "All severities";
   var config = "All configurations";
@@ -135,14 +136,24 @@
     });
     var map = {};
     Object.keys(seen).sort().forEach(function (name, i) {
-      map[name] = "Configurations" + (i + 1);
+      map[name] = "Config" + (i + 1);
     });
     return map;
   }
 
   function configLabel(name) {
     var key = String(name || "").trim();
-    return pageConfigMap[key] || key;
+    return shortConfig(pageConfigMap[key] || key);
+  }
+
+  function shortConfig(value) {
+    return String(value || "").trim().replace(/^Configurations/, "Config");
+  }
+
+  function sameConfig(left, right) {
+    var a = shortConfig(left);
+    var b = shortConfig(right);
+    return Boolean(a) && a === b;
   }
 
   function labeledStations(ids) {
@@ -455,7 +466,7 @@
     return (item.stations || []).some(function (raw) {
       var id = String(raw || "").trim();
       var label = configLabel(id);
-      return device === id || device === label || named === label || named === id;
+      return sameConfig(device, id) || sameConfig(device, label) || sameConfig(named, label) || sameConfig(named, id);
     });
   }
 
@@ -557,6 +568,15 @@
     return pkg.include_in_deploy
       ? '<span class="status install">Install</span>'
       : '<span class="status hold">Hold</span>';
+  }
+
+  function actionLabel(action) {
+    var raw = String(action || "").trim();
+    if (!raw) return "—";
+    if (raw === "candidate_for_validation") return "Recommended to validate";
+    if (raw === "do_not_install") return "Do not install";
+    if (raw === "not_in_scope") return "Not in scope";
+    return raw.replace(/_/g, " ");
   }
 
   function risk(letter) {
@@ -729,7 +749,7 @@
 
   function patchTable(run, rows) {
     if (!rows.length) return '<p class="empty">No patches match the selected filters.</p>';
-    var html = '<div style="overflow:auto"><table><thead><tr><th>KB</th><th>Title</th><th>Severity</th><th>Recommendation</th><th>Configurations</th><th>CVEs</th><th>Vendor</th><th>Product</th><th>Status</th><th></th></tr></thead><tbody>';
+    var html = '<div style="overflow:auto"><table><thead><tr><th>KB</th><th>Title</th><th>Severity</th><th>Recommendation</th><th>Config</th><th>CVEs</th><th>Vendor</th><th>Product</th><th>Status</th><th></th></tr></thead><tbody>';
     rows.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       html += "<tr><td><button class=\"link\" data-open-kb=\"" + esc(pkg.kb) + "\">" + esc(pkg.kb) +
@@ -832,7 +852,7 @@
     var rows = list || [];
     for (var i = 0; i < rows.length; i++) {
       var item = rows[i];
-      if (item.device_id === id || item.device_id === label || item.config_label === label || item.config_label === id) {
+      if (sameConfig(item.device_id, id) || sameConfig(item.device_id, label) || sameConfig(item.config_label, label) || sameConfig(item.config_label, id)) {
         return item;
       }
     }
@@ -936,7 +956,7 @@
         ["Title", esc(pkg.title)],
         ["CVE", esc((pkg.cve_ids || []).join(", ") || "—")],
         ["Severity", esc(pkg.severity || "—")],
-        ["Action", esc(pkg.action || "—")],
+        ["Action", esc(actionLabel(pkg.action))],
         ["KEV", esc(pkg.known_exploited || "—")],
         ["Exploitability", esc(pkg.exploitability || "—")],
         ["OS products", esc((pkg.os_products || []).join(", ") || "—")],
@@ -998,7 +1018,7 @@
         ["Compatibility", esc(filledScore(cluster, "compatibility"))],
         ["Required for app", esc(filledScore(cluster, "required_for_app"))],
         ["Recommendation", pkg.include_in_deploy ? "Install" : "Hold / Do not install"],
-        ["Action", esc(pkg.action || "not in this snapshot")]
+        ["Action", esc(pkg.action ? actionLabel(pkg.action) : "not in this snapshot")]
       ])) +
       panel("Technical Impact", impactBlocks(run, pkg) + citedFileList(run, letters.clusters || []));
   }
@@ -1178,7 +1198,7 @@
         ["FindUpdates run", run.findupdates_url ? link(run.findupdates_url, run.findupdates_run_id) : esc(run.findupdates_run_id || "—")],
         ["Host Application SHA", run.sha_url ? link(run.sha_url, run.sha) : esc(run.sha || "—")],
         ["Bundle", esc(bundle.bundle_id || "not in this snapshot")],
-        ["Action", esc((pkg && pkg.action) || "—")],
+        ["Action", esc(actionLabel((pkg && pkg.action) || ""))],
         ["Analysis", esc(formatAiUsage(run.ai))]
       ])) +
       panel("This KB across loaded runs", rows.length
@@ -1230,7 +1250,7 @@
           esc(bundle.generated || "") + "</span></div></div>" +
           miniGrid([
             ["Bundle date", bundle.generated],
-            ["Configurations", String(stationCount(bundle))],
+            ["Config", String(stationCount(bundle))],
             ["Recommended", String(counts.recommended)],
             ["Held", String(counts.held)]
           ])
@@ -1241,7 +1261,7 @@
           ["Generated", esc(bundle.generated || "—")],
           ["Recommended", String(counts.recommended)],
           ["Held", String(counts.held)],
-          ["Configurations", String(stationCount(bundle))],
+          ["Config", String(stationCount(bundle))],
           ["FindUpdates", bundle.findupdates_html_url ? link(bundle.findupdates_html_url, bundle.findupdates_run_id) : esc(run.findupdates_run_id || "—")],
           ["Workflow", esc(run.workflow || "—")],
           ["Conclusion", esc(run.conclusion || "—")],
@@ -1319,6 +1339,165 @@
         : '<p class="empty">No PDLC findings on this run.</p>');
   }
 
+  function normalizeQuestion(text) {
+    return String(text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  var QA_OUT = "This question is outside the scope of this report.";
+  var QA_EMPTY = "Type a question about this report.";
+  var QA_OFF = ["windchill", "password", "bitcoin", "weather", "recipe"];
+  var QA_ITEMS = [
+    {
+      q: "What are PDLC findings?",
+      needles: ["pdlc findings", "pdlc finding", "pdlc", "findings"],
+      answer: "PDLC findings is the count of Host Application product findings scored in this run. It comes from the product vulnerability report plus code on main. It is not a Windows KB count."
+    },
+    {
+      q: "What are Product findings?",
+      needles: ["product findings", "product finding", "present absent partial"],
+      answer: "Product findings is the same list as PDLC findings, split by whether a countermeasure is on main: present (defense is in the product), absent (no defense), or partial (only part of the defense is there)."
+    },
+    {
+      q: "What is present, absent, or partial?",
+      needles: ["present", "absent", "partial", "countermeasure"],
+      answer: "Those labels are for product findings, not KBs. Present means the defense is in Host Application on main. Absent means it is not. Partial means it is only partly there."
+    },
+    {
+      q: "What does Action mean?",
+      needles: ["candidate for validation", "candidate_for_validation", "action", "do not install", "do_not_install", "not in scope", "not_in_scope"],
+      answer: "Action is the FindUpdates catalogue verdict for that KB. Recommended to validate means the KB is a candidate to test on the lab configuration. Do not install means hold it. Not in scope means this product path does not use that update. This page does not authorize install."
+    },
+    {
+      q: "What is Install vs Hold?",
+      needles: ["install", "hold", "recommended to install", "do not install"],
+      answer: "Install and Hold come from include_in_deploy on this run. Install means recommended for the lab configuration. Hold means do not install. HOLD and BLOCK from FindUpdates stay. The page is advisory only."
+    },
+    {
+      q: "What is Config1?",
+      needles: ["config1", "config 1", "config2", "numbered config"],
+      answer: "Config1, Config2, and so on are numbered lab configurations, sorted from the station list in the snapshot. They are not production site names. The same order is used on the chart, matrix, and vendor-impact mail."
+    },
+    {
+      q: "What is vendor vs product risk?",
+      needles: ["vendor", "product risk", "letter", "c h m l", "psirt"],
+      answer: "Vendor letters are Microsoft / FindUpdates severity and exploitability (KEV is C). Product letters are for Host Application on that configuration. Product risk can be L even when vendor risk is C if the app does not load that component. NA means the KB does not apply to that configuration."
+    },
+    {
+      q: "What does NA mean?",
+      needles: ["na", "not applicable"],
+      answer: "NA on the KB × Config grid means this KB is not applicable to that configuration in this snapshot."
+    },
+    {
+      q: "What is KEV?",
+      needles: ["kev", "known exploited", "known_exploited"],
+      answer: "KEV means Known Exploited Vulnerability. If it is true, vendor likelihood is scored C. It is a vendor catalogue fact, not an install authorization."
+    },
+    {
+      q: "Can I install from this page?",
+      needles: ["can i install", "authorize", "approval", "deploy"],
+      answer: "No. This GitHub Page is advisory only. It cannot start Orchestrator and it is not an authorization to install, approve, or deploy. HOLD and BLOCK stay."
+    },
+    {
+      q: "What is Manager vs Engineer view?",
+      needles: ["manager", "engineer"],
+      answer: "Manager view is the executive dashboard: KPIs, configuration bars, findings, and latest KBs. Engineer view opens the KB card: impact, configs, tests, evidence, and history."
+    },
+    {
+      q: "What is the stepper?",
+      needles: ["stepper", "packages", "impact clusters", "findings or zip"],
+      answer: "The stepper only shows whether this snapshot has packages, impact clusters, tests, and findings or a zip. Done means the artifact is in the snapshot. It is not an approval or release gate."
+    },
+    {
+      q: "What is Host Application?",
+      needles: ["host application", "hostapplication"],
+      answer: "Host Application is the Windows product under test. GitHub repo, exe, and zip use HostApplication. A host OS KB does not patch the self-contained runtime inside the zip."
+    },
+    {
+      q: "What is the bundle?",
+      needles: ["bundle", "zip", "apply.ps1"],
+      answer: "The Windows patch bundle is a lab artifact: KB manifest and APPLY.ps1, not .msu files. The Host Application zip is the product package from this run, with SHA from main."
+    },
+    {
+      q: "What are tests on this page?",
+      needles: ["test coverage", "smoke", "regression"],
+      answer: "Test Coverage is Host Application Smoke and Regression from this snapshot, plus PDLC tests_to_run ids. A missing outcome means tests were not recorded in this snapshot."
+    },
+    {
+      q: "What is this report?",
+      needles: ["this report", "this page", "orchestrator", "github page"],
+      answer: "This is the advisory Windows patch report for Host Application lab configurations. It is built from 90-day Orchestrator snapshots: KBs, impact clusters, PDLC findings, tests, and the bundle. It does not install updates."
+    },
+    {
+      q: "What is severity?",
+      needles: ["severity", "critical", "high", "medium", "low"],
+      answer: "Severity on a KB is the vendor / MSRC rating from FindUpdates. The severity donut counts unique KBs in this run. It is not the product letter score."
+    },
+    {
+      q: "What is an impact cluster?",
+      needles: ["impact cluster", "cluster key", "schannel"],
+      answer: "An impact cluster groups how a KB couples to Host Application on a configuration (for example Schannel / TLS). The engineer card shows that impact text and install vs skip scores."
+    },
+    {
+      q: "What do the KPI numbers mean?",
+      needles: ["kpi", "runs", "applicable", "held"],
+      answer: "Runs is how many Orchestrator snapshots are in the last 90 days. Applicable is unique KBs in this run. Recommended to install and Held are unique KBs by include_in_deploy. PDLC findings is the product-finding count."
+    }
+  ];
+
+  function answerReportQuestion(raw) {
+    var original = String(raw || "").trim();
+    var q = normalizeQuestion(original);
+    if (!q) return { ok: false, text: QA_EMPTY };
+    if (/[а-яё]/i.test(original)) return { ok: false, text: QA_OUT };
+    var blocked = false;
+    QA_OFF.forEach(function (word) {
+      if (q.indexOf(word) !== -1) blocked = true;
+    });
+    if (blocked) return { ok: false, text: QA_OUT };
+    var best = null;
+    var bestScore = 0;
+    QA_ITEMS.forEach(function (item) {
+      var score = 0;
+      (item.needles || []).forEach(function (needle) {
+        var bit = normalizeQuestion(needle);
+        if (bit && q.indexOf(bit) !== -1) score += bit.split(" ").length;
+      });
+      if (score > bestScore) {
+        bestScore = score;
+        best = item;
+      }
+    });
+    if (!best || bestScore < 1) return { ok: false, text: QA_OUT };
+    return { ok: true, title: best.q, text: best.answer };
+  }
+
+  function qaPage() {
+    var result = qaQuestion ? answerReportQuestion(qaQuestion) : null;
+    var chips = [
+      "What are PDLC findings?",
+      "What are Product findings?",
+      "What does Action mean?",
+      "What is Install vs Hold?",
+      "What is Config1?",
+      "What is vendor vs product risk?",
+      "Can I install from this page?"
+    ];
+    var answerHtml = '<p class="empty">Ask a term you see on this report.</p>';
+    if (result) {
+      answerHtml = '<div class="qaResult ' + (result.ok ? "ok" : "out") + '">' +
+        (result.title && result.ok ? "<b>" + esc(result.title) + "</b>" : "") +
+        "<p>" + esc(result.text) + "</p></div>";
+    }
+    return '<div class="pageHead"><div><h1>Q&amp;A</h1><p>Short answers for labels on this advisory report</p></div></div>' +
+      panel("Ask this report",
+        '<form id="qa-form" class="qaForm"><input id="qa-input" placeholder="Ask about a label on this report" value="' +
+        esc(qaQuestion) + '"><button class="view" type="submit">Ask</button></form>' +
+        '<div class="qaChips">' + chips.map(function (item) {
+          return '<button class="secondary" type="button" data-qa-ask="' + esc(item) + '">' + esc(item) + "</button>";
+        }).join("") + "</div>") +
+      panel("Answer", answerHtml);
+  }
+
   function settingsPage() {
     return '<div class="pageHead"><div><h1>Settings</h1><p>Advisory GitHub Page</p></div></div>' +
       panel("Scope", infoRows([
@@ -1330,9 +1509,9 @@
 
   function navItems() {
     if (role === "manager") {
-      return ["Dashboard", "Patches", "Releases", "Devices & Configurations", "Reports", "Settings"];
+      return ["Dashboard", "Patches", "Releases", "Devices & Configurations", "Reports", "Q&A", "Settings"];
     }
-    return ["Dashboard", "Patches", "Releases", "Impact Analysis", "Test Coverage", "Dependencies", "Reports", "Settings"];
+    return ["Dashboard", "Patches", "Releases", "Impact Analysis", "Test Coverage", "Dependencies", "Reports", "Q&A", "Settings"];
   }
 
   function header(run) {
@@ -1372,6 +1551,7 @@
     if (page === "Test Coverage") return engineerPage(run);
     if (page === "Dependencies") return engineerPage(run);
     if (page === "Reports") return reports(run);
+    if (page === "Q&A") return qaPage();
     if (page === "Settings") return settingsPage();
     return managerDashboard(run);
   }
@@ -1473,6 +1653,26 @@
     if (select) {
       select.addEventListener("change", function () { show(select.value); });
     }
+    var qaForm = document.getElementById("qa-form");
+    if (qaForm) {
+      qaForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var input = document.getElementById("qa-input");
+        qaQuestion = input ? input.value : "";
+        paint(run);
+        var again = document.getElementById("qa-input");
+        if (again) again.focus();
+      });
+    }
+    shell.querySelectorAll("[data-qa-ask]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        qaQuestion = btn.getAttribute("data-qa-ask") || "";
+        page = "Q&A";
+        paint(run);
+        var again = document.getElementById("qa-input");
+        if (again) again.focus();
+      });
+    });
   }
 
   function paint(run) {

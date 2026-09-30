@@ -36,9 +36,9 @@ class BuildPagesSiteTests(unittest.TestCase):
             _write(
                 work / "issues-out" / "01-schannel-tls-SYNTHETIC-W11-24H2-01.json",
                 {
-                    "title": "[Impact] KB5002916 on Configurations1 - Schannel TLS host path",
+                    "title": "[Impact] KB5002916 on Config1 - Schannel TLS host path",
                     "cluster_key": "schannel-tls",
-                    "device_id": "Configurations1",
+                    "device_id": "Config1",
                     "packages": [],
                     "required_for_app": "not_required",
                     "install_risk": "compatible",
@@ -158,7 +158,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertEqual(first["bundle"]["packages"][0]["os_products"], [
                 "Windows 11 Version 24H2 for x64-based Systems"
             ])
-            self.assertEqual(first["clusters"][0]["config_label"], "Configurations1")
+            self.assertEqual(first["clusters"][0]["config_label"], "Config1")
             self.assertEqual(first["bundle"]["packages"][0]["vendor_severity"], "H")
             self.assertEqual(first["bundle"]["packages"][0]["vendor_likelihood"], "L")
             self.assertEqual(first["findings"][0]["evidence"][:24], "InsecureVendorBulletinCl")
@@ -249,7 +249,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("kb-search", app_js)
             self.assertIn("Search KB or title", app_js)
             self.assertIn("function configNameMap", app_js)
-            self.assertIn('"Configurations"', app_js)
+            self.assertIn('"Config"', app_js)
             self.assertNotIn(".replace(/^SYNTHETIC-/", app_js)
             self.assertIn("function clusterMatchesPkg", app_js)
             self.assertIn("function filledScore", app_js)
@@ -259,6 +259,13 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("function displayProduct", app_js)
             self.assertIn("PDLC findings", app_js)
             self.assertIn("Host OS products", app_js)
+            self.assertIn("function answerReportQuestion", app_js)
+            self.assertIn("outside the scope of this report", app_js)
+            self.assertNotIn("Ваш вопрос выходит за рамки данного отчета.", app_js)
+            self.assertIn("Q&A", app_js)
+            self.assertIn("function actionLabel", app_js)
+            self.assertIn("Recommended to validate", app_js)
+            self.assertNotIn("Run now", app_js)
             self.assertIn("Release and Evidence", app_js)
             self.assertIn("function clusterKeyLabel", app_js)
             self.assertIn('class="stepper"', app_js)
@@ -370,9 +377,9 @@ class BuildPagesSiteTests(unittest.TestCase):
         labels = pages.config_display_names(
             ["SYNTHETIC-W11-24H2-01", "SYNTHETIC-CT-IMG-01", "SYNTHETIC-LAB-24H2-01"]
         )
-        self.assertEqual(labels["SYNTHETIC-CT-IMG-01"], "Configurations1")
-        self.assertEqual(labels["SYNTHETIC-LAB-24H2-01"], "Configurations2")
-        self.assertEqual(labels["SYNTHETIC-W11-24H2-01"], "Configurations3")
+        self.assertEqual(labels["SYNTHETIC-CT-IMG-01"], "Config1")
+        self.assertEqual(labels["SYNTHETIC-LAB-24H2-01"], "Config2")
+        self.assertEqual(labels["SYNTHETIC-W11-24H2-01"], "Config3")
 
     def test_config_chart_caption_grows_with_history(self) -> None:
         rows = [{"name": "CFG-A", "recommended": 2, "ignored": 1}]
@@ -397,7 +404,7 @@ class BuildPagesSiteTests(unittest.TestCase):
                 },
             ]
         )
-        self.assertEqual(matrix["columns"], ["Configurations1", "Configurations2"])
+        self.assertEqual(matrix["columns"], ["Config1", "Config2"])
         by_kb = {row["kb"]: row["cells"] for row in matrix["rows"]}
         self.assertNotEqual(by_kb["KB1"][0], "NA")
         self.assertEqual(by_kb["KB2"][0], "NA")
@@ -527,7 +534,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertTrue(none_marker)
 
     def test_extract_kb_and_impact_excerpt(self) -> None:
-        self.assertEqual(pages.extract_kb_ids("[Impact] KB5099414 on Configurations1 - Shell"), ["KB5099414"])
+        self.assertEqual(pages.extract_kb_ids("[Impact] KB5099414 on Config1 - Shell"), ["KB5099414"])
         self.assertEqual(
             pages.extract_kb_ids("dwm-wpf", "See KB5093998 and kb5099535"),
             ["KB5093998", "KB5099535"],
@@ -554,8 +561,8 @@ class BuildPagesSiteTests(unittest.TestCase):
                 "run_id": "old",
                 "clusters": [
                     {
-                        "title": "[Impact] KB5099414 on Configurations1 - Shell may change exe launch",
-                        "device_id": "Configurations1",
+                        "title": "[Impact] KB5099414 on Config1 - Shell may change exe launch",
+                        "device_id": "Config1",
                         "cluster_key": "shell-launch",
                         "packages": None,
                         "required_for_app": "not_required",
@@ -564,8 +571,8 @@ class BuildPagesSiteTests(unittest.TestCase):
                         "compatibility": "compatible",
                     },
                     {
-                        "title": "[Impact] shell-launch on Configurations2 - Shell may change exe launch",
-                        "device_id": "Configurations2",
+                        "title": "[Impact] shell-launch on Config2 - Shell may change exe launch",
+                        "device_id": "Config2",
                         "cluster_key": "shell-launch",
                         "packages": [],
                         "required_for_app": "not_required",
@@ -588,12 +595,12 @@ class BuildPagesSiteTests(unittest.TestCase):
             }
         )
         clusters = {item["device_id"]: item for item in snapshot["clusters"]}
-        self.assertEqual(clusters["Configurations1"]["packages"], ["KB5099414"])
-        self.assertEqual(clusters["Configurations2"]["packages"], ["KB5099414"])
-        self.assertIn("Shell may change exe launch", clusters["Configurations1"]["impact"])
+        self.assertEqual(clusters["Config1"]["packages"], ["KB5099414"])
+        self.assertEqual(clusters["Config2"]["packages"], ["KB5099414"])
+        self.assertIn("Shell may change exe launch", clusters["Config1"]["impact"])
         self.assertEqual(snapshot["bundle"]["packages"][0]["vendor_severity"], "C")
         matrix = snapshot["psirt_matrix"]
-        self.assertEqual(matrix["columns"], ["Configurations1", "Configurations2"])
+        self.assertEqual(matrix["columns"], ["Config1", "Config2"])
         self.assertNotIn("NA", matrix["rows"][0]["cells"][0])
         self.assertIn("/", matrix["rows"][0]["cells"][0])
 
@@ -613,7 +620,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             ],
             [
                 {
-                    "device_id": "Configurations2",
+                    "device_id": "Config2",
                     "packages": ["KB5099414"],
                     "required_for_app": "not_required",
                     "install_risk": "compatible",
@@ -622,7 +629,7 @@ class BuildPagesSiteTests(unittest.TestCase):
                 }
             ],
         )
-        self.assertEqual(matrix["columns"], ["Configurations1", "Configurations2"])
+        self.assertEqual(matrix["columns"], ["Config1", "Config2"])
         by_kb = {row["kb"]: row["cells"] for row in matrix["rows"]}
         self.assertEqual(by_kb["KB5099414"][0], "NA")
         self.assertIn("L", by_kb["KB5099414"][1])
@@ -631,8 +638,8 @@ class BuildPagesSiteTests(unittest.TestCase):
     def test_cluster_joins_numbered_device_id_to_synthetic_station(self) -> None:
         labels = pages.config_display_names(["SYNTHETIC-US-01", "SYNTHETIC-LAB-24H2-01"])
         cluster = {
-            "title": "[Impact] shell-launch on Configurations1",
-            "device_id": "Configurations1",
+            "title": "[Impact] shell-launch on Config1",
+            "device_id": "Config1",
             "packages": [],
             "cluster_key": "shell-launch",
         }
@@ -640,7 +647,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             "kb": "KB5002916",
             "stations": ["SYNTHETIC-LAB-24H2-01"],
         }
-        self.assertEqual(labels["SYNTHETIC-LAB-24H2-01"], "Configurations1")
+        self.assertEqual(labels["SYNTHETIC-LAB-24H2-01"], "Config1")
         self.assertTrue(pages.cluster_matches_package(cluster, pkg, labels))
         matched = pages.clusters_for_kb([cluster], pkg, labels)
         self.assertEqual(len(matched), 1)

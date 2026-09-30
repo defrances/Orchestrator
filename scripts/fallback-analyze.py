@@ -72,7 +72,7 @@ def source_version_lines(repos: list[str] | None = None) -> str:
 
 def config_display_names(names: list[str] | None) -> dict[str, str]:
     unique = sorted({str(name).strip() for name in (names or []) if str(name).strip()})
-    return {name: f"Configurations{index}" for index, name in enumerate(unique, start=1)}
+    return {name: f"Config{index}" for index, name in enumerate(unique, start=1)}
 
 
 def report_config_labels(payload: dict[str, object] | None) -> dict[str, str]:
@@ -561,7 +561,7 @@ def issue_body(
     scores: dict[str, str] | None = None,
 ) -> str:
     del log
-    config_name = (device or "").strip() or "Configurations1"
+    config_name = (device or "").strip() or "Config1"
     rows = []
     for item in unique_updates(members):
         url = item.get("official_url")
@@ -746,7 +746,7 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for written, issue in enumerate(issues, start=1):
         key = str(issue.get("cluster_key") or "cluster")
-        config_name = str(issue.get("device_id") or "Configurations")
+        config_name = str(issue.get("device_id") or "Config")
         name = (
             f"{written:02d}-"
             f"{re.sub(r'[^A-Za-z0-9._-]+', '-', key)}-"

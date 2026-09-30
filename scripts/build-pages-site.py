@@ -692,7 +692,14 @@ def bundle_summary(bundle: dict[str, object] | None, *, run_id: str = "") -> str
 
 def config_display_names(names: list[str] | None) -> dict[str, str]:
     unique = sorted({str(name).strip() for name in (names or []) if str(name).strip()})
-    return {name: f"Configurations{index}" for index, name in enumerate(unique, start=1)}
+    return {name: f"Config{index}" for index, name in enumerate(unique, start=1)}
+
+
+def short_config(value: object) -> str:
+    text = str(value or "").strip()
+    if text.startswith("Configurations"):
+        return "Config" + text[len("Configurations") :]
+    return text
 
 
 def cluster_matches_package(
@@ -717,7 +724,8 @@ def cluster_matches_package(
         if not station:
             continue
         label = names.get(station, station)
-        if device in {station, label} or named in {station, label}:
+        aliases = {station, label, short_config(station), short_config(label)}
+        if short_config(device) in aliases or short_config(named) in aliases:
             return True
     return False
 
