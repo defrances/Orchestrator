@@ -141,11 +141,11 @@ Fine-grained PAT (or classic `repo` PAT):
 
 ## GitHub Pages
 
-[https://defrances.github.io/Orchestrator/](https://defrances.github.io/Orchestrator/) shows the **latest** follow-through run. A dropdown loads snapshots from the last **90 days**.
+[https://defrances.github.io/Orchestrator/](https://defrances.github.io/Orchestrator/) is an **Alcon Windows Patch Management** shell (Manager / Engineer) over the **latest** follow-through run. A dropdown loads snapshots from the last **90 days**. Counts and tables come from those snapshots, not from mock KBs.
 
-`scripts/build-pages-site.py` builds the site from `issues-out/`, `pdlc-out/analysis.json`, `BUNDLE_MANIFEST.json`, and `TEST_RESULTS.md`. It does not call an analysis provider. Actions artifacts still expire in 14 days; the script copies a slim JSON snapshot onto `gh-pages` so history can outlive the artifact.
+`scripts/build-pages-site.py` copies [`scripts/pages/`](scripts/pages/) and fills `assets/data.js` from `issues-out/`, `pdlc-out/analysis.json`, `BUNDLE_MANIFEST.json`, and `TEST_RESULTS.md`. It does not call an analysis provider. Actions artifacts still expire in 14 days; the script copies a slim JSON snapshot onto `gh-pages` so history can outlive the artifact.
 
-The page is advisory. It does not host the exe or official `.msu` files. Enable **Settings → Pages → GitHub Actions** once.
+The page is advisory. It does not start Orchestrator, does not host the exe or official `.msu` files, and does not authorize install. HOLD and BLOCK stay. Enable **Settings → Pages → GitHub Actions** once.
 
 Local rebuild:
 
