@@ -85,6 +85,7 @@ class BuildPagesSiteTests(unittest.TestCase):
                         {
                             "kb": "KB5002916",
                             "title": "Graphics",
+                            "vendor": "microsoft",
                             "include_in_deploy": True,
                             "severity": "HIGH",
                             "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-81955",
@@ -159,6 +160,7 @@ class BuildPagesSiteTests(unittest.TestCase):
                 "Windows 11 Version 24H2 for x64-based Systems"
             ])
             self.assertEqual(first["clusters"][0]["config_label"], "Config1")
+            self.assertEqual(first["bundle"]["packages"][0]["vendor"], "microsoft")
             self.assertEqual(first["bundle"]["packages"][0]["vendor_severity"], "H")
             self.assertEqual(first["bundle"]["packages"][0]["vendor_likelihood"], "L")
             self.assertEqual(first["findings"][0]["evidence"][:24], "InsecureVendorBulletinCl")
@@ -226,6 +228,11 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("KB × configurations", app_js)
             self.assertIn("NA = not applicable", app_js)
             self.assertIn("Vendor risk", app_js)
+            self.assertIn("Vendor name", app_js)
+            self.assertIn("function vendorName", app_js)
+            self.assertIn("NVIDIA", app_js)
+            self.assertNotIn("Nvideo", app_js)
+            self.assertNotIn("Microsoft (MSRC)", app_js)
             self.assertIn("function configUpdateCounts", app_js)
             self.assertIn("applicable for our platform", app_js)
             self.assertIn("recommended to install", app_js)
@@ -306,6 +313,7 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn('"9"', data_js)
             latest = json.loads((out2 / "data" / "latest.json").read_text(encoding="utf-8"))
             self.assertTrue(latest["no_clusters"])
+            self.assertEqual(latest["bundle"]["packages"][0]["vendor"], "microsoft")
 
     def test_prunes_snapshots_older_than_90_days(self) -> None:
         now = datetime(2026, 9, 24, tzinfo=timezone.utc)

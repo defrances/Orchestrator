@@ -509,6 +509,7 @@ def collect_bundle(workspace: Path) -> dict[str, object] | None:
             {
                 "kb": str(item.get("kb") or ""),
                 "title": str(item.get("title") or ""),
+                "vendor": str(item.get("vendor") or ""),
                 "action": str(item.get("action") or ""),
                 "include_in_deploy": bool(item.get("include_in_deploy")),
                 "severity": str(item.get("severity") or ""),

@@ -169,6 +169,20 @@
     return ((run && run.bundle) || {}).packages || [];
   }
 
+  function vendorName(pkg) {
+    var raw = String((pkg && pkg.vendor) || "").trim().toLowerCase();
+    if (raw === "microsoft" || raw === "msrc") return "Microsoft";
+    if (raw === "intel") return "Intel";
+    if (raw === "nvidia" || raw === "nvideo") return "NVIDIA";
+    if (raw) return raw.charAt(0).toUpperCase() + raw.slice(1);
+    var url = String((pkg && pkg.official_url) || "").toLowerCase();
+    if (url.indexOf("intel.com") !== -1) return "Intel";
+    if (url.indexOf("nvidia.com") !== -1) return "NVIDIA";
+    if (url.indexOf("microsoft.com") !== -1 || url.indexOf("msrc.") !== -1) return "Microsoft";
+    if (/^KB\d+/i.test(String((pkg && pkg.kb) || ""))) return "Microsoft";
+    return "—";
+  }
+
   function uniqueKbMap(list) {
     var map = {};
     (list || []).forEach(function (item, index) {
@@ -365,13 +379,13 @@
     });
     names.sort();
     if (!names.length || !pkgs.length) return "";
-    var parts = ['<div class="matrix-wrap"><table><thead><tr><th>KB</th>'];
+    var parts = ['<div class="matrix-wrap"><table><thead><tr><th>KB</th><th>Vendor name</th>'];
     names.forEach(function (name) { parts.push("<th>" + esc(configLabel(name)) + "</th>"); });
     parts.push("</tr></thead><tbody>");
     pkgs.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       var stations = pkg.stations || [];
-      parts.push("<tr><td>" + esc(pkg.kb) + "</td>");
+      parts.push("<tr><td>" + esc(pkg.kb) + "</td><td>" + esc(vendorName(pkg)) + "</td>");
       names.forEach(function (name) {
         var hit = stations.some(function (station) {
           return sameConfig(station, name) || sameConfig(configLabel(station), configLabel(name));
@@ -932,7 +946,7 @@
 
   function packageMatchesFilters(pkg) {
     var item = pkg || {};
-    var hay = (item.kb + " " + (item.title || "")).toLowerCase();
+    var hay = (item.kb + " " + (item.title || "") + " " + vendorName(item)).toLowerCase();
     if (query && hay.indexOf(String(query).toLowerCase()) === -1) return false;
     if (severity !== "All severities" && severityBucket(item.severity) !== severity) return false;
     if (decision !== "All decisions" && patchDecision(item) !== decision) return false;
@@ -967,11 +981,12 @@
 
   function patchTable(run, rows) {
     if (!rows.length) return '<p class="empty">No patches match the selected filters.</p>';
-    var html = '<div style="overflow:auto"><table><thead><tr><th>KB</th><th>Title</th><th>Severity</th><th>Decision</th><th>Config</th><th>CVEs</th><th>Vendor</th><th>Product</th><th>Status</th><th></th></tr></thead><tbody>';
+    var html = '<div style="overflow:auto"><table><thead><tr><th>KB</th><th>Title</th><th>Vendor name</th><th>Severity</th><th>Decision</th><th>Config</th><th>CVEs</th><th>Vendor risk</th><th>Product risk</th><th>Status</th><th></th></tr></thead><tbody>';
     rows.forEach(function (pkg) {
       var letters = lettersForKb(run, pkg.kb);
       html += "<tr><td><button class=\"link\" data-open-kb=\"" + esc(pkg.kb) + "\">" + esc(pkg.kb) +
-        "</button></td><td>" + esc(pkg.title) + "</td><td>" + badgeSev(pkg.severity) +
+        "</button></td><td>" + esc(pkg.title) + "</td><td>" + esc(vendorName(pkg)) +
+        "</td><td>" + badgeSev(pkg.severity) +
         "</td><td>" + decisionBadge(pkg) + "</td><td>" + esc(labeledStations(pkg.stations)) +
         "</td><td>" + esc((pkg.cve_ids || []).join(", ") || "—") +
         "</td><td>" + risk(letters.vendor) + "</td><td>" + risk(letters.product) +
@@ -1187,8 +1202,8 @@
         ["Exploitability", esc(pkg.exploitability || "—")],
         ["OS products", esc((pkg.os_products || []).join(", ") || "—")],
         ["Deployment groups", esc((pkg.deployment_groups || []).join(", ") || "—")],
-        ["Official", pkg.official_url ? link(pkg.official_url, "MSRC") : "—"],
-        ["Vendor", "Microsoft (MSRC)"]
+        ["Official", pkg.official_url ? link(pkg.official_url, vendorName(pkg) === "Microsoft" ? "MSRC" : "Official") : "—"],
+        ["Vendor name", esc(vendorName(pkg))]
       ])) +
       panel("Affected Configurations · " + (pkg.stations || []).length,
         '<div class="configList">' + (pkg.stations || []).map(function (id) {
@@ -1504,7 +1519,7 @@
         ? rows.map(function (pkg) {
           return '<div class="kbLine"><button class="link" data-open-kb="' + esc(pkg.kb) + '">' +
             esc(pkg.kb) + "</button><span class=\"cves\">" +
-            esc((pkg.cve_ids || []).join(", ") || pkg.title || "") +
+            esc(vendorName(pkg) + " · " + ((pkg.cve_ids || []).join(", ") || pkg.title || "")) +
             "</span><span class=\"kbSev\">" + badgeSev(pkg.severity) +
             "</span><span class=\"kbRec\">" + decisionStatus(pkg) + "</span></div>";
         }).join("")
@@ -1548,7 +1563,8 @@
       (selectedRows.length
         ? selectedRows.map(function (pkg) {
           return '<div class="metricLine"><button class="link" data-open-kb="' + esc(pkg.kb) + '">' +
-            esc(pkg.kb) + "</button>" + badgeSev(pkg.severity) + decisionStatus(pkg) + "</div>";
+            esc(pkg.kb) + "</button><span>" + esc(vendorName(pkg)) + "</span>" +
+            badgeSev(pkg.severity) + decisionStatus(pkg) + "</div>";
         }).join("")
         : '<p class="empty">No patches for this configuration.</p>'));
     return html;
@@ -1610,8 +1626,13 @@
       answer: "Config1, Config2, and so on are numbered lab configurations, sorted from the station list in the snapshot. They are not production site names. The same order is used on the chart, matrix, and vendor-impact mail."
     },
     {
+      q: "What is Vendor name?",
+      needles: ["vendor name", "supplier", "nvidia", "intel"],
+      answer: "Vendor name is the update supplier from the FindUpdates catalogue: Microsoft, Intel, or NVIDIA. It is not the vendor risk letter. Vendor risk is still C H M L."
+    },
+    {
       q: "What is vendor vs product risk?",
-      needles: ["vendor", "product risk", "letter", "c h m l", "psirt"],
+      needles: ["vendor", "product risk", "letter", "c h m l", "psirt", "vendor risk"],
       answer: "Vendor letters are Microsoft / FindUpdates severity and exploitability (KEV is C). Product letters are for Host Application on that configuration. Product risk can be L even when vendor risk is C if the app does not load that component. NA means the KB does not apply to that configuration."
     },
     {
@@ -1717,6 +1738,7 @@
       "What are Close, Defer, Qualify, and Expedite?",
       "What is Install vs Hold?",
       "What is Config1?",
+      "What is Vendor name?",
       "What is vendor vs product risk?",
       "Can I install from this page?"
     ];
