@@ -1,6 +1,6 @@
 ---
 name: product-safety-engineer-skill
-description: Product_Safety_Engineer_Skill. Review install vs skip risk and clinical criticality for Host Application lab configurations. Advisory only. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for a product-safety review.
+description: "Product_Safety_Engineer_Skill. Review install vs skip risk and clinical criticality for Host Application lab configurations. Advisory only. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for a product-safety review."
 ---
 
 # Product_Safety_Engineer_Skill

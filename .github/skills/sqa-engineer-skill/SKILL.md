@@ -1,6 +1,6 @@
 ---
 name: sqa-engineer-skill
-description: SQA_Engineer_Skill. Check vendor-impact and PDLC analysis completeness: catalog-driven findings, ConfigN labels, HOLD/BLOCK preserved, no invented rows. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for an SQA review.
+description: "SQA_Engineer_Skill. Check vendor-impact and PDLC analysis completeness: catalog-driven findings, ConfigN labels, HOLD/BLOCK preserved, no invented rows. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for an SQA review."
 ---
 
 # SQA_Engineer_Skill

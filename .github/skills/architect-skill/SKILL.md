@@ -1,6 +1,6 @@
 ---
 name: architect-skill
-description: Architect_Skill. Review Host Application architecture against vendor-impact clusters and PDLC findings. Map couplings, modules, and ConfigN impact. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for an architect review.
+description: "Architect_Skill. Review Host Application architecture against vendor-impact clusters and PDLC findings. Map couplings, modules, and ConfigN impact. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for an architect review."
 ---
 
 # Architect_Skill

@@ -39,6 +39,25 @@ class RoleSkillTests(unittest.TestCase):
                 self.assertIn(phrase, text, msg=f"{folder}: missing {phrase}")
             self.assertNotIn("Run now", text)
 
+    def test_role_skill_frontmatter_quotes_colons(self) -> None:
+        for folder, _skill_name in ROLE_SKILLS:
+            text = (SKILLS / folder / "SKILL.md").read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("---\n"), msg=folder)
+            end = text.find("\n---", 3)
+            self.assertGreater(end, 0, msg=folder)
+            description = ""
+            for line in text[4:end].splitlines():
+                if line.startswith("description:"):
+                    description = line[len("description:") :].strip()
+            self.assertTrue(description, msg=folder)
+            inner = description.strip('"').strip("'")
+            if ": " in inner:
+                self.assertTrue(
+                    (description.startswith('"') and description.endswith('"'))
+                    or (description.startswith("'") and description.endswith("'")),
+                    msg=f"{folder} description must be quoted when it contains a colon",
+                )
+
     def test_existing_skills_point_at_role_reviews(self) -> None:
         vendor = (SKILLS / "analyze-vendor-update-impact" / "SKILL.md").read_text(encoding="utf-8")
         pdlc = (SKILLS / "analyze-pdlc-release" / "SKILL.md").read_text(encoding="utf-8")

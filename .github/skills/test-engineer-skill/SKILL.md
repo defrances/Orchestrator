@@ -1,6 +1,6 @@
 ---
 name: test-engineer-skill
-description: Test_Engineer_Skill. Select smoke and regression coverage for vendor-impact clusters and PDLC findings from the Host Application test plan. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for a test-engineer review.
+description: "Test_Engineer_Skill. Select smoke and regression coverage for vendor-impact clusters and PDLC findings from the Host Application test plan. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for a test-engineer review."
 ---
 
 # Test_Engineer_Skill

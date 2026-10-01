@@ -1,6 +1,6 @@
 ---
 name: cybersec-engineer-skill
-description: CyberSec_Engineer_Skill. Review vendor vs product C/H/M/L scores, KEV, and exploitability for Host Application clusters. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for a cybersecurity review.
+description: "CyberSec_Engineer_Skill. Review vendor vs product C/H/M/L scores, KEV, and exploitability for Host Application clusters. Use after issues-out/ or pdlc-out/analysis.json exist, or when asked for a cybersecurity review."
 ---
 
 # CyberSec_Engineer_Skill
