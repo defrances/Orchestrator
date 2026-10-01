@@ -108,6 +108,34 @@ class UsageRecordTests(unittest.TestCase):
         self.assertAlmostEqual(float(summary["cost_usd"]), 0.03)
 
 
+class TaskSpecTests(unittest.TestCase):
+    def test_role_reviews_load_all_five_skills(self) -> None:
+        spec = analyze.task_spec("role-reviews")
+        names = [path.name for path in spec["skills"]]
+        self.assertEqual(names, ["SKILL.md"] * 5)
+        folders = [path.parent.name for path in spec["skills"]]
+        self.assertEqual(
+            folders,
+            [
+                "architect-skill",
+                "test-engineer-skill",
+                "cybersec-engineer-skill",
+                "product-safety-engineer-skill",
+                "sqa-engineer-skill",
+            ],
+        )
+        self.assertIn("Architect_Skill", spec["prompt"])
+        prompt = spec["prompt"]
+        self.assertIn("skills-out/architect/review.json", prompt)
+        self.assertIn("Do not change HOLD/BLOCK", prompt)
+
+    def test_single_role_writes_one_review_path(self) -> None:
+        spec = analyze.task_spec("product-safety")
+        self.assertEqual(spec["skills"][0].parent.name, "product-safety-engineer-skill")
+        self.assertIn("Product_Safety_Engineer_Skill", spec["prompt"])
+        self.assertTrue(str(spec["out_dir"]).endswith("product-safety"))
+
+
 class CopilotArgvTests(unittest.TestCase):
     def test_passes_selected_model(self) -> None:
         with patch("subprocess.run") as run:

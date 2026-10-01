@@ -15,6 +15,36 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PDLC_SKILL = ROOT / ".github" / "skills" / "analyze-pdlc-release" / "SKILL.md"
 VENDOR_SKILL = ROOT / ".github" / "skills" / "analyze-vendor-update-impact" / "SKILL.md"
+SKILLS_ROOT = ROOT / ".github" / "skills"
+
+ROLE_TASKS = ("architect", "test-engineer", "cybersec", "product-safety", "sqa")
+ROLE_META = {
+    "architect": {
+        "skill_name": "Architect_Skill",
+        "dir": "architect-skill",
+        "out_rel": "skills-out/architect/review.json",
+    },
+    "test-engineer": {
+        "skill_name": "Test_Engineer_Skill",
+        "dir": "test-engineer-skill",
+        "out_rel": "skills-out/test-engineer/review.json",
+    },
+    "cybersec": {
+        "skill_name": "CyberSec_Engineer_Skill",
+        "dir": "cybersec-engineer-skill",
+        "out_rel": "skills-out/cybersec/review.json",
+    },
+    "product-safety": {
+        "skill_name": "Product_Safety_Engineer_Skill",
+        "dir": "product-safety-engineer-skill",
+        "out_rel": "skills-out/product-safety/review.json",
+    },
+    "sqa": {
+        "skill_name": "SQA_Engineer_Skill",
+        "dir": "sqa-engineer-skill",
+        "out_rel": "skills-out/sqa/review.json",
+    },
+}
 
 PDLC_PROMPT = """Follow .github/skills/analyze-pdlc-release/SKILL.md.
 
@@ -38,6 +68,76 @@ Write one file per numbered configuration that has rows for that cluster_key. Do
 Input report: inputs/report.json
 Write analysis JSON files only to issues-out/. Do not call gh issue create. Do not publish GitHub Issues. Do not deploy.
 """
+
+ROLE_REVIEWS_PROMPT = """Follow these role skills in order:
+- Architect_Skill (.github/skills/architect-skill/SKILL.md)
+- Test_Engineer_Skill (.github/skills/test-engineer-skill/SKILL.md)
+- CyberSec_Engineer_Skill (.github/skills/cybersec-engineer-skill/SKILL.md)
+- Product_Safety_Engineer_Skill (.github/skills/product-safety-engineer-skill/SKILL.md)
+- SQA_Engineer_Skill (.github/skills/sqa-engineer-skill/SKILL.md)
+
+Review existing files under issues-out/ and pdlc-out/analysis.json.
+Analyze Host Application (workspace/HostApplication) on branch main (see workspace/host-application-inventory.md).
+The numbered configuration labels are Config1, Config2, … from sorted lab device_id values (same order as the GitHub Page).
+Write one review file per skill:
+- skills-out/architect/review.json
+- skills-out/test-engineer/review.json
+- skills-out/cybersec/review.json
+- skills-out/product-safety/review.json
+- skills-out/sqa/review.json
+Do not call gh issue create. Do not deploy. Do not change HOLD/BLOCK. Do not open Windchill, Quality, or Regulatory tickets.
+"""
+
+
+def _role_skill(folder: str) -> Path:
+    return SKILLS_ROOT / folder / "SKILL.md"
+
+
+def role_prompt(task: str) -> str:
+    meta = ROLE_META[task]
+    return f"""Follow {meta["skill_name"]} (.github/skills/{meta["dir"]}/SKILL.md).
+
+Review existing files under issues-out/ and pdlc-out/analysis.json.
+Analyze Host Application (workspace/HostApplication) on branch main (see workspace/host-application-inventory.md).
+The numbered configuration labels are Config1, Config2, … from sorted lab device_id values (same order as the GitHub Page).
+Write {meta["out_rel"]} only. Do not call gh issue create. Do not deploy. Do not change HOLD/BLOCK. Do not open Windchill, Quality, or Regulatory tickets.
+"""
+
+
+def role_ready(task: str) -> bool:
+    return (ROOT / ROLE_META[task]["out_rel"]).is_file()
+
+
+def task_spec(task: str) -> dict[str, object]:
+    if task == "pdlc":
+        return {
+            "prompt": PDLC_PROMPT,
+            "skills": [PDLC_SKILL],
+            "out_dir": ROOT / "pdlc-out",
+            "ready": lambda: (ROOT / "pdlc-out" / "analysis.json").is_file(),
+        }
+    if task == "vendor-impact":
+        return {
+            "prompt": VENDOR_PROMPT,
+            "skills": [VENDOR_SKILL],
+            "out_dir": ROOT / "issues-out",
+            "ready": lambda: any((ROOT / "issues-out").glob("*.json")),
+        }
+    if task == "role-reviews":
+        return {
+            "prompt": ROLE_REVIEWS_PROMPT,
+            "skills": [_role_skill(ROLE_META[name]["dir"]) for name in ROLE_TASKS],
+            "out_dir": ROOT / "skills-out",
+            "ready": lambda: all(role_ready(name) for name in ROLE_TASKS),
+        }
+    meta = ROLE_META[task]
+    out = ROOT / meta["out_rel"]
+    return {
+        "prompt": role_prompt(task),
+        "skills": [_role_skill(meta["dir"])],
+        "out_dir": out.parent,
+        "ready": lambda path=out: path.is_file(),
+    }
 
 
 USAGE_PATH = ROOT / "artifacts" / "ai-usage.json"
@@ -218,6 +318,9 @@ def persist_usage(entry: dict[str, object]) -> None:
     pdlc_out = ROOT / "pdlc-out"
     if pdlc_out.is_dir():
         (pdlc_out / "ai-usage.json").write_text(text, encoding="utf-8")
+    skills_out = ROOT / "skills-out"
+    if skills_out.is_dir():
+        (skills_out / "ai-usage.json").write_text(text, encoding="utf-8")
     print(
         "usage provider={provider} model={model} model_tokens={model_tokens} raw_total={tokens} cost_usd={cost}".format(
             provider=payload["summary"].get("provider"),
@@ -231,9 +334,19 @@ def persist_usage(entry: dict[str, object]) -> None:
 
 
 def run_offline(task: str) -> int:
-    script = ROOT / "scripts" / ("fallback-pdlc.py" if task == "pdlc" else "fallback-analyze.py")
+    if task == "pdlc":
+        script = ROOT / "scripts" / "fallback-pdlc.py"
+        argv = [sys.executable, str(script)]
+    elif task == "vendor-impact":
+        script = ROOT / "scripts" / "fallback-analyze.py"
+        argv = [sys.executable, str(script)]
+    else:
+        script = ROOT / "scripts" / "fallback-role-reviews.py"
+        argv = [sys.executable, str(script)]
+        if task != "role-reviews":
+            argv.extend(["--role", task])
     print(f"provider=offline script={script.name}", flush=True)
-    return subprocess.call([sys.executable, str(script)], cwd=str(ROOT))
+    return subprocess.call(argv, cwd=str(ROOT))
 
 
 DEFAULT_MODELS = {
@@ -276,7 +389,9 @@ def _agent_options(sdk: object, api_key: str, model: str) -> dict[str, object]:
     }
 
 
-def run_agent(prompt: str, model: str) -> tuple[int, dict[str, int | None], float | None]:
+def run_agent(
+    prompt: str, model: str, skill_paths: list[Path] | None = None
+) -> tuple[int, dict[str, int | None], float | None]:
     api_key = os.environ.get("AGENT_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("AGENT_API_KEY is not set")
@@ -287,8 +402,10 @@ def run_agent(prompt: str, model: str) -> tuple[int, dict[str, int | None], floa
     if not module:
         raise RuntimeError("AGENT_SDK_MODULE is not set")
     sdk = importlib.import_module(module)
-    skill_path = PDLC_SKILL if "analyze-pdlc-release" in prompt else VENDOR_SKILL
-    skill_text = skill_path.read_text(encoding="utf-8") if skill_path.exists() else ""
+    skill_paths = skill_paths or []
+    skill_text = "\n\n".join(
+        path.read_text(encoding="utf-8") for path in skill_paths if path.exists()
+    )
     full_prompt = "\n\n".join(part for part in (skill_text, prompt) if part)
     options = _agent_options(sdk, api_key, model)
     try:
@@ -330,7 +447,11 @@ def normalize_provider(raw: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--task", choices=("pdlc", "vendor-impact"), required=True)
+    parser.add_argument(
+        "--task",
+        choices=("pdlc", "vendor-impact", "role-reviews") + ROLE_TASKS,
+        required=True,
+    )
     parser.add_argument(
         "--provider",
         default=os.environ.get("ORCHESTRATOR_AI_PROVIDER", "agent"),
@@ -344,14 +465,17 @@ def main() -> int:
     args = parser.parse_args()
     provider = normalize_provider(args.provider)
     model = resolve_model(provider, args.model)
-    prompt = PDLC_PROMPT if args.task == "pdlc" else VENDOR_PROMPT
-    out_dir = ROOT / ("pdlc-out" if args.task == "pdlc" else "issues-out")
+    spec = task_spec(args.task)
+    prompt = str(spec["prompt"])
+    skill_paths = list(spec["skills"])
+    out_dir = spec["out_dir"]
+    assert isinstance(out_dir, Path)
     out_dir.mkdir(parents=True, exist_ok=True)
+    ready = spec["ready"]
+    assert callable(ready)
 
     def output_ready() -> bool:
-        if args.task == "pdlc":
-            return (out_dir / "analysis.json").is_file()
-        return any(out_dir.glob("*.json"))
+        return bool(ready())
 
     if provider == "offline":
         print("provider=offline model=n/a", flush=True)
@@ -380,7 +504,7 @@ def main() -> int:
         )
         return 0
     try:
-        code, tokens, cost = run_agent(prompt, model)
+        code, tokens, cost = run_agent(prompt, model, skill_paths)
     except Exception as exc:
         print(f"agent failed: {exc}; using offline analysis", file=sys.stderr, flush=True)
         offline = run_offline(args.task)

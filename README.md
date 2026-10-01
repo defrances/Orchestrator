@@ -24,10 +24,10 @@ sequenceDiagram
   FU->>FU: detect.yml live or fixtures
   FU->>FU: upload findupdates-report-json
   FU->>Orch: repository_dispatch findupdates-complete plus run_id
-  Note over Orch: Vendor impact and PDLC
+  Note over Orch: Vendor impact, PDLC, role skills
   Orch->>FU: download findupdates-report-json
   Orch->>HA: checkout main
-  Orch->>Orch: vendor analysis and PDLC
+  Orch->>Orch: vendor analysis, PDLC, role reviews
   Orch->>Orch: tests, app zip, Windows KB bundle
   Orch->>Mail: cluster emails plus bundle README
 ```
@@ -38,6 +38,7 @@ sequenceDiagram
 | --- | --- | --- | --- |
 | Vendor impact | `inputs/report.json` + Host Application `main` + optional SBOM | Does this host KB couple to a **file on main**? | `issues-out/` → one email per cluster |
 | Product PDLC | `docs/architecture.md`, `mds2.md`, `test-plan.md`, `vulnerability-report.md` + `main` | Is each product finding's countermeasure present / absent / partial? | `pdlc-out/analysis.json` |
+| Role reviews | `issues-out/` + `pdlc-out/analysis.json` + `main` | Architect / Test / CyberSec / Product Safety / SQA lenses | `skills-out/<role>/review.json` |
 
 Vendor impact is **not** “the CVE is Critical”. A row is in scope only if a path on `main` would feel the change (`InsecureVendorBulletinClient`, WPF/`app.manifest`, `NoteStore`, self-contained publish). Scores:
 
@@ -99,6 +100,13 @@ Skills (same for every provider):
 
 - [`.github/skills/analyze-vendor-update-impact/`](.github/skills/analyze-vendor-update-impact/) → `issues-out/`
 - [`.github/skills/analyze-pdlc-release/`](.github/skills/analyze-pdlc-release/) → `pdlc-out/analysis.json`
+- [`.github/skills/architect-skill/`](.github/skills/architect-skill/) (`Architect_Skill`) → `skills-out/architect/review.json`
+- [`.github/skills/test-engineer-skill/`](.github/skills/test-engineer-skill/) (`Test_Engineer_Skill`) → `skills-out/test-engineer/review.json`
+- [`.github/skills/cybersec-engineer-skill/`](.github/skills/cybersec-engineer-skill/) (`CyberSec_Engineer_Skill`) → `skills-out/cybersec/review.json`
+- [`.github/skills/product-safety-engineer-skill/`](.github/skills/product-safety-engineer-skill/) (`Product_Safety_Engineer_Skill`) → `skills-out/product-safety/review.json`
+- [`.github/skills/sqa-engineer-skill/`](.github/skills/sqa-engineer-skill/) (`SQA_Engineer_Skill`) → `skills-out/sqa/review.json`
+
+Role skills run after vendor-impact and PDLC as one `--task role-reviews` step (or standalone `--task architect` / `test-engineer` / `cybersec` / `product-safety` / `sqa`). They are advisory reviews. They do not change HOLD/BLOCK, authorize install, or open GitHub Issues.
 
 ## Secrets and variables
 
@@ -159,7 +167,7 @@ python scripts/build-pages-site.py --workspace <run-dir> --history <gh-pages-che
 
 | Artifact | Contents |
 | --- | --- |
-| `orchestrator-analysis` | `inputs/report.json`, `issues-out/`, `pdlc-out/`, inventory |
+| `orchestrator-analysis` | `inputs/report.json`, `issues-out/`, `pdlc-out/`, `skills-out/`, inventory |
 | `windows-patch-bundle` | KB manifest zip + README + `APPLY.ps1` |
 | `pdlc-release` | `PDLC_REPORT.md`, analysis, exe, tests, bundle copy |
 

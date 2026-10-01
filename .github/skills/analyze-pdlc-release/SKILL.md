@@ -84,3 +84,15 @@ Write `pdlc-out/analysis.json`:
 
 If every catalog row is already mitigated, still write the file with
 `countermeasure: present` and `patch_plan: none`.
+
+## Related role skills
+
+After this analysis is written, Orchestrator also runs:
+
+- `Architect_Skill` (`.github/skills/architect-skill/`)
+- `Test_Engineer_Skill` (`.github/skills/test-engineer-skill/`)
+- `CyberSec_Engineer_Skill` (`.github/skills/cybersec-engineer-skill/`)
+- `Product_Safety_Engineer_Skill` (`.github/skills/product-safety-engineer-skill/`)
+- `SQA_Engineer_Skill` (`.github/skills/sqa-engineer-skill/`)
+
+Those reviews stay advisory. They do not rewrite `pdlc-out/analysis.json` or change HOLD/BLOCK.

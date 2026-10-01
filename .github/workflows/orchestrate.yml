@@ -183,6 +183,18 @@ jobs:
           unset COPILOT_GITHUB_TOKEN
           python3 scripts/run-ai-analyze.py --task pdlc --provider "${ORCHESTRATOR_AI_PROVIDER}"
 
+      - name: Apply role skills
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN || github.token }}
+          COPILOT_AUTO_UPDATE: "false"
+        run: |
+          set -euo pipefail
+          mkdir -p skills-out
+          unset COPILOT_GITHUB_TOKEN
+          python3 scripts/run-ai-analyze.py --task role-reviews --provider "${ORCHESTRATOR_AI_PROVIDER}"
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -229,6 +241,7 @@ jobs:
             inputs/report.json
             issues-out/**
             pdlc-out/**
+            skills-out/**
             artifacts/ai-usage.json
             workspace/host-application-inventory.md
           if-no-files-found: warn
