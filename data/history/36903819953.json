@@ -1,0 +1,965 @@
+{
+  "schema_version": 1,
+  "run_id": "36903819953",
+  "created_at": "2026-10-01T18:06:45Z",
+  "workflow": "Vendor impact and PDLC",
+  "run_url": "https://github.com/defrances/Orchestrator/actions/runs/36903819953",
+  "findupdates_run_id": "36903582134",
+  "findupdates_url": "https://github.com/defrances/FindUpdates/actions/runs/36903582134",
+  "product": "HostApplication",
+  "branch": "main",
+  "sha": "22b249a754b849dac151e976b533f60994fc6098",
+  "sha_url": "https://github.com/defrances/HostApplication/commit/22b249a754b849dac151e976b533f60994fc6098",
+  "conclusion": "success",
+  "clusters": [
+    {
+      "title": "[Impact] dwm-wpf on Config2 - DWM composition may affect WPF rendering",
+      "device_id": "Config2",
+      "cluster_key": "dwm-wpf",
+      "advisory_id": "dwm-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5093998",
+        "KB5099535"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:dwm-wpf:Config2 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Microsoft DWM Core Library Elevation of Privilege Vulnerability | [KB5093998](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-45637) | CVE-2026-45637 | Install - High Prio |\n| Desktop Window Manager Elevation of Privilege Vulnerability | [KB5099535](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50692) | CVE-2026-50692 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config2`\n- Model / role: `LabBench-L110` / `lab-analysis-workstation`\n- Deployment group: `lab-ring-0`\n- OS: `Windows 11 IoT Enterprise` build `10.0.26100.4200`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `M` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nDesktop Window Manager composition used when WPF presents the main window. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF visual tree) and `src/HostApplication/app.manifest` (`PerMonitorV2` DPI awareness).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** DWM cumulative updates can change composition or privilege boundaries; WPF presentation in `MainWindow.xaml` flows through DWM on the host.\n- **If we skip: Station stays exposed.** Host DWM remains vulnerable while the product process can still start.\n- **Compatibility: Compatible with the app.** Existing builds already run against the lab host DWM version; installing the KB patches the OS compositor, not files inside the self-contained publish output.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package.\n\n## Cybersecurity impact assessment\n\nDWM EoP CVEs are in the Windows Desktop Window Manager component. SBOM and project files show no DWM library reference\u2014only WPF UI that relies on the host compositor. This patch set addresses CVE-2026-45637, CVE-2026-50692. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Primary UI (`MainWindow`), status bar, and notes panel depend on WPF rendering through DWM; core file/TLS logic is unchanged.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated UI verification after OS graphics stack updates.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nDesktop Window Manager composition used when WPF presents the main window. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF visual tree) and `src/HostApplication/app.manifest` (`PerMonitorV2` DPI awareness).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** DWM cumulative updates can change composition or privilege boundaries; WPF presentation in `MainWindow.xaml` flows through DWM on the host.\n- **If we skip: Station stays exposed.** Host DWM remains vulnerable while the product process can still start.\n- **Compatibility: Compatible with the app.** Existing builds already run against the lab host DWM version; installing the KB patches the OS compositor, not files inside the self-contained publish output.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package\u2026",
+      "config_label": "Config2"
+    },
+    {
+      "title": "[Impact] dwm-wpf on Config5 - DWM composition may affect WPF rendering",
+      "device_id": "Config5",
+      "cluster_key": "dwm-wpf",
+      "advisory_id": "dwm-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5093998",
+        "KB5099535"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:dwm-wpf:Config5 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Microsoft DWM Core Library Elevation of Privilege Vulnerability | [KB5093998](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-45637) | CVE-2026-45637 | Install - High Prio |\n| Desktop Window Manager Elevation of Privilege Vulnerability | [KB5099535](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50692) | CVE-2026-50692 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config5`\n- Model / role: `UltrasoundCart-U90` / `ultrasound-workstation`\n- Deployment group: `ultrasound`\n- OS: `Windows 10 IoT Enterprise` build `10.0.19044.3803`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `M` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nDesktop Window Manager composition used when WPF presents the main window. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF visual tree) and `src/HostApplication/app.manifest` (`PerMonitorV2` DPI awareness).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** DWM cumulative updates can change composition or privilege boundaries; WPF presentation in `MainWindow.xaml` flows through DWM on the host.\n- **If we skip: Station stays exposed.** Host DWM remains vulnerable while the product process can still start.\n- **Compatibility: Compatible with the app.** Existing builds already run against the lab host DWM version; installing the KB patches the OS compositor, not files inside the self-contained publish output.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package.\n\n## Cybersecurity impact assessment\n\nDWM EoP CVEs are in the Windows Desktop Window Manager component. SBOM and project files show no DWM library reference\u2014only WPF UI that relies on the host compositor. This patch set addresses CVE-2026-45637, CVE-2026-50692. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Primary UI (`MainWindow`), status bar, and notes panel depend on WPF rendering through DWM; core file/TLS logic is unchanged.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated UI verification after OS graphics stack updates.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nDesktop Window Manager composition used when WPF presents the main window. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF visual tree) and `src/HostApplication/app.manifest` (`PerMonitorV2` DPI awareness).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** DWM cumulative updates can change composition or privilege boundaries; WPF presentation in `MainWindow.xaml` flows through DWM on the host.\n- **If we skip: Station stays exposed.** Host DWM remains vulnerable while the product process can still start.\n- **Compatibility: Compatible with the app.** Existing builds already run against the lab host DWM version; installing the KB patches the OS compositor, not files inside the self-contained publish output.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package\u2026",
+      "config_label": "Config5"
+    },
+    {
+      "title": "[Impact] dwm-wpf on Config6 - DWM composition may affect WPF rendering",
+      "device_id": "Config6",
+      "cluster_key": "dwm-wpf",
+      "advisory_id": "dwm-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5093998",
+        "KB5099535"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:dwm-wpf:Config6 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Microsoft DWM Core Library Elevation of Privilege Vulnerability | [KB5093998](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-45637) | CVE-2026-45637 | Install - High Prio |\n| Desktop Window Manager Elevation of Privilege Vulnerability | [KB5099535](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50692) | CVE-2026-50692 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config6`\n- Model / role: `PACS-Validate-24H2` / `pacs-review-workstation`\n- Deployment group: `pacs-validate`\n- OS: `Windows 11 Version 24H2 for x64-based Systems` build `10.0.26100.4200`\n- Clinical criticality: `medium`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `M` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nDesktop Window Manager composition used when WPF presents the main window. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF visual tree) and `src/HostApplication/app.manifest` (`PerMonitorV2` DPI awareness).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** DWM cumulative updates can change composition or privilege boundaries; WPF presentation in `MainWindow.xaml` flows through DWM on the host.\n- **If we skip: Station stays exposed.** Host DWM remains vulnerable while the product process can still start.\n- **Compatibility: Compatible with the app.** Existing builds already run against the lab host DWM version; installing the KB patches the OS compositor, not files inside the self-contained publish output.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package.\n\n## Cybersecurity impact assessment\n\nDWM EoP CVEs are in the Windows Desktop Window Manager component. SBOM and project files show no DWM library reference\u2014only WPF UI that relies on the host compositor. This patch set addresses CVE-2026-45637, CVE-2026-50692. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Primary UI (`MainWindow`), status bar, and notes panel depend on WPF rendering through DWM; core file/TLS logic is unchanged.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated UI verification after OS graphics stack updates.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nDesktop Window Manager composition used when WPF presents the main window. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF visual tree) and `src/HostApplication/app.manifest` (`PerMonitorV2` DPI awareness).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** DWM cumulative updates can change composition or privilege boundaries; WPF presentation in `MainWindow.xaml` flows through DWM on the host.\n- **If we skip: Station stays exposed.** Host DWM remains vulnerable while the product process can still start.\n- **Compatibility: Compatible with the app.** Existing builds already run against the lab host DWM version; installing the KB patches the OS compositor, not files inside the self-contained publish output.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package\u2026",
+      "config_label": "Config6"
+    },
+    {
+      "title": "[Impact] KB5099444 on Config2 - NTFS patch does not change notes file contract",
+      "device_id": "Config2",
+      "cluster_key": "ntfs-notes",
+      "advisory_id": "ntfs-notes",
+      "required_for_app": "not_required",
+      "install_risk": "compatible",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099444"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "L",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:ntfs-notes:Config2 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows NTFS Remote Code Execution Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50448) | CVE-2026-50448 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config2`\n- Model / role: `LabBench-L110` / `lab-analysis-workstation`\n- Deployment group: `lab-ring-0`\n- OS: `Windows 11 IoT Enterprise` build `10.0.26100.4200`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `L` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nLocal NTFS/profile file I/O for `%AppData%\\HostApplication\\notes.txt`. Evidence on `main`: `src/HostApplication.Core/NoteStore.cs` (`DefaultPath`, `Load`, `Save`, `ExportCopy`) and tests in `tests/HostApplication.Tests/NoteStoreTests.cs`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: Compatible with the app.** The KB updates host NTFS filter drivers; `NoteStore` uses standard `File.ReadAllText` / `File.WriteAllText` and does not pin a specific NTFS driver version inside the published exe.\n- **If we skip: Station stays exposed.** The station NTFS stack can remain exposed to remote-code-execution class issues while notes I/O through `NoteStore` still works.\n- **Compatibility: Compatible with the app.** Smoke test `TC-SMOKE-NOTES` already validates save/load on a temp path using the same APIs as production.\n\n### Conclusions\n\nHost NTFS cumulative updates patch the workstation file stack used indirectly by `NoteStore` BCL calls; they do not modify the runtime embedded in the published exe.\n\n## Cybersecurity impact assessment\n\nNTFS RCE CVEs live in the Windows NTFS component. No NTFS driver is bundled; Core only calls BCL file APIs. This patch set addresses CVE-2026-50448. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Local notes persistence and export backup (`ExportBackupCommand`) use `NoteStore` file paths under the user profile.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- `TC-SMOKE-NOTES` \u2014 save/load round-trip guarded by `NoteStore.cs`.\n\n### Gap Analysis\n\n- None identified.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nLocal NTFS/profile file I/O for `%AppData%\\HostApplication\\notes.txt`. Evidence on `main`: `src/HostApplication.Core/NoteStore.cs` (`DefaultPath`, `Load`, `Save`, `ExportCopy`) and tests in `tests/HostApplication.Tests/NoteStoreTests.cs`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: Compatible with the app.** The KB updates host NTFS filter drivers; `NoteStore` uses standard `File.ReadAllText` / `File.WriteAllText` and does not pin a specific NTFS driver version inside the published exe.\n- **If we skip: Station stays exposed.** The station NTFS stack can remain exposed to remote-code-execution class issues while notes I/O through `NoteStore` still works.\n- **Compatibility: Compatible with the app.** Smoke test `TC-SMOKE-NOTES` already validates save/load on a temp path using the same APIs as production.\n\n### Conclusions\n\nHost NTFS cumulative updates patch the workstation file stack used indirectly by\u2026",
+      "config_label": "Config2"
+    },
+    {
+      "title": "[Impact] KB5099444 on Config5 - NTFS patch does not change notes file contract",
+      "device_id": "Config5",
+      "cluster_key": "ntfs-notes",
+      "advisory_id": "ntfs-notes",
+      "required_for_app": "not_required",
+      "install_risk": "compatible",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099444"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "L",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:ntfs-notes:Config5 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows NTFS Remote Code Execution Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50448) | CVE-2026-50448 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config5`\n- Model / role: `UltrasoundCart-U90` / `ultrasound-workstation`\n- Deployment group: `ultrasound`\n- OS: `Windows 10 IoT Enterprise` build `10.0.19044.3803`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `L` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nLocal NTFS/profile file I/O for `%AppData%\\HostApplication\\notes.txt`. Evidence on `main`: `src/HostApplication.Core/NoteStore.cs` (`DefaultPath`, `Load`, `Save`, `ExportCopy`) and tests in `tests/HostApplication.Tests/NoteStoreTests.cs`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: Compatible with the app.** The KB updates host NTFS filter drivers; `NoteStore` uses standard `File.ReadAllText` / `File.WriteAllText` and does not pin a specific NTFS driver version inside the published exe.\n- **If we skip: Station stays exposed.** The station NTFS stack can remain exposed to remote-code-execution class issues while notes I/O through `NoteStore` still works.\n- **Compatibility: Compatible with the app.** Smoke test `TC-SMOKE-NOTES` already validates save/load on a temp path using the same APIs as production.\n\n### Conclusions\n\nHost NTFS cumulative updates patch the workstation file stack used indirectly by `NoteStore` BCL calls; they do not modify the runtime embedded in the published exe.\n\n## Cybersecurity impact assessment\n\nNTFS RCE CVEs live in the Windows NTFS component. No NTFS driver is bundled; Core only calls BCL file APIs. This patch set addresses CVE-2026-50448. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Local notes persistence and export backup (`ExportBackupCommand`) use `NoteStore` file paths under the user profile.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- `TC-SMOKE-NOTES` \u2014 save/load round-trip guarded by `NoteStore.cs`.\n\n### Gap Analysis\n\n- None identified.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nLocal NTFS/profile file I/O for `%AppData%\\HostApplication\\notes.txt`. Evidence on `main`: `src/HostApplication.Core/NoteStore.cs` (`DefaultPath`, `Load`, `Save`, `ExportCopy`) and tests in `tests/HostApplication.Tests/NoteStoreTests.cs`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: Compatible with the app.** The KB updates host NTFS filter drivers; `NoteStore` uses standard `File.ReadAllText` / `File.WriteAllText` and does not pin a specific NTFS driver version inside the published exe.\n- **If we skip: Station stays exposed.** The station NTFS stack can remain exposed to remote-code-execution class issues while notes I/O through `NoteStore` still works.\n- **Compatibility: Compatible with the app.** Smoke test `TC-SMOKE-NOTES` already validates save/load on a temp path using the same APIs as production.\n\n### Conclusions\n\nHost NTFS cumulative updates patch the workstation file stack used indirectly by\u2026",
+      "config_label": "Config5"
+    },
+    {
+      "title": "[Impact] KB5099444 on Config6 - NTFS patch does not change notes file contract",
+      "device_id": "Config6",
+      "cluster_key": "ntfs-notes",
+      "advisory_id": "ntfs-notes",
+      "required_for_app": "not_required",
+      "install_risk": "compatible",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099444"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "L",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:ntfs-notes:Config6 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows NTFS Remote Code Execution Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50448) | CVE-2026-50448 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config6`\n- Model / role: `PACS-Validate-24H2` / `pacs-review-workstation`\n- Deployment group: `pacs-validate`\n- OS: `Windows 11 Version 24H2 for x64-based Systems` build `10.0.26100.4200`\n- Clinical criticality: `medium`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `L` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nLocal NTFS/profile file I/O for `%AppData%\\HostApplication\\notes.txt`. Evidence on `main`: `src/HostApplication.Core/NoteStore.cs` (`DefaultPath`, `Load`, `Save`, `ExportCopy`) and tests in `tests/HostApplication.Tests/NoteStoreTests.cs`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: Compatible with the app.** The KB updates host NTFS filter drivers; `NoteStore` uses standard `File.ReadAllText` / `File.WriteAllText` and does not pin a specific NTFS driver version inside the published exe.\n- **If we skip: Station stays exposed.** The station NTFS stack can remain exposed to remote-code-execution class issues while notes I/O through `NoteStore` still works.\n- **Compatibility: Compatible with the app.** Smoke test `TC-SMOKE-NOTES` already validates save/load on a temp path using the same APIs as production.\n\n### Conclusions\n\nHost NTFS cumulative updates patch the workstation file stack used indirectly by `NoteStore` BCL calls; they do not modify the runtime embedded in the published exe.\n\n## Cybersecurity impact assessment\n\nNTFS RCE CVEs live in the Windows NTFS component. No NTFS driver is bundled; Core only calls BCL file APIs. This patch set addresses CVE-2026-50448. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Local notes persistence and export backup (`ExportBackupCommand`) use `NoteStore` file paths under the user profile.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- `TC-SMOKE-NOTES` \u2014 save/load round-trip guarded by `NoteStore.cs`.\n\n### Gap Analysis\n\n- None identified.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nLocal NTFS/profile file I/O for `%AppData%\\HostApplication\\notes.txt`. Evidence on `main`: `src/HostApplication.Core/NoteStore.cs` (`DefaultPath`, `Load`, `Save`, `ExportCopy`) and tests in `tests/HostApplication.Tests/NoteStoreTests.cs`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: Compatible with the app.** The KB updates host NTFS filter drivers; `NoteStore` uses standard `File.ReadAllText` / `File.WriteAllText` and does not pin a specific NTFS driver version inside the published exe.\n- **If we skip: Station stays exposed.** The station NTFS stack can remain exposed to remote-code-execution class issues while notes I/O through `NoteStore` still works.\n- **Compatibility: Compatible with the app.** Smoke test `TC-SMOKE-NOTES` already validates save/load on a temp path using the same APIs as production.\n\n### Conclusions\n\nHost NTFS cumulative updates patch the workstation file stack used indirectly by\u2026",
+      "config_label": "Config6"
+    },
+    {
+      "title": "[Impact] KB5099414 on Config1 - Shell identity may affect WinExe launch context",
+      "device_id": "Config1",
+      "cluster_key": "shell-launch",
+      "advisory_id": "shell-launch",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099414"
+      ],
+      "vendor_severity": "C",
+      "vendor_likelihood": "C",
+      "vendor_risk": "C",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:shell-launch:Config1 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Shell Spoofing Vulnerability | [KB5099414](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202) | CVE-2026-32202 | Low Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config1`\n- Model / role: `CTConsole-A300` / `ct-imaging-workstation`\n- Deployment group: `imaging-ct`\n- OS: `Windows 11 IoT Enterprise` build `10.0.22621.2500`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `C` | `C` | `C` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside the CI single-file publish artifact.\n\n## Cybersecurity impact assessment\n\nShell spoofing CVEs are in Windows Shell, not in application assemblies. SBOM lists only the self-contained .NET runtime and WPF stack bundled with the exe. This patch set addresses CVE-2026-32202. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Application start from Explorer or clinical shortcuts; in-app notes/TLS features do not call Shell APIs directly.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated launch or shortcut-spoofing regression in `docs/test-plan.md`.\n\n## Recommendation\n\nFindUpdates marked this row `do_not_install` with policy BLOCK on this configuration; keep the host patch on hold for lab review and do not treat it as an authorized product patch. Table recommendation: **Low Prio** for this product configuration.",
+      "impact": "### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside\u2026",
+      "config_label": "Config1"
+    },
+    {
+      "title": "[Impact] KB5099414 on Config2 - Shell identity may affect WinExe launch context",
+      "device_id": "Config2",
+      "cluster_key": "shell-launch",
+      "advisory_id": "shell-launch",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099414"
+      ],
+      "vendor_severity": "C",
+      "vendor_likelihood": "C",
+      "vendor_risk": "C",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:shell-launch:Config2 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Shell Spoofing Vulnerability | [KB5099414](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202) | CVE-2026-32202 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config2`\n- Model / role: `LabBench-L110` / `lab-analysis-workstation`\n- Deployment group: `lab-ring-0`\n- OS: `Windows 11 IoT Enterprise` build `10.0.26100.4200`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `C` | `C` | `C` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside the CI single-file publish artifact.\n\n## Cybersecurity impact assessment\n\nShell spoofing CVEs are in Windows Shell, not in application assemblies. SBOM lists only the self-contained .NET runtime and WPF stack bundled with the exe. This patch set addresses CVE-2026-32202. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Application start from Explorer or clinical shortcuts; in-app notes/TLS features do not call Shell APIs directly.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated launch or shortcut-spoofing regression in `docs/test-plan.md`.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside\u2026",
+      "config_label": "Config2"
+    },
+    {
+      "title": "[Impact] KB5099414 on Config3 - Shell identity may affect WinExe launch context",
+      "device_id": "Config3",
+      "cluster_key": "shell-launch",
+      "advisory_id": "shell-launch",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099414"
+      ],
+      "vendor_severity": "C",
+      "vendor_likelihood": "C",
+      "vendor_risk": "C",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:shell-launch:Config3 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Shell Spoofing Vulnerability | [KB5099414](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202) | CVE-2026-32202 | Low Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config3`\n- Model / role: `MRConsole-R200` / `mr-imaging-workstation`\n- Deployment group: `imaging-mr`\n- OS: `Windows 11 IoT Enterprise` build `10.0.22621.2500`\n- Clinical criticality: `critical`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `C` | `C` | `C` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside the CI single-file publish artifact.\n\n## Cybersecurity impact assessment\n\nShell spoofing CVEs are in Windows Shell, not in application assemblies. SBOM lists only the self-contained .NET runtime and WPF stack bundled with the exe. This patch set addresses CVE-2026-32202. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Application start from Explorer or clinical shortcuts; in-app notes/TLS features do not call Shell APIs directly.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated launch or shortcut-spoofing regression in `docs/test-plan.md`.\n\n## Recommendation\n\nFindUpdates marked this row `do_not_install` with policy BLOCK on this configuration; keep the host patch on hold for lab review and do not treat it as an authorized product patch. Table recommendation: **Low Prio** for this product configuration.",
+      "impact": "### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside\u2026",
+      "config_label": "Config3"
+    },
+    {
+      "title": "[Impact] KB5099414 on Config4 - Shell identity may affect WinExe launch context",
+      "device_id": "Config4",
+      "cluster_key": "shell-launch",
+      "advisory_id": "shell-launch",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099414"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "C",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:shell-launch:Config4 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Shell Spoofing Vulnerability | [KB5099414](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202) | CVE-2026-32202 | Low Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config4`\n- Model / role: `PACS-Review-21` / `pacs-review-workstation`\n- Deployment group: `pacs-review`\n- OS: `Windows 11 IoT Enterprise` build `10.0.22621.2500`\n- Clinical criticality: `medium`\n- Network exposure: `isolated`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `C` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside the CI single-file publish artifact.\n\n## Cybersecurity impact assessment\n\nShell spoofing CVEs are in Windows Shell, not in application assemblies. SBOM lists only the self-contained .NET runtime and WPF stack bundled with the exe. This patch set addresses CVE-2026-32202. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Application start from Explorer or clinical shortcuts; in-app notes/TLS features do not call Shell APIs directly.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated launch or shortcut-spoofing regression in `docs/test-plan.md`.\n\n## Recommendation\n\nFindUpdates marked this row `do_not_install` with policy BLOCK on this configuration; keep the host patch on hold for lab review and do not treat it as an authorized product patch. Table recommendation: **Low Prio** for this product configuration.",
+      "impact": "### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside\u2026",
+      "config_label": "Config4"
+    },
+    {
+      "title": "[Impact] KB5099414 on Config5 - Shell identity may affect WinExe launch context",
+      "device_id": "Config5",
+      "cluster_key": "shell-launch",
+      "advisory_id": "shell-launch",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099414"
+      ],
+      "vendor_severity": "C",
+      "vendor_likelihood": "C",
+      "vendor_risk": "C",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:shell-launch:Config5 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Shell Spoofing Vulnerability | [KB5099414](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202) | CVE-2026-32202 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config5`\n- Model / role: `UltrasoundCart-U90` / `ultrasound-workstation`\n- Deployment group: `ultrasound`\n- OS: `Windows 10 IoT Enterprise` build `10.0.19044.3803`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `C` | `C` | `C` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside the CI single-file publish artifact.\n\n## Cybersecurity impact assessment\n\nShell spoofing CVEs are in Windows Shell, not in application assemblies. SBOM lists only the self-contained .NET runtime and WPF stack bundled with the exe. This patch set addresses CVE-2026-32202. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Application start from Explorer or clinical shortcuts; in-app notes/TLS features do not call Shell APIs directly.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated launch or shortcut-spoofing regression in `docs/test-plan.md`.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside\u2026",
+      "config_label": "Config5"
+    },
+    {
+      "title": "[Impact] KB5099414 on Config6 - Shell identity may affect WinExe launch context",
+      "device_id": "Config6",
+      "cluster_key": "shell-launch",
+      "advisory_id": "shell-launch",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099414"
+      ],
+      "vendor_severity": "C",
+      "vendor_likelihood": "C",
+      "vendor_risk": "C",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:shell-launch:Config6 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Shell Spoofing Vulnerability | [KB5099414](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202) | CVE-2026-32202 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config6`\n- Model / role: `PACS-Validate-24H2` / `pacs-review-workstation`\n- Deployment group: `pacs-validate`\n- OS: `Windows 11 Version 24H2 for x64-based Systems` build `10.0.26100.4200`\n- Clinical criticality: `medium`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `C` | `C` | `C` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside the CI single-file publish artifact.\n\n## Cybersecurity impact assessment\n\nShell spoofing CVEs are in Windows Shell, not in application assemblies. SBOM lists only the self-contained .NET runtime and WPF stack bundled with the exe. This patch set addresses CVE-2026-32202. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Application start from Explorer or clinical shortcuts; in-app notes/TLS features do not call Shell APIs directly.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated launch or shortcut-spoofing regression in `docs/test-plan.md`.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside\u2026",
+      "config_label": "Config6"
+    },
+    {
+      "title": "[Impact] KB5099414 on Config7 - Shell identity may affect WinExe launch context",
+      "device_id": "Config7",
+      "cluster_key": "shell-launch",
+      "advisory_id": "shell-launch",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099414"
+      ],
+      "vendor_severity": "C",
+      "vendor_likelihood": "C",
+      "vendor_risk": "C",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:shell-launch:Config7 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Shell Spoofing Vulnerability | [KB5099414](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202) | CVE-2026-32202 | Low Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config7`\n- Model / role: `Worklist-PC-5` / `worklist-workstation`\n- Deployment group: `worklist`\n- OS: `Windows 11 IoT Enterprise` build `10.0.22621.2500`\n- Clinical criticality: `low`\n- Network exposure: `enterprise_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `C` | `C` | `C` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside the CI single-file publish artifact.\n\n## Cybersecurity impact assessment\n\nShell spoofing CVEs are in Windows Shell, not in application assemblies. SBOM lists only the self-contained .NET runtime and WPF stack bundled with the exe. This patch set addresses CVE-2026-32202. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Application start from Explorer or clinical shortcuts; in-app notes/TLS features do not call Shell APIs directly.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No automated launch or shortcut-spoofing regression in `docs/test-plan.md`.\n\n## Recommendation\n\nFindUpdates marked this row `do_not_install` with policy BLOCK on this configuration; keep the host patch on hold for lab review and do not treat it as an authorized product patch. Table recommendation: **Low Prio** for this product configuration.",
+      "impact": "### Impacted Components\n\nWindows Shell handling of executable identity and spoofing-related UI affordances when users start the product. Evidence on `main`: `src/HostApplication/HostApplication.csproj` (`OutputType` `WinExe`) and `src/HostApplication/app.manifest` (`assemblyIdentity` name `HostApplication`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** Shell security updates can change how executables are resolved or presented; this product is shipped as a single-file WinExe per CI publish settings.\n- **If we skip: Station stays exposed.** Shell spoofing weaknesses can remain on the workstation while the Host Application process still launches.\n- **Compatibility: Compatible with the app.** The manifest assembly name and WinExe output type on `main` already match today's lab launch path.\n\n### Conclusions\n\nShell spoofing mitigations apply to how Windows presents executables; they do not patch assemblies inside\u2026",
+      "config_label": "Config7"
+    },
+    {
+      "title": "[Impact] win32k-wpf on Config2 - Win32k may change WPF windowing and DPI",
+      "device_id": "Config2",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099444",
+        "KB5099536"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "H",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config2 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-49805) | CVE-2026-49805 | Install - High Prio |\n| Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-57095) | CVE-2026-57095 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50688) | CVE-2026-50688 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-56176) | CVE-2026-56176 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099536](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54112) | CVE-2026-54112 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config2`\n- Model / role: `LabBench-L110` / `lab-analysis-workstation`\n- Deployment group: `lab-ring-0`\n- OS: `Windows 11 IoT Enterprise` build `10.0.26100.4200`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `H` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWin32k-backed windowing and per-monitor DPI that WPF uses for rendering and input. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF `Window` chrome and layout), `src/HostApplication/HostApplication.csproj` (`UseWPF`), and `src/HostApplication/app.manifest` (`dpiAware` / `PerMonitorV2`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** A Win32k security cumulative can alter kernel window-manager behavior; WPF on `MainWindow.xaml` depends on that stack and manifest DPI settings.\n- **If we skip: Station stays exposed.** The workstation Win32k surface stays exposed to elevation-of-privilege issues while Host Application continues to launch as a WinExe.\n- **Compatibility: Compatible with the app.** Current `main` already runs on today's host Win32k bits; the published self-contained exe in CI (`ci.yml` `--self-contained true`) is not replaced by the KB.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package.\n\n## Cybersecurity impact assessment\n\nWin32k elevation-of-privilege CVEs addressed by these cumulative updates sit in the Windows kernel window manager, not in HostApplication.Core or any NuGet dependency. This patch set addresses CVE-2026-49805, CVE-2026-50688, CVE-2026-54112, CVE-2026-56176, CVE-2026-57095. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Notes save/load (`NoteStore`), vendor bulletin HTTPS check (`CheckBulletinCommand`), and system information display may be indirectly affected only if window creation or DPI scaling regresses after a host reboot.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No UI automation or visual regression tests for WPF layout/DPI after OS patches.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nWin32k-backed windowing and per-monitor DPI that WPF uses for rendering and input. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF `Window` chrome and layout), `src/HostApplication/HostApplication.csproj` (`UseWPF`), and `src/HostApplication/app.manifest` (`dpiAware` / `PerMonitorV2`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** A Win32k security cumulative can alter kernel window-manager behavior; WPF on `MainWindow.xaml` depends on that stack and manifest DPI settings.\n- **If we skip: Station stays exposed.** The workstation Win32k surface stays exposed to elevation-of-privilege issues while Host Application continues to launch as a WinExe.\n- **Compatibility: Compatible with the app.** Current `main` already runs on today's host Win32k bits; the published self-contained exe in CI (`ci.yml` `--self-contained true`) is not replaced by the KB.\n\n### Conclusions\n\nThese k\u2026",
+      "config_label": "Config2"
+    },
+    {
+      "title": "[Impact] win32k-wpf on Config5 - Win32k may change WPF windowing and DPI",
+      "device_id": "Config5",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099444",
+        "KB5099536"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "H",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config5 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-49805) | CVE-2026-49805 | Install - High Prio |\n| Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-57095) | CVE-2026-57095 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50688) | CVE-2026-50688 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-56176) | CVE-2026-56176 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099536](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54112) | CVE-2026-54112 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config5`\n- Model / role: `UltrasoundCart-U90` / `ultrasound-workstation`\n- Deployment group: `ultrasound`\n- OS: `Windows 10 IoT Enterprise` build `10.0.19044.3803`\n- Clinical criticality: `high`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `H` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWin32k-backed windowing and per-monitor DPI that WPF uses for rendering and input. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF `Window` chrome and layout), `src/HostApplication/HostApplication.csproj` (`UseWPF`), and `src/HostApplication/app.manifest` (`dpiAware` / `PerMonitorV2`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** A Win32k security cumulative can alter kernel window-manager behavior; WPF on `MainWindow.xaml` depends on that stack and manifest DPI settings.\n- **If we skip: Station stays exposed.** The workstation Win32k surface stays exposed to elevation-of-privilege issues while Host Application continues to launch as a WinExe.\n- **Compatibility: Compatible with the app.** Current `main` already runs on today's host Win32k bits; the published self-contained exe in CI (`ci.yml` `--self-contained true`) is not replaced by the KB.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package.\n\n## Cybersecurity impact assessment\n\nWin32k elevation-of-privilege CVEs addressed by these cumulative updates sit in the Windows kernel window manager, not in HostApplication.Core or any NuGet dependency. This patch set addresses CVE-2026-49805, CVE-2026-50688, CVE-2026-54112, CVE-2026-56176, CVE-2026-57095. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Notes save/load (`NoteStore`), vendor bulletin HTTPS check (`CheckBulletinCommand`), and system information display may be indirectly affected only if window creation or DPI scaling regresses after a host reboot.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No UI automation or visual regression tests for WPF layout/DPI after OS patches.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nWin32k-backed windowing and per-monitor DPI that WPF uses for rendering and input. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF `Window` chrome and layout), `src/HostApplication/HostApplication.csproj` (`UseWPF`), and `src/HostApplication/app.manifest` (`dpiAware` / `PerMonitorV2`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** A Win32k security cumulative can alter kernel window-manager behavior; WPF on `MainWindow.xaml` depends on that stack and manifest DPI settings.\n- **If we skip: Station stays exposed.** The workstation Win32k surface stays exposed to elevation-of-privilege issues while Host Application continues to launch as a WinExe.\n- **Compatibility: Compatible with the app.** Current `main` already runs on today's host Win32k bits; the published self-contained exe in CI (`ci.yml` `--self-contained true`) is not replaced by the KB.\n\n### Conclusions\n\nThese k\u2026",
+      "config_label": "Config5"
+    },
+    {
+      "title": "[Impact] win32k-wpf on Config6 - Win32k may change WPF windowing and DPI",
+      "device_id": "Config6",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5099444",
+        "KB5099536"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "H",
+      "vendor_risk": "H",
+      "product_severity": "L",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config6 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-49805) | CVE-2026-49805 | Install - High Prio |\n| Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-57095) | CVE-2026-57095 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50688) | CVE-2026-50688 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099444](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-56176) | CVE-2026-56176 | Install - High Prio |\n| Windows Win32k Elevation of Privilege Vulnerability | [KB5099536](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54112) | CVE-2026-54112 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: `Config6`\n- Model / role: `PACS-Validate-24H2` / `pacs-review-workstation`\n- Deployment group: `pacs-validate`\n- OS: `Windows 11 Version 24H2 for x64-based Systems` build `10.0.26100.4200`\n- Clinical criticality: `medium`\n- Network exposure: `restricted_lan`\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | `H` | `H` | `H` |\n| Product | `L` | `L` | `L` |\n\n## Technical Impact Assessment\n\n### Impacted Components\n\nWin32k-backed windowing and per-monitor DPI that WPF uses for rendering and input. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF `Window` chrome and layout), `src/HostApplication/HostApplication.csproj` (`UseWPF`), and `src/HostApplication/app.manifest` (`dpiAware` / `PerMonitorV2`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** A Win32k security cumulative can alter kernel window-manager behavior; WPF on `MainWindow.xaml` depends on that stack and manifest DPI settings.\n- **If we skip: Station stays exposed.** The workstation Win32k surface stays exposed to elevation-of-privilege issues while Host Application continues to launch as a WinExe.\n- **Compatibility: Compatible with the app.** Current `main` already runs on today's host Win32k bits; the published self-contained exe in CI (`ci.yml` `--self-contained true`) is not replaced by the KB.\n\n### Conclusions\n\nThese kernel/compositor updates change host windowing bits WPF relies on; they do not replace the bundled .NET 9 runtime inside the self-contained package.\n\n## Cybersecurity impact assessment\n\nWin32k elevation-of-privilege CVEs addressed by these cumulative updates sit in the Windows kernel window manager, not in HostApplication.Core or any NuGet dependency. This patch set addresses CVE-2026-49805, CVE-2026-50688, CVE-2026-54112, CVE-2026-56176, CVE-2026-57095. SBOM scan and source code scan show no matching dependency in product code; host exposure remains if skipped.\n\n## Product Risk assessment\n\n- Functions touched: Notes save/load (`NoteStore`), vendor bulletin HTTPS check (`CheckBulletinCommand`), and system information display may be indirectly affected only if window creation or DPI scaling regresses after a host reboot.\n- Potential hazards: None identified for this product configuration beyond generic OS regression risk after reboot.\n- Install vs skip: Installing may require validation of WPF/UI or launch behavior; skipping leaves host-level exposure without stopping the product process.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No UI automation or visual regression tests for WPF layout/DPI after OS patches.\n\n## Recommendation\n\nComplete lab validation per design control before any deployment adapter; table recommendation: **Install - High Prio** for host hardening where policy allows, with smoke/regression on notes and bulletin paths after reboot.",
+      "impact": "### Impacted Components\n\nWin32k-backed windowing and per-monitor DPI that WPF uses for rendering and input. Evidence on `main`: `src/HostApplication/MainWindow.xaml` (WPF `Window` chrome and layout), `src/HostApplication/HostApplication.csproj` (`UseWPF`), and `src/HostApplication/app.manifest` (`dpiAware` / `PerMonitorV2`).\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The self-contained publish in `.github/workflows/ci.yml` (`--self-contained true` for `win-x64`) does not load this Windows component as a product `PackageReference`; Host Application starts without this KB.\n- **If we install: App may break.** A Win32k security cumulative can alter kernel window-manager behavior; WPF on `MainWindow.xaml` depends on that stack and manifest DPI settings.\n- **If we skip: Station stays exposed.** The workstation Win32k surface stays exposed to elevation-of-privilege issues while Host Application continues to launch as a WinExe.\n- **Compatibility: Compatible with the app.** Current `main` already runs on today's host Win32k bits; the published self-contained exe in CI (`ci.yml` `--self-contained true`) is not replaced by the KB.\n\n### Conclusions\n\nThese k\u2026",
+      "config_label": "Config6"
+    }
+  ],
+  "cluster_count": 16,
+  "no_clusters": false,
+  "findings": [
+    {
+      "id": "VR-TLS-001",
+      "title": "Vendor bulletin HTTPS accepts any server certificate",
+      "countermeasure": "present",
+      "evidence": "On main, src/HostApplication.Core/InsecureVendorBulletinClient.cs AcceptAnyServerCertificate returns sslPolicyErrors == SslPolicyErrors.None (not unconditional true); Marker is TLS_CERTIFICATE_VALIDATED. tests/HostApplication.Tests/InsecureVendorBulletinClientTests.cs TC-REG-TLS-CALLBACK asserts rejection when SslPolicyErrors indicate an invalid chain. inputs/mds2.md MDS2-TLS still describes the old bypass and is stale relative to main.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-UNIT-TLS-MARKER",
+        "TC-REG-TLS-CALLBACK"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/InsecureVendorBulletinClient.cs",
+        "src/HostApplication/MainViewModel.cs"
+      ]
+    },
+    {
+      "id": "VR-NOTES-001",
+      "title": "Notes stored as plaintext in user AppData",
+      "countermeasure": "present",
+      "evidence": "src/HostApplication.Core/NoteStore.cs persists UTF-8 plaintext under %AppData%\\HostApplication\\notes.txt with no network export; inputs/mds2.md MDS2-DATA met (local notes only, no PHI). Residual risk is host-account access to the file, accepted for this PoC per catalog.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-UNIT-NOTES-EMPTY",
+        "TC-UNIT-NOTES-PATH",
+        "TC-SMOKE-NOTES"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/NoteStore.cs"
+      ]
+    },
+    {
+      "id": "VR-NET-001",
+      "title": "No inbound network listener",
+      "countermeasure": "present",
+      "evidence": "No TcpListener, HttpListener, or socket bind in application source; only optional outbound HTTPS via InsecureVendorBulletinClient.FetchAsync. inputs/mds2.md MDS2-NET met.",
+      "patch_plan": "none",
+      "tests_to_run": [],
+      "impact_files": []
+    }
+  ],
+  "os_kb_advice": [
+    "Host OS KBs stay a station recommendation and are not in the application zip.",
+    "Host Schannel and other Windows TLS stack updates remain station-level recommendations; they are not packaged with the self-contained application zip."
+  ],
+  "bundle": {
+    "bundle_id": "windows-patch-bundle-live-20261001T180520Z",
+    "generated": "2026-10-01T18:05:20Z",
+    "findupdates_run_id": "36903582134",
+    "findupdates_html_url": "https://github.com/defrances/FindUpdates/actions/runs/36903582134",
+    "counts": {
+      "report_rows": 146,
+      "packages": 9,
+      "deploy": 8,
+      "do_not_install": 1,
+      "stations": 7
+    },
+    "packages": [
+      {
+        "kb": "KB5082052",
+        "title": "Windows Internet Key Exchange (IKE) Service Extensions Remote Code Execution Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "CRITICAL",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-33824",
+        "stations": [
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-33824",
+          "CVE-2026-26174",
+          "CVE-2026-32157"
+        ],
+        "known_exploited": "false",
+        "exploitability": "low",
+        "advisory_id": "advisory_217d52d4106695644946",
+        "os_products": [
+          "Windows 10 IoT Enterprise",
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "ultrasound",
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "C",
+        "vendor_likelihood": "L",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5099414",
+        "title": "Windows Shell Spoofing Vulnerability",
+        "vendor": "microsoft",
+        "action": "do_not_install",
+        "include_in_deploy": false,
+        "severity": "CRITICAL",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-32202",
+        "stations": [
+          "SYNTHETIC-CT-IMG-01",
+          "SYNTHETIC-MR-IMG-01",
+          "SYNTHETIC-PACS-01",
+          "SYNTHETIC-WKLIST-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-32202"
+        ],
+        "known_exploited": "true",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_cf8ded0e710d1d9ff46c",
+        "os_products": [
+          "Windows 11 IoT Enterprise"
+        ],
+        "deployment_groups": [
+          "imaging-ct",
+          "imaging-mr",
+          "pacs-review",
+          "worklist"
+        ],
+        "vendor_severity": "C",
+        "vendor_likelihood": "C",
+        "vendor_risk": "C"
+      },
+      {
+        "kb": "KB5087420",
+        "title": "Windows Cloud Files Mini Filter Driver Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-33835",
+        "stations": [
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-33835"
+        ],
+        "known_exploited": "false",
+        "exploitability": "high",
+        "advisory_id": "advisory_1a40ba7bdf40cdea75ef",
+        "os_products": [
+          "Windows 10 IoT Enterprise",
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "ultrasound",
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "H",
+        "vendor_risk": "H"
+      },
+      {
+        "kb": "KB5093998",
+        "title": "Remote Desktop Client Remote Code Execution Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-42993",
+        "stations": [
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-42993",
+          "CVE-2026-42914",
+          "CVE-2026-45639",
+          "CVE-2026-45637",
+          "CVE-2026-42912"
+        ],
+        "known_exploited": "false",
+        "exploitability": "low",
+        "advisory_id": "advisory_5fa05d7acf8951a2e696",
+        "os_products": [
+          "Windows 10 IoT Enterprise",
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "ultrasound",
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "L",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5099414",
+        "title": "Internet Key Exchange (IKE) Protocol Denial of Service Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50696",
+        "stations": [
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-50696",
+          "CVE-2026-32202"
+        ],
+        "known_exploited": "false",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_52c78353ec625ebd6646",
+        "os_products": [
+          "Windows 10 IoT Enterprise",
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "ultrasound",
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5099444",
+        "title": "Windows OLE Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50344",
+        "stations": [
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-50344",
+          "CVE-2026-57095",
+          "CVE-2026-50400",
+          "CVE-2026-50453",
+          "CVE-2026-49177",
+          "CVE-2026-40400",
+          "CVE-2026-50448",
+          "CVE-2026-49805",
+          "CVE-2026-50311",
+          "CVE-2026-50688",
+          "CVE-2026-49798",
+          "CVE-2026-50376",
+          "CVE-2026-56176",
+          "CVE-2026-50419",
+          "CVE-2026-50332",
+          "CVE-2026-50435",
+          "CVE-2026-57085",
+          "CVE-2026-56650",
+          "CVE-2026-50351",
+          "CVE-2026-50462",
+          "CVE-2026-56188"
+        ],
+        "known_exploited": "false",
+        "exploitability": "low",
+        "advisory_id": "advisory_0ee24b4846145517f45a",
+        "os_products": [
+          "Windows 10 IoT Enterprise",
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "ultrasound",
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "L",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5099535",
+        "title": "Desktop Window Manager Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50692",
+        "stations": [
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-50692",
+          "CVE-2026-50333",
+          "CVE-2026-50661",
+          "CVE-2026-57091",
+          "CVE-2026-50357"
+        ],
+        "known_exploited": "false",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_171ef35cdec0a63fcda1",
+        "os_products": [
+          "Windows 10 IoT Enterprise",
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "ultrasound",
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5099536",
+        "title": "Windows Terminal Remote Code Execution Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54124",
+        "stations": [
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-54124",
+          "CVE-2026-58547",
+          "CVE-2026-49183",
+          "CVE-2026-50679",
+          "CVE-2026-50375",
+          "CVE-2026-54112",
+          "CVE-2026-50414",
+          "CVE-2026-50466",
+          "CVE-2026-49800",
+          "CVE-2026-50383",
+          "CVE-2026-54990"
+        ],
+        "known_exploited": "false",
+        "exploitability": "low",
+        "advisory_id": "advisory_1df6c1eed1d9f1a0c0f4",
+        "os_products": [
+          "Windows 10 IoT Enterprise",
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "ultrasound",
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "L",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5101649",
+        "title": "Windows Media Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-50676",
+        "stations": [
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-50676"
+        ],
+        "known_exploited": "false",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_e0a8e3ae65de714691f7",
+        "os_products": [
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      }
+    ],
+    "stations": [
+      {
+        "device_id": "SYNTHETIC-CT-IMG-01",
+        "model": "CTConsole-A300",
+        "device_role": "ct-imaging-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "imaging-ct"
+      },
+      {
+        "device_id": "SYNTHETIC-LAB-24H2-01",
+        "model": "LabBench-L110",
+        "device_role": "lab-analysis-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.26100.4200",
+        "deployment_group": "lab-ring-0"
+      },
+      {
+        "device_id": "SYNTHETIC-MR-IMG-01",
+        "model": "MRConsole-R200",
+        "device_role": "mr-imaging-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "imaging-mr"
+      },
+      {
+        "device_id": "SYNTHETIC-PACS-01",
+        "model": "PACS-Review-21",
+        "device_role": "pacs-review-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "pacs-review"
+      },
+      {
+        "device_id": "SYNTHETIC-US-01",
+        "model": "UltrasoundCart-U90",
+        "device_role": "ultrasound-workstation",
+        "os_product": "Windows 10 IoT Enterprise",
+        "os_build": "10.0.19044.3803",
+        "deployment_group": "ultrasound"
+      },
+      {
+        "device_id": "SYNTHETIC-W11-24H2-01",
+        "model": "PACS-Validate-24H2",
+        "device_role": "pacs-review-workstation",
+        "os_product": "Windows 11 Version 24H2 for x64-based Systems",
+        "os_build": "10.0.26100.4200",
+        "deployment_group": "pacs-validate"
+      },
+      {
+        "device_id": "SYNTHETIC-WKLIST-01",
+        "model": "Worklist-PC-5",
+        "device_role": "worklist-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "worklist"
+      }
+    ]
+  },
+  "psirt_matrix": {
+    "columns": [
+      "Config1",
+      "Config2",
+      "Config3",
+      "Config4",
+      "Config5",
+      "Config6",
+      "Config7"
+    ],
+    "rows": [
+      {
+        "kb": "KB5082052",
+        "cells": [
+          "NA",
+          "M / \u2014",
+          "NA",
+          "NA",
+          "M / \u2014",
+          "M / \u2014",
+          "NA"
+        ]
+      },
+      {
+        "kb": "KB5099414",
+        "cells": [
+          "C / M",
+          "NA",
+          "C / M",
+          "C / M",
+          "NA",
+          "NA",
+          "C / M"
+        ]
+      },
+      {
+        "kb": "KB5087420",
+        "cells": [
+          "NA",
+          "H / \u2014",
+          "NA",
+          "NA",
+          "H / \u2014",
+          "H / \u2014",
+          "NA"
+        ]
+      },
+      {
+        "kb": "KB5093998",
+        "cells": [
+          "NA",
+          "M / M",
+          "NA",
+          "NA",
+          "M / M",
+          "M / M",
+          "NA"
+        ]
+      },
+      {
+        "kb": "KB5099414",
+        "cells": [
+          "NA",
+          "M / M",
+          "NA",
+          "NA",
+          "M / M",
+          "M / M",
+          "NA"
+        ]
+      },
+      {
+        "kb": "KB5099444",
+        "cells": [
+          "NA",
+          "M / M",
+          "NA",
+          "NA",
+          "M / M",
+          "M / M",
+          "NA"
+        ]
+      },
+      {
+        "kb": "KB5099535",
+        "cells": [
+          "NA",
+          "M / M",
+          "NA",
+          "NA",
+          "M / M",
+          "M / M",
+          "NA"
+        ]
+      },
+      {
+        "kb": "KB5099536",
+        "cells": [
+          "NA",
+          "M / M",
+          "NA",
+          "NA",
+          "M / M",
+          "M / M",
+          "NA"
+        ]
+      },
+      {
+        "kb": "KB5101649",
+        "cells": [
+          "NA",
+          "M / \u2014",
+          "NA",
+          "NA",
+          "NA",
+          "M / \u2014",
+          "NA"
+        ]
+      }
+    ]
+  },
+  "tests": {
+    "outcome": "passed",
+    "failed": 0,
+    "passed": 3,
+    "skipped": 0,
+    "total": 3,
+    "filter": "Smoke|Regression"
+  },
+  "release": {
+    "zip_name": "HostApplication-20261001T180520Z-36903819953-win-x64.zip"
+  },
+  "ai": {
+    "provider": "agent",
+    "model": "composer-2.5"
+  }
+}
