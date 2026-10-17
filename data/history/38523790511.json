@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "run_id": "38523790511",
+  "created_at": "2026-10-14T06:43:41Z",
+  "workflow": "Vendor impact and PDLC",
+  "run_url": "https://github.com/defrances/Orchestrator/actions/runs/38523790511",
+  "findupdates_run_id": "38523657807",
+  "findupdates_url": "https://github.com/defrances/FindUpdates/actions/runs/38523657807",
+  "product": "HostApplication",
+  "branch": "main",
+  "sha": "22b249a754b849dac151e976b533f60994fc6098",
+  "sha_url": "https://github.com/defrances/HostApplication/commit/22b249a754b849dac151e976b533f60994fc6098",
+  "conclusion": "success",
+  "clusters": [],
+  "cluster_count": 0,
+  "no_clusters": true,
+  "findings": [
+    {
+      "id": "VR-TLS-001",
+      "title": "Vendor bulletin HTTPS accepts any server certificate",
+      "countermeasure": "present",
+      "evidence": "Catalog is stale: cited code on main no longer carries the intentional-vuln marker.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-REG-TLS-CALLBACK"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/InsecureVendorBulletinClient.cs"
+      ]
+    },
+    {
+      "id": "VR-NOTES-001",
+      "title": "Notes stored as plaintext in user AppData",
+      "countermeasure": "absent",
+      "evidence": "Cited file still contains `INTENTIONAL_SKILL_TEST_VULNERABILITY`.",
+      "patch_plan": "Address `VR-NOTES-001` in the cited files on Host Application main. Orchestrator does not apply product patches.",
+      "tests_to_run": [
+        "TC-SMOKE-NOTES"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/NoteStore.cs"
+      ]
+    },
+    {
+      "id": "VR-NET-001",
+      "title": "No inbound network listener",
+      "countermeasure": "present",
+      "evidence": "Catalog status `closed` / countermeasure cell scored `present`.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-SMOKE-NOTES",
+        "TC-SMOKE-SYSINFO"
+      ],
+      "impact_files": []
+    }
+  ],
+  "os_kb_advice": [
+    "Host OS KBs stay a station-level recommendation and are not packaged in the application zip.",
+    "An OS .NET KB does not patch the bundled self-contained runtime."
+  ],
+  "bundle": null,
+  "psirt_matrix": {
+    "columns": [],
+    "rows": []
+  },
+  "tests": {
+    "outcome": "passed",
+    "failed": 0,
+    "passed": 3,
+    "skipped": 0,
+    "total": 3,
+    "filter": "Smoke|Regression"
+  },
+  "release": {
+    "zip_name": "HostApplication-20261014T064316Z-38523790511-win-x64.zip"
+  },
+  "ai": {
+    "provider": "offline",
+    "model": ""
+  }
+}
