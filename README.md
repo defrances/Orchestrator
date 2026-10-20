@@ -175,7 +175,7 @@ python scripts/build-pages-site.py --workspace <run-dir> --history <gh-pages-che
 
 | Workflow | Repository | Role |
 | --- | --- | --- |
-| [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Daily live detect, upload report, notify this repo |
+| [Detect updates](https://github.com/defrances/FindUpdates/blob/main/.github/workflows/detect.yml) | FindUpdates | Manual detect, upload report, notify this repo |
 | [Vendor impact and PDLC](.github/workflows/orchestrate.yml) | Orchestrator | One follow-through run, then Pages |
 | [PDLC patch and release](.github/workflows/pdlc.yml) | Orchestrator | Manual product-only package |
 | [CI](https://github.com/defrances/HostApplication/blob/main/.github/workflows/ci.yml) | Host Application | Build, test, SBOM |
