@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "run_id": "38862787562",
+  "created_at": "2026-10-16T06:45:20Z",
+  "workflow": "Vendor impact and PDLC",
+  "run_url": "https://github.com/defrances/Orchestrator/actions/runs/38862787562",
+  "findupdates_run_id": "38862631034",
+  "findupdates_url": "https://github.com/defrances/FindUpdates/actions/runs/38862631034",
+  "product": "HostApplication",
+  "branch": "main",
+  "sha": "22b249a754b849dac151e976b533f60994fc6098",
+  "sha_url": "https://github.com/defrances/HostApplication/commit/22b249a754b849dac151e976b533f60994fc6098",
+  "conclusion": "success",
+  "clusters": [],
+  "cluster_count": 0,
+  "no_clusters": true,
+  "findings": [
+    {
+      "id": "VR-TLS-001",
+      "title": "Vendor bulletin HTTPS accepts any server certificate",
+      "countermeasure": "present",
+      "evidence": "src/HostApplication.Core/InsecureVendorBulletinClient.cs: AcceptAnyServerCertificate returns true only when sslPolicyErrors == SslPolicyErrors.None; Marker TLS_CERTIFICATE_VALIDATED; TC-REG-TLS-CALLBACK rejects invalid chains. inputs/mds2.md MDS2-TLS still documents not met (stale vs main code).",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-UNIT-TLS-MARKER",
+        "TC-REG-TLS-CALLBACK"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/InsecureVendorBulletinClient.cs",
+        "src/HostApplication/MainViewModel.cs"
+      ]
+    },
+    {
+      "id": "VR-NOTES-001",
+      "title": "Notes stored as plaintext in user AppData",
+      "countermeasure": "present",
+      "evidence": "src/HostApplication.Core/NoteStore.cs writes local UTF-8 notes under ApplicationData; inputs/mds2.md MDS2-DATA met (no PHI, no remote storage). Residual risk is host-account access to the file.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-UNIT-NOTES-EMPTY",
+        "TC-UNIT-NOTES-PATH",
+        "TC-SMOKE-NOTES"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/NoteStore.cs"
+      ]
+    },
+    {
+      "id": "VR-NET-001",
+      "title": "No inbound network listener",
+      "countermeasure": "present",
+      "evidence": "No TcpListener/HttpListener/Kestrel or bind usage in workspace/HostApplication; inputs/mds2.md MDS2-NET met; inputs/architecture.md documents outbound-only vendor bulletin GET.",
+      "patch_plan": "none",
+      "tests_to_run": [],
+      "impact_files": []
+    }
+  ],
+  "os_kb_advice": [
+    "Host OS KBs stay a station recommendation and are not in the application zip.",
+    "After application TLS validation, host Schannel KBs remain a station-level recommendation and are not included in the self-contained application publish artifact."
+  ],
+  "bundle": null,
+  "psirt_matrix": {
+    "columns": [],
+    "rows": []
+  },
+  "tests": {
+    "outcome": "passed",
+    "failed": 0,
+    "passed": 3,
+    "skipped": 0,
+    "total": 3,
+    "filter": "Smoke|Regression"
+  },
+  "release": {
+    "zip_name": "HostApplication-20261016T064500Z-38862787562-win-x64.zip"
+  },
+  "ai": {
+    "provider": "agent",
+    "model": "composer-2.5"
+  }
+}
