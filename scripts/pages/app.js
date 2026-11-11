@@ -1807,7 +1807,7 @@
         "</b><small>Orchestrator #" + esc(runId) + '</small></div><select id="run-select">' +
         opts + "</select></div>";
     }
-    return '<header class="topbar"><div class="brand"><div class="alcon">Alcon</div>' +
+    return '<header class="topbar"><div class="brand"><div class="steris">STERIS</div>' +
       '<div class="product">Windows Patch Management</div></div>' +
       '<div class="roleSwitch"><button class="' + (role === "manager" ? "active" : "") +
       '" data-role="manager">Manager View</button><button class="' +

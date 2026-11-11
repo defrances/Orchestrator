@@ -16,7 +16,7 @@ body { margin: 0; }
   gap: 24px;
 }
 .brand { display: flex; align-items: center; gap: 22px; min-width: 320px; }
-.alcon { font-size: 25px; font-weight: 800; }
+.steris { font-size: 25px; font-weight: 800; }
 .product { font-size: 18px; font-weight: 650; }
 .roleSwitch {
   background: #0a478f;
