@@ -1,0 +1,452 @@
+{
+  "schema_version": 1,
+  "run_id": "43073757791",
+  "created_at": "2026-11-11T18:14:41Z",
+  "workflow": "Vendor impact and PDLC",
+  "run_url": "https://github.com/defrances/Orchestrator/actions/runs/43073757791",
+  "findupdates_run_id": "43073670548",
+  "findupdates_url": "https://github.com/defrances/FindUpdates/actions/runs/43073670548",
+  "product": "HostApplication",
+  "branch": "main",
+  "sha": "22b249a754b849dac151e976b533f60994fc6098",
+  "sha_url": "https://github.com/defrances/HostApplication/commit/22b249a754b849dac151e976b533f60994fc6098",
+  "conclusion": "success",
+  "clusters": [
+    {
+      "title": "[Impact] KB5060001 on Config1 - Win32k kernel patch may alter WPF rendering behavior",
+      "device_id": "Config1",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config1 -->\n\n## Impact analysis conducted on source code version\n\n- **Repository**: defrances/HostApplication\n- **Branch**: main\n- **Commit**: 22b249a754b849dac151e976b533f60994fc6098\n\n## Updates\n\n| Package | CVE | Title |\n|---------|-----|-------|\n| [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Windows Kernel Elevation of Privilege Vulnerability |\n\n## Technical Impact Assessment\n\n### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chain\n\n**CI publish** (`.github/workflows/ci.yml`): The app is published with `dotnet publish --self-contained true -r win-x64`, bundling .NET 9 runtime binaries inside the executable. The bundled .NET runtime is **not** patched by host Windows KBs; only host OS code (Win32k) would be updated. This means:\n\n- WPF assemblies in the bundle depend on Win32k kernel APIs for rendering, but the code inside those assemblies does not change when KB5060001 is installed.\n- The **host kernel** change affects how WPF's system calls are handled at runtime.\n\n### Regression test evidence\n\nTest `TC-SMOKE-SYSINFO` (file: `tests/HostApplication.Tests/SystemInformationProviderTests.cs`) verifies that system information is populated at runtime. Test `TC-SMOKE-NOTES` (file: `tests/HostApplication.Tests/NoteStoreTests.cs`) exercises local file I/O. These tests indirectly verify that WPF and OS integration work correctly, but they do not freeze Win32k contracts in code.\n\n## Potential Risks\n\n### Install Risk: `may_break_app`\n\nWindows Kernel EoP patches (particularly those affecting Win32k) can modify the semantics of system calls or change data structure layouts used by rendering APIs. Because HostApplication uses WPF with `PerMonitorV2` DPI awareness, a kernel patch that changes DPI coordinate transformation, window message handling, or rendering context allocation could cause:\n\n- Visual glitches (incorrect scaling on multi-monitor setups)\n- Window layout miscalculation\n- Unexpected rendering artifacts during high-DPI transitions\n\nHowever, Microsoft's typical kernel patches are backward-compatible with existing DPI-aware WPF applications. The risk is elevated only if the specific KB5060001 EoP fix modifies undocumented Win32k rendering internals.\n\n### Skip Risk: `stays_vulnerable`\n\nIf KB5060001 is not installed on Config1, the host Windows kernel remains exposed to the CVE-2026-12345 elevation of privilege vulnerability. HostApplication can still run (the bundled .NET runtime is unaffected), but the underlying OS lacks the security patch. This means:\n\n- Untrusted code executing on the same machine can exploit the kernel vulnerability to gain higher privileges.\n- The application process itself is not directly vulnerable (the bundled runtime is not affected), but the host security posture is weakened.\n\n### Compatibility: `compatible`\n\nCurrent HostApplication code on `main` targets .NET 9 for Windows and relies on standard WPF/Win32k integration patterns that Microsoft maintains across Windows versions. KB5060001 is a security patch expected to be backward-compatible with WPF applications already running on Config1's baseline OS build (10.0.22621.2500). The application should continue to function after the KB is installed, assuming Win32k changes follow Microsoft's compatibility guarantees.\n\n## Required for Application: `not_required`\n\nHostApplication does not directly load or call Win32k APIs. The application's functionality (system information display, notes save/load, vendor bulletin fetch) does not depend on the KB5060001 patch. However, the host OS security posture benefits from installing the patch.\n\n## Cybersecurity Impact Assessment\n\nThe CVE-2026-12345 EoP vulnerability is a **host OS security issue**, not a product code issue. Installing KB5060001 reduces the attack surface for the entire machine, protecting not just HostApplication but all processes running on Config1.\n\n## Product Risk Assessment\n\n**Vendor Severity**: HIGH (CVE-2026-12345 labeled as EoP)\n**Vendor Likelihood**: M (unknown exploitability; not listed in KEV or known public exploits at report time)\n**Vendor Risk**: M (vendor HIGH severity + M likelihood \u2192 M risk)\n\n**Product Severity**: M (WPF rendering may be affected if kernel changes impact DPI/window handling)\n**Product Likelihood**: L (Microsoft's patches typically maintain backward compatibility; incompatibility is uncommon)\n**Product Risk**: L (M severity + L likelihood \u2192 L risk; bundled runtime is unaffected)\n\n## Recommendation\n\n**Install - High Prio**\n\nKB5060001 addresses a critical kernel EoP vulnerability on the host OS. Although HostApplication's bundled .NET runtime is unaffected and the app has low product risk from rendering changes, the security patch should be deployed to all affected configurations to harden the host OS and protect against CVE-2026-12345 exploitation.",
+      "impact": "### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chai\u2026",
+      "config_label": "Config1"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config2 - Win32k kernel patch may alter WPF rendering behavior",
+      "device_id": "Config2",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config2 -->\n\n## Impact analysis conducted on source code version\n\n- **Repository**: defrances/HostApplication\n- **Branch**: main\n- **Commit**: 22b249a754b849dac151e976b533f60994fc6098\n\n## Updates\n\n| Package | CVE | Title | Action |\n|---------|-----|-------|--------|\n| [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Windows Kernel Elevation of Privilege Vulnerability | BLOCK |\n\n## Technical Impact Assessment\n\n### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chain\n\n**CI publish** (`.github/workflows/ci.yml`): The app is published with `dotnet publish --self-contained true -r win-x64`, bundling .NET 9 runtime binaries inside the executable. The bundled .NET runtime is **not** patched by host Windows KBs; only host OS code (Win32k) would be updated. This means:\n\n- WPF assemblies in the bundle depend on Win32k kernel APIs for rendering, but the code inside those assemblies does not change when KB5060001 is installed.\n- The **host kernel** change affects how WPF's system calls are handled at runtime.\n\n### Regression test evidence\n\nTest `TC-SMOKE-SYSINFO` (file: `tests/HostApplication.Tests/SystemInformationProviderTests.cs`) verifies that system information is populated at runtime. Test `TC-SMOKE-NOTES` (file: `tests/HostApplication.Tests/NoteStoreTests.cs`) exercises local file I/O. These tests indirectly verify that WPF and OS integration work correctly, but they do not freeze Win32k contracts in code.\n\n## Potential Risks\n\n### Install Risk: `may_break_app`\n\nWindows Kernel EoP patches (particularly those affecting Win32k) can modify the semantics of system calls or change data structure layouts used by rendering APIs. Because HostApplication uses WPF with `PerMonitorV2` DPI awareness, a kernel patch that changes DPI coordinate transformation, window message handling, or rendering context allocation could cause:\n\n- Visual glitches (incorrect scaling on multi-monitor setups)\n- Window layout miscalculation\n- Unexpected rendering artifacts during high-DPI transitions\n\nHowever, Microsoft's typical kernel patches are backward-compatible with existing DPI-aware WPF applications. The risk is elevated only if the specific KB5060001 EoP fix modifies undocumented Win32k rendering internals.\n\n### Skip Risk: `stays_vulnerable`\n\nIf KB5060001 is not installed on Config2, the host Windows kernel remains exposed to the CVE-2026-12345 elevation of privilege vulnerability. HostApplication can still run (the bundled .NET runtime is unaffected), but the underlying OS lacks the security patch. This means:\n\n- Untrusted code executing on the same machine can exploit the kernel vulnerability to gain higher privileges.\n- The application process itself is not directly vulnerable (the bundled runtime is not affected), but the host security posture is weakened.\n\n### Compatibility: `compatible`\n\nCurrent HostApplication code on `main` targets .NET 9 for Windows and relies on standard WPF/Win32k integration patterns that Microsoft maintains across Windows versions. KB5060001 is a security patch expected to be backward-compatible with WPF applications already running on Config2's baseline OS build (10.0.26100.4200). The application should continue to function after the KB is installed, assuming Win32k changes follow Microsoft's compatibility guarantees.\n\n## Required for Application: `not_required`\n\nHostApplication does not directly load or call Win32k APIs. The application's functionality (system information display, notes save/load, vendor bulletin fetch) does not depend on the KB5060001 patch. However, the host OS security posture benefits from installing the patch.\n\n## Cybersecurity Impact Assessment\n\nThe CVE-2026-12345 EoP vulnerability is a **host OS security issue**, not a product code issue. Installing KB5060001 reduces the attack surface for the entire machine, protecting not just HostApplication but all processes running on Config2.\n\n## Product Risk Assessment\n\n**Vendor Severity**: HIGH (CVE-2026-12345 labeled as EoP)\n**Vendor Likelihood**: M (unknown exploitability; not listed in KEV or known public exploits at report time)\n**Vendor Risk**: M (vendor HIGH severity + M likelihood \u2192 M risk)\n\n**Product Severity**: M (WPF rendering may be affected if kernel changes impact DPI/window handling)\n**Product Likelihood**: L (Microsoft's patches typically maintain backward compatibility; incompatibility is uncommon)\n**Product Risk**: L (M severity + L likelihood \u2192 L risk; bundled runtime is unaffected)\n\n## Recommendation\n\n**Low Prio**\n\nFindUpdates verdict: `do_not_install` / BLOCK. The report indicates this configuration should not receive KB5060001 at this time. This analysis respects that BLOCK verdict. Although the bundled HostApplication runtime is compatible and would continue to function, the FindUpdates policy decision overrides the standard install recommendation. Revisit the install decision when the policy changes.",
+      "impact": "### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chai\u2026",
+      "config_label": "Config2"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config3 - Win32k kernel patch may alter WPF rendering behavior",
+      "device_id": "Config3",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config3 -->\n\n## Impact analysis conducted on source code version\n\n- **Repository**: defrances/HostApplication\n- **Branch**: main\n- **Commit**: 22b249a754b849dac151e976b533f60994fc6098\n\n## Updates\n\n| Package | CVE | Title |\n|---------|-----|-------|\n| [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Windows Kernel Elevation of Privilege Vulnerability |\n\n## Technical Impact Assessment\n\n### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chain\n\n**CI publish** (`.github/workflows/ci.yml`): The app is published with `dotnet publish --self-contained true -r win-x64`, bundling .NET 9 runtime binaries inside the executable. The bundled .NET runtime is **not** patched by host Windows KBs; only host OS code (Win32k) would be updated. This means:\n\n- WPF assemblies in the bundle depend on Win32k kernel APIs for rendering, but the code inside those assemblies does not change when KB5060001 is installed.\n- The **host kernel** change affects how WPF's system calls are handled at runtime.\n\n### Regression test evidence\n\nTest `TC-SMOKE-SYSINFO` (file: `tests/HostApplication.Tests/SystemInformationProviderTests.cs`) verifies that system information is populated at runtime. Test `TC-SMOKE-NOTES` (file: `tests/HostApplication.Tests/NoteStoreTests.cs`) exercises local file I/O. These tests indirectly verify that WPF and OS integration work correctly, but they do not freeze Win32k contracts in code.\n\n## Potential Risks\n\n### Install Risk: `may_break_app`\n\nWindows Kernel EoP patches (particularly those affecting Win32k) can modify the semantics of system calls or change data structure layouts used by rendering APIs. Because HostApplication uses WPF with `PerMonitorV2` DPI awareness, a kernel patch that changes DPI coordinate transformation, window message handling, or rendering context allocation could cause:\n\n- Visual glitches (incorrect scaling on multi-monitor setups)\n- Window layout miscalculation\n- Unexpected rendering artifacts during high-DPI transitions\n\nHowever, Microsoft's typical kernel patches are backward-compatible with existing DPI-aware WPF applications. The risk is elevated only if the specific KB5060001 EoP fix modifies undocumented Win32k rendering internals.\n\n### Skip Risk: `stays_vulnerable`\n\nIf KB5060001 is not installed on Config3, the host Windows kernel remains exposed to the CVE-2026-12345 elevation of privilege vulnerability. HostApplication can still run (the bundled .NET runtime is unaffected), but the underlying OS lacks the security patch. This means:\n\n- Untrusted code executing on the same machine can exploit the kernel vulnerability to gain higher privileges.\n- The application process itself is not directly vulnerable (the bundled runtime is not affected), but the host security posture is weakened.\n\n### Compatibility: `compatible`\n\nCurrent HostApplication code on `main` targets .NET 9 for Windows and relies on standard WPF/Win32k integration patterns that Microsoft maintains across Windows versions. KB5060001 is a security patch expected to be backward-compatible with WPF applications already running on Config3's baseline OS build (10.0.22621.2500). The application should continue to function after the KB is installed, assuming Win32k changes follow Microsoft's compatibility guarantees.\n\n## Required for Application: `not_required`\n\nHostApplication does not directly load or call Win32k APIs. The application's functionality (system information display, notes save/load, vendor bulletin fetch) does not depend on the KB5060001 patch. However, the host OS security posture benefits from installing the patch.\n\n## Cybersecurity Impact Assessment\n\nThe CVE-2026-12345 EoP vulnerability is a **host OS security issue**, not a product code issue. Installing KB5060001 reduces the attack surface for the entire machine, protecting not just HostApplication but all processes running on Config3.\n\n## Product Risk Assessment\n\n**Vendor Severity**: HIGH (CVE-2026-12345 labeled as EoP)\n**Vendor Likelihood**: M (unknown exploitability; not listed in KEV or known public exploits at report time)\n**Vendor Risk**: M (vendor HIGH severity + M likelihood \u2192 M risk)\n\n**Product Severity**: M (WPF rendering may be affected if kernel changes impact DPI/window handling)\n**Product Likelihood**: L (Microsoft's patches typically maintain backward compatibility; incompatibility is uncommon)\n**Product Risk**: L (M severity + L likelihood \u2192 L risk; bundled runtime is unaffected)\n\n## Recommendation\n\n**Install - High Prio**\n\nKB5060001 addresses a critical kernel EoP vulnerability on the host OS. Although HostApplication's bundled .NET runtime is unaffected and the app has low product risk from rendering changes, the security patch should be deployed to all affected configurations to harden the host OS and protect against CVE-2026-12345 exploitation.",
+      "impact": "### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chai\u2026",
+      "config_label": "Config3"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config4 - Win32k kernel patch may alter WPF rendering behavior",
+      "device_id": "Config4",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config4 -->\n\n## Impact analysis conducted on source code version\n\n- **Repository**: defrances/HostApplication\n- **Branch**: main\n- **Commit**: 22b249a754b849dac151e976b533f60994fc6098\n\n## Updates\n\n| Package | CVE | Title |\n|---------|-----|-------|\n| [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Windows Kernel Elevation of Privilege Vulnerability |\n\n## Technical Impact Assessment\n\n### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chain\n\n**CI publish** (`.github/workflows/ci.yml`): The app is published with `dotnet publish --self-contained true -r win-x64`, bundling .NET 9 runtime binaries inside the executable. The bundled .NET runtime is **not** patched by host Windows KBs; only host OS code (Win32k) would be updated. This means:\n\n- WPF assemblies in the bundle depend on Win32k kernel APIs for rendering, but the code inside those assemblies does not change when KB5060001 is installed.\n- The **host kernel** change affects how WPF's system calls are handled at runtime.\n\n### Regression test evidence\n\nTest `TC-SMOKE-SYSINFO` (file: `tests/HostApplication.Tests/SystemInformationProviderTests.cs`) verifies that system information is populated at runtime. Test `TC-SMOKE-NOTES` (file: `tests/HostApplication.Tests/NoteStoreTests.cs`) exercises local file I/O. These tests indirectly verify that WPF and OS integration work correctly, but they do not freeze Win32k contracts in code.\n\n## Potential Risks\n\n### Install Risk: `may_break_app`\n\nWindows Kernel EoP patches (particularly those affecting Win32k) can modify the semantics of system calls or change data structure layouts used by rendering APIs. Because HostApplication uses WPF with `PerMonitorV2` DPI awareness, a kernel patch that changes DPI coordinate transformation, window message handling, or rendering context allocation could cause:\n\n- Visual glitches (incorrect scaling on multi-monitor setups)\n- Window layout miscalculation\n- Unexpected rendering artifacts during high-DPI transitions\n\nHowever, Microsoft's typical kernel patches are backward-compatible with existing DPI-aware WPF applications. The risk is elevated only if the specific KB5060001 EoP fix modifies undocumented Win32k rendering internals.\n\n### Skip Risk: `stays_vulnerable`\n\nIf KB5060001 is not installed on Config4, the host Windows kernel remains exposed to the CVE-2026-12345 elevation of privilege vulnerability. HostApplication can still run (the bundled .NET runtime is unaffected), but the underlying OS lacks the security patch. This means:\n\n- Untrusted code executing on the same machine can exploit the kernel vulnerability to gain higher privileges.\n- The application process itself is not directly vulnerable (the bundled runtime is not affected), but the host security posture is weakened.\n\n### Compatibility: `compatible`\n\nCurrent HostApplication code on `main` targets .NET 9 for Windows and relies on standard WPF/Win32k integration patterns that Microsoft maintains across Windows versions. KB5060001 is a security patch expected to be backward-compatible with WPF applications already running on Config4's baseline OS build (10.0.22621.2500). The application should continue to function after the KB is installed, assuming Win32k changes follow Microsoft's compatibility guarantees.\n\n## Required for Application: `not_required`\n\nHostApplication does not directly load or call Win32k APIs. The application's functionality (system information display, notes save/load, vendor bulletin fetch) does not depend on the KB5060001 patch. However, the host OS security posture benefits from installing the patch.\n\n## Cybersecurity Impact Assessment\n\nThe CVE-2026-12345 EoP vulnerability is a **host OS security issue**, not a product code issue. Installing KB5060001 reduces the attack surface for the entire machine, protecting not just HostApplication but all processes running on Config4.\n\n## Product Risk Assessment\n\n**Vendor Severity**: HIGH (CVE-2026-12345 labeled as EoP)\n**Vendor Likelihood**: M (unknown exploitability; not listed in KEV or known public exploits at report time)\n**Vendor Risk**: M (vendor HIGH severity + M likelihood \u2192 M risk)\n\n**Product Severity**: M (WPF rendering may be affected if kernel changes impact DPI/window handling)\n**Product Likelihood**: L (Microsoft's patches typically maintain backward compatibility; incompatibility is uncommon)\n**Product Risk**: L (M severity + L likelihood \u2192 L risk; bundled runtime is unaffected)\n\n## Recommendation\n\n**Install - High Prio**\n\nKB5060001 addresses a critical kernel EoP vulnerability on the host OS. Although HostApplication's bundled .NET runtime is unaffected and the app has low product risk from rendering changes, the security patch should be deployed to all affected configurations to harden the host OS and protect against CVE-2026-12345 exploitation.",
+      "impact": "### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chai\u2026",
+      "config_label": "Config4"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config5 - Win32k kernel patch may alter WPF rendering behavior",
+      "device_id": "Config5",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config5 -->\n\n## Impact analysis conducted on source code version\n\n- **Repository**: defrances/HostApplication\n- **Branch**: main\n- **Commit**: 22b249a754b849dac151e976b533f60994fc6098\n\n## Updates\n\n| Package | CVE | Title |\n|---------|-----|-------|\n| [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Windows Kernel Elevation of Privilege Vulnerability |\n\n## Technical Impact Assessment\n\n### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chain\n\n**CI publish** (`.github/workflows/ci.yml`): The app is published with `dotnet publish --self-contained true -r win-x64`, bundling .NET 9 runtime binaries inside the executable. The bundled .NET runtime is **not** patched by host Windows KBs; only host OS code (Win32k) would be updated. This means:\n\n- WPF assemblies in the bundle depend on Win32k kernel APIs for rendering, but the code inside those assemblies does not change when KB5060001 is installed.\n- The **host kernel** change affects how WPF's system calls are handled at runtime.\n\n### Regression test evidence\n\nTest `TC-SMOKE-SYSINFO` (file: `tests/HostApplication.Tests/SystemInformationProviderTests.cs`) verifies that system information is populated at runtime. Test `TC-SMOKE-NOTES` (file: `tests/HostApplication.Tests/NoteStoreTests.cs`) exercises local file I/O. These tests indirectly verify that WPF and OS integration work correctly, but they do not freeze Win32k contracts in code.\n\n## Potential Risks\n\n### Install Risk: `may_break_app`\n\nWindows Kernel EoP patches (particularly those affecting Win32k) can modify the semantics of system calls or change data structure layouts used by rendering APIs. Because HostApplication uses WPF with `PerMonitorV2` DPI awareness, a kernel patch that changes DPI coordinate transformation, window message handling, or rendering context allocation could cause:\n\n- Visual glitches (incorrect scaling on multi-monitor setups)\n- Window layout miscalculation\n- Unexpected rendering artifacts during high-DPI transitions\n\nHowever, Microsoft's typical kernel patches are backward-compatible with existing DPI-aware WPF applications. The risk is elevated only if the specific KB5060001 EoP fix modifies undocumented Win32k rendering internals.\n\n### Skip Risk: `stays_vulnerable`\n\nIf KB5060001 is not installed on Config5, the host Windows kernel remains exposed to the CVE-2026-12345 elevation of privilege vulnerability. HostApplication can still run (the bundled .NET runtime is unaffected), but the underlying OS lacks the security patch. This means:\n\n- Untrusted code executing on the same machine can exploit the kernel vulnerability to gain higher privileges.\n- The application process itself is not directly vulnerable (the bundled runtime is not affected), but the host security posture is weakened.\n\n### Compatibility: `compatible`\n\nCurrent HostApplication code on `main` targets .NET 9 for Windows and relies on standard WPF/Win32k integration patterns that Microsoft maintains across Windows versions. KB5060001 is a security patch expected to be backward-compatible with WPF applications already running on Config5's baseline OS build (10.0.19044.3803). The application should continue to function after the KB is installed, assuming Win32k changes follow Microsoft's compatibility guarantees.\n\n## Required for Application: `not_required`\n\nHostApplication does not directly load or call Win32k APIs. The application's functionality (system information display, notes save/load, vendor bulletin fetch) does not depend on the KB5060001 patch. However, the host OS security posture benefits from installing the patch.\n\n## Cybersecurity Impact Assessment\n\nThe CVE-2026-12345 EoP vulnerability is a **host OS security issue**, not a product code issue. Installing KB5060001 reduces the attack surface for the entire machine, protecting not just HostApplication but all processes running on Config5.\n\n## Product Risk Assessment\n\n**Vendor Severity**: HIGH (CVE-2026-12345 labeled as EoP)\n**Vendor Likelihood**: M (unknown exploitability; not listed in KEV or known public exploits at report time)\n**Vendor Risk**: M (vendor HIGH severity + M likelihood \u2192 M risk)\n\n**Product Severity**: M (WPF rendering may be affected if kernel changes impact DPI/window handling)\n**Product Likelihood**: L (Microsoft's patches typically maintain backward compatibility; incompatibility is uncommon)\n**Product Risk**: L (M severity + L likelihood \u2192 L risk; bundled runtime is unaffected)\n\n## Recommendation\n\n**Install - High Prio**\n\nKB5060001 addresses a critical kernel EoP vulnerability on the host OS. Although HostApplication's bundled .NET runtime is unaffected and the app has low product risk from rendering changes, the security patch should be deployed to all affected configurations to harden the host OS and protect against CVE-2026-12345 exploitation.",
+      "impact": "### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chai\u2026",
+      "config_label": "Config5"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config6 - Win32k kernel patch may alter WPF rendering behavior",
+      "device_id": "Config6",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config6 -->\n\n## Impact analysis conducted on source code version\n\n- **Repository**: defrances/HostApplication\n- **Branch**: main\n- **Commit**: 22b249a754b849dac151e976b533f60994fc6098\n\n## Updates\n\n| Package | CVE | Title | Action |\n|---------|-----|-------|--------|\n| [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Windows Kernel Elevation of Privilege Vulnerability | BLOCK |\n\n## Technical Impact Assessment\n\n### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chain\n\n**CI publish** (`.github/workflows/ci.yml`): The app is published with `dotnet publish --self-contained true -r win-x64`, bundling .NET 9 runtime binaries inside the executable. The bundled .NET runtime is **not** patched by host Windows KBs; only host OS code (Win32k) would be updated. This means:\n\n- WPF assemblies in the bundle depend on Win32k kernel APIs for rendering, but the code inside those assemblies does not change when KB5060001 is installed.\n- The **host kernel** change affects how WPF's system calls are handled at runtime.\n\n### Regression test evidence\n\nTest `TC-SMOKE-SYSINFO` (file: `tests/HostApplication.Tests/SystemInformationProviderTests.cs`) verifies that system information is populated at runtime. Test `TC-SMOKE-NOTES` (file: `tests/HostApplication.Tests/NoteStoreTests.cs`) exercises local file I/O. These tests indirectly verify that WPF and OS integration work correctly, but they do not freeze Win32k contracts in code.\n\n## Potential Risks\n\n### Install Risk: `may_break_app`\n\nWindows Kernel EoP patches (particularly those affecting Win32k) can modify the semantics of system calls or change data structure layouts used by rendering APIs. Because HostApplication uses WPF with `PerMonitorV2` DPI awareness, a kernel patch that changes DPI coordinate transformation, window message handling, or rendering context allocation could cause:\n\n- Visual glitches (incorrect scaling on multi-monitor setups)\n- Window layout miscalculation\n- Unexpected rendering artifacts during high-DPI transitions\n\nHowever, Microsoft's typical kernel patches are backward-compatible with existing DPI-aware WPF applications. The risk is elevated only if the specific KB5060001 EoP fix modifies undocumented Win32k rendering internals.\n\n### Skip Risk: `stays_vulnerable`\n\nIf KB5060001 is not installed on Config6, the host Windows kernel remains exposed to the CVE-2026-12345 elevation of privilege vulnerability. HostApplication can still run (the bundled .NET runtime is unaffected), but the underlying OS lacks the security patch. This means:\n\n- Untrusted code executing on the same machine can exploit the kernel vulnerability to gain higher privileges.\n- The application process itself is not directly vulnerable (the bundled runtime is not affected), but the host security posture is weakened.\n\n### Compatibility: `compatible`\n\nCurrent HostApplication code on `main` targets .NET 9 for Windows and relies on standard WPF/Win32k integration patterns that Microsoft maintains across Windows versions. KB5060001 is a security patch expected to be backward-compatible with WPF applications already running on Config6's baseline OS build (10.0.26100.4200). The application should continue to function after the KB is installed, assuming Win32k changes follow Microsoft's compatibility guarantees.\n\n## Required for Application: `not_required`\n\nHostApplication does not directly load or call Win32k APIs. The application's functionality (system information display, notes save/load, vendor bulletin fetch) does not depend on the KB5060001 patch. However, the host OS security posture benefits from installing the patch.\n\n## Cybersecurity Impact Assessment\n\nThe CVE-2026-12345 EoP vulnerability is a **host OS security issue**, not a product code issue. Installing KB5060001 reduces the attack surface for the entire machine, protecting not just HostApplication but all processes running on Config6.\n\n## Product Risk Assessment\n\n**Vendor Severity**: HIGH (CVE-2026-12345 labeled as EoP)\n**Vendor Likelihood**: M (unknown exploitability; not listed in KEV or known public exploits at report time)\n**Vendor Risk**: M (vendor HIGH severity + M likelihood \u2192 M risk)\n\n**Product Severity**: M (WPF rendering may be affected if kernel changes impact DPI/window handling)\n**Product Likelihood**: L (Microsoft's patches typically maintain backward compatibility; incompatibility is uncommon)\n**Product Risk**: L (M severity + L likelihood \u2192 L risk; bundled runtime is unaffected)\n\n## Recommendation\n\n**Low Prio**\n\nFindUpdates verdict: `do_not_install` / BLOCK. The report indicates this configuration should not receive KB5060001 at this time. This analysis respects that BLOCK verdict. Although the bundled HostApplication runtime is compatible and would continue to function, the FindUpdates policy decision overrides the standard install recommendation. Revisit the install decision when the policy changes.",
+      "impact": "### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chai\u2026",
+      "config_label": "Config6"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config7 - Win32k kernel patch may alter WPF rendering behavior",
+      "device_id": "Config7",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "compatible",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "L",
+      "product_risk": "L",
+      "body": "<!-- impact:win32k-wpf:Config7 -->\n\n## Impact analysis conducted on source code version\n\n- **Repository**: defrances/HostApplication\n- **Branch**: main\n- **Commit**: 22b249a754b849dac151e976b533f60994fc6098\n\n## Updates\n\n| Package | CVE | Title |\n|---------|-----|-------|\n| [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Windows Kernel Elevation of Privilege Vulnerability |\n\n## Technical Impact Assessment\n\n### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chain\n\n**CI publish** (`.github/workflows/ci.yml`): The app is published with `dotnet publish --self-contained true -r win-x64`, bundling .NET 9 runtime binaries inside the executable. The bundled .NET runtime is **not** patched by host Windows KBs; only host OS code (Win32k) would be updated. This means:\n\n- WPF assemblies in the bundle depend on Win32k kernel APIs for rendering, but the code inside those assemblies does not change when KB5060001 is installed.\n- The **host kernel** change affects how WPF's system calls are handled at runtime.\n\n### Regression test evidence\n\nTest `TC-SMOKE-SYSINFO` (file: `tests/HostApplication.Tests/SystemInformationProviderTests.cs`) verifies that system information is populated at runtime. Test `TC-SMOKE-NOTES` (file: `tests/HostApplication.Tests/NoteStoreTests.cs`) exercises local file I/O. These tests indirectly verify that WPF and OS integration work correctly, but they do not freeze Win32k contracts in code.\n\n## Potential Risks\n\n### Install Risk: `may_break_app`\n\nWindows Kernel EoP patches (particularly those affecting Win32k) can modify the semantics of system calls or change data structure layouts used by rendering APIs. Because HostApplication uses WPF with `PerMonitorV2` DPI awareness, a kernel patch that changes DPI coordinate transformation, window message handling, or rendering context allocation could cause:\n\n- Visual glitches (incorrect scaling on multi-monitor setups)\n- Window layout miscalculation\n- Unexpected rendering artifacts during high-DPI transitions\n\nHowever, Microsoft's typical kernel patches are backward-compatible with existing DPI-aware WPF applications. The risk is elevated only if the specific KB5060001 EoP fix modifies undocumented Win32k rendering internals.\n\n### Skip Risk: `stays_vulnerable`\n\nIf KB5060001 is not installed on Config7, the host Windows kernel remains exposed to the CVE-2026-12345 elevation of privilege vulnerability. HostApplication can still run (the bundled .NET runtime is unaffected), but the underlying OS lacks the security patch. This means:\n\n- Untrusted code executing on the same machine can exploit the kernel vulnerability to gain higher privileges.\n- The application process itself is not directly vulnerable (the bundled runtime is not affected), but the host security posture is weakened.\n\n### Compatibility: `compatible`\n\nCurrent HostApplication code on `main` targets .NET 9 for Windows and relies on standard WPF/Win32k integration patterns that Microsoft maintains across Windows versions. KB5060001 is a security patch expected to be backward-compatible with WPF applications already running on Config7's baseline OS build (10.0.22621.2500). The application should continue to function after the KB is installed, assuming Win32k changes follow Microsoft's compatibility guarantees.\n\n## Required for Application: `not_required`\n\nHostApplication does not directly load or call Win32k APIs. The application's functionality (system information display, notes save/load, vendor bulletin fetch) does not depend on the KB5060001 patch. However, the host OS security posture benefits from installing the patch.\n\n## Cybersecurity Impact Assessment\n\nThe CVE-2026-12345 EoP vulnerability is a **host OS security issue**, not a product code issue. Installing KB5060001 reduces the attack surface for the entire machine, protecting not just HostApplication but all processes running on Config7.\n\n## Product Risk Assessment\n\n**Vendor Severity**: HIGH (CVE-2026-12345 labeled as EoP)\n**Vendor Likelihood**: M (unknown exploitability; not listed in KEV or known public exploits at report time)\n**Vendor Risk**: M (vendor HIGH severity + M likelihood \u2192 M risk)\n\n**Product Severity**: M (WPF rendering may be affected if kernel changes impact DPI/window handling)\n**Product Likelihood**: L (Microsoft's patches typically maintain backward compatibility; incompatibility is uncommon)\n**Product Risk**: L (M severity + L likelihood \u2192 L risk; bundled runtime is unaffected)\n\n## Recommendation\n\n**Install - High Prio**\n\nKB5060001 addresses a critical kernel EoP vulnerability on the host OS. Although HostApplication's bundled .NET runtime is unaffected and the app has low product risk from rendering changes, the security patch should be deployed to all affected configurations to harden the host OS and protect against CVE-2026-12345 exploitation.",
+      "impact": "### Codebase Coupling\n\nHostApplication is a Windows Presentation Foundation (WPF) client targeting `net9.0-windows` with `UseWPF=true` (file: `src/HostApplication/HostApplication.csproj`). The application declares WPF DPI awareness through `app.manifest` with `dpiAware=true/pm` and `PerMonitorV2` settings, which require coordination between the WPF runtime and Windows kernel system calls in the Win32k subsystem.\n\n**Cited evidence:**\n- `src/HostApplication/HostApplication.csproj`: `<UseWPF>true</UseWPF>`, `<TargetFramework>net9.0-windows</TargetFramework>`\n- `src/HostApplication/app.manifest`: `<dpiAwareness>PerMonitorV2</dpiAwareness>`\n- `src/HostApplication/MainWindow.xaml`: Window layout with height/width/minimum constraints and DockPanel + Grid containers that depend on DPI scaling\n\nThe application does not make direct Win32k API calls. However, WPF's rendering pipeline internally calls Win32k functions for rendering context, window messages, and display coordinate transformation. Kernel patches that modify Win32k structure layouts, system call semantics, or DPI scaling coordination paths may alter the behavior of WPF rendering on affected versions of Windows.\n\n### Artifact chai\u2026",
+      "config_label": "Config7"
+    }
+  ],
+  "cluster_count": 7,
+  "no_clusters": false,
+  "findings": [
+    {
+      "id": "VR-TLS-001",
+      "title": "Vendor bulletin HTTPS accepts any server certificate",
+      "countermeasure": "absent",
+      "evidence": "InsecureVendorBulletinClient.cs defines AcceptAnyServerCertificate returning true for SslPolicyErrors.None, but the method name and implementation do not enforce strict certificate validation. MDS2-TLS row status is 'not met'. The regression test TC-REG-TLS-CALLBACK expects rejection of invalid chains, confirming the vulnerability is known but unpatched on main.",
+      "patch_plan": "Stop trusting every certificate. Modify AcceptAnyServerCertificate to enforce SslPolicyErrors.None strictly and reject any deviation. Verify the handler implementation does not bypass certificate validation. Update TC-REG-TLS-CALLBACK regression test to verify rejection of invalid certificate chains after the patch is applied. Update MDS2-TLS status to 'met' once the patch validates certificate chains.",
+      "tests_to_run": [
+        "TC-SMOKE-NOTES",
+        "TC-SMOKE-SYSINFO",
+        "TC-REG-TLS-CALLBACK"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/InsecureVendorBulletinClient.cs",
+        "src/HostApplication/MainViewModel.cs"
+      ]
+    },
+    {
+      "id": "VR-NOTES-001",
+      "title": "Notes stored as plaintext in user AppData",
+      "countermeasure": "present",
+      "evidence": "NoteStore.cs stores notes as UTF-8 plaintext in %AppData%\\HostApplication\\notes.txt. MDS2-DATA row status is 'met'. No PHI by design. Local-only file with no network export. Residual risk is host-account access, which is accepted for this PoC client.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-SMOKE-NOTES",
+        "TC-UNIT-NOTES-EMPTY",
+        "TC-UNIT-NOTES-PATH"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/NoteStore.cs"
+      ]
+    },
+    {
+      "id": "VR-NET-001",
+      "title": "No inbound network listener",
+      "countermeasure": "present",
+      "evidence": "HostApplication.exe is a WPF client that only initiates outbound HTTPS GET to the vendor bulletin endpoint. No inbound listeners are defined. MDS2-NET row status is 'met'.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-SMOKE-SYSINFO"
+      ],
+      "impact_files": []
+    }
+  ],
+  "os_kb_advice": [
+    "Host OS KBs (including .NET Framework and Windows TLS stack patches) remain a station-level recommendation and are not packaged with the application zip. Schannel (host TLS stack), Win32k (windows/DPI), DWM (composition), and NTFS (notes file) are provided by the host OS, not bundled in the self-contained win-x64 exe."
+  ],
+  "bundle": {
+    "bundle_id": "windows-patch-bundle-fixtures-20261111T181408Z",
+    "generated": "2026-11-11T18:14:08Z",
+    "findupdates_run_id": "43073670548",
+    "findupdates_html_url": "",
+    "counts": {
+      "report_rows": 9,
+      "packages": 3,
+      "deploy": 1,
+      "do_not_install": 2,
+      "stations": 7
+    },
+    "packages": [
+      {
+        "kb": "KB5060001",
+        "title": "Windows Kernel Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345",
+        "stations": [
+          "SYNTHETIC-CT-IMG-01",
+          "SYNTHETIC-MR-IMG-01",
+          "SYNTHETIC-PACS-01",
+          "SYNTHETIC-WKLIST-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-12345"
+        ],
+        "known_exploited": "unknown",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_5582b122814f9dee7938",
+        "os_products": [
+          "Windows 11 IoT Enterprise"
+        ],
+        "deployment_groups": [
+          "imaging-ct",
+          "imaging-mr",
+          "pacs-review",
+          "worklist"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5060001",
+        "title": "Windows Kernel Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "do_not_install",
+        "include_in_deploy": false,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345",
+        "stations": [
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-12345"
+        ],
+        "known_exploited": "unknown",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_5582b122814f9dee7938",
+        "os_products": [
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "mcu-0x00000012",
+        "title": "Intel Processor Microcode Update Advisory",
+        "vendor": "intel",
+        "action": "not_in_scope",
+        "include_in_deploy": false,
+        "severity": "MEDIUM",
+        "official_url": "https://www.intel.com/content/www/us/en/security-center/advisory/intel-sa-01234.html",
+        "stations": [
+          "SYNTHETIC-CT-IMG-01",
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-22222"
+        ],
+        "known_exploited": "unknown",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_96c75c0782da38ee3681",
+        "os_products": [
+          "Windows 11 IoT Enterprise",
+          "Windows 10 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "imaging-ct",
+          "ultrasound",
+          "pacs-validate"
+        ],
+        "vendor_severity": "M",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      }
+    ],
+    "stations": [
+      {
+        "device_id": "SYNTHETIC-CT-IMG-01",
+        "model": "CTConsole-A300",
+        "device_role": "ct-imaging-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "imaging-ct"
+      },
+      {
+        "device_id": "SYNTHETIC-LAB-24H2-01",
+        "model": "LabBench-L110",
+        "device_role": "lab-analysis-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.26100.4200",
+        "deployment_group": "lab-ring-0"
+      },
+      {
+        "device_id": "SYNTHETIC-MR-IMG-01",
+        "model": "MRConsole-R200",
+        "device_role": "mr-imaging-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "imaging-mr"
+      },
+      {
+        "device_id": "SYNTHETIC-PACS-01",
+        "model": "PACS-Review-21",
+        "device_role": "pacs-review-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "pacs-review"
+      },
+      {
+        "device_id": "SYNTHETIC-US-01",
+        "model": "UltrasoundCart-U90",
+        "device_role": "ultrasound-workstation",
+        "os_product": "Windows 10 IoT Enterprise",
+        "os_build": "10.0.19044.3803",
+        "deployment_group": "ultrasound"
+      },
+      {
+        "device_id": "SYNTHETIC-W11-24H2-01",
+        "model": "PACS-Validate-24H2",
+        "device_role": "pacs-review-workstation",
+        "os_product": "Windows 11 Version 24H2 for x64-based Systems",
+        "os_build": "10.0.26100.4200",
+        "deployment_group": "pacs-validate"
+      },
+      {
+        "device_id": "SYNTHETIC-WKLIST-01",
+        "model": "Worklist-PC-5",
+        "device_role": "worklist-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "worklist"
+      }
+    ]
+  },
+  "psirt_matrix": {
+    "columns": [
+      "Config1",
+      "Config2",
+      "Config3",
+      "Config4",
+      "Config5",
+      "Config6",
+      "Config7"
+    ],
+    "rows": [
+      {
+        "kb": "KB5060001",
+        "cells": [
+          "M / M",
+          "NA",
+          "M / M",
+          "M / M",
+          "NA",
+          "NA",
+          "M / M"
+        ]
+      },
+      {
+        "kb": "KB5060001",
+        "cells": [
+          "NA",
+          "M / M",
+          "NA",
+          "NA",
+          "NA",
+          "M / M",
+          "NA"
+        ]
+      },
+      {
+        "kb": "mcu-0x00000012",
+        "cells": [
+          "M / \u2014",
+          "NA",
+          "NA",
+          "NA",
+          "M / \u2014",
+          "M / \u2014",
+          "NA"
+        ]
+      }
+    ]
+  },
+  "tests": {
+    "outcome": "passed",
+    "failed": 0,
+    "passed": 3,
+    "skipped": 0,
+    "total": 3,
+    "filter": "Smoke|Regression"
+  },
+  "release": {
+    "zip_name": "HostApplication-20261111T181408Z-43073757791-win-x64.zip"
+  },
+  "ai": {
+    "provider": "copilot",
+    "model": "claude-haiku-4.5"
+  }
+}

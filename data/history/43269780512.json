@@ -1,0 +1,427 @@
+{
+  "schema_version": 1,
+  "run_id": "43269780512",
+  "created_at": "2026-11-12T17:31:07Z",
+  "workflow": "Vendor impact and PDLC",
+  "run_url": "https://github.com/defrances/Orchestrator/actions/runs/43269780512",
+  "findupdates_run_id": "43269723349",
+  "findupdates_url": "https://github.com/defrances/FindUpdates/actions/runs/43269723349",
+  "product": "HostApplication",
+  "branch": "main",
+  "sha": "22b249a754b849dac151e976b533f60994fc6098",
+  "sha_url": "https://github.com/defrances/HostApplication/commit/22b249a754b849dac151e976b533f60994fc6098",
+  "conclusion": "success",
+  "clusters": [
+    {
+      "title": "[Impact] KB5060001 on Config1 - Win32k may change WPF windowing or DPI",
+      "device_id": "Config1",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "unknown",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "M",
+      "product_risk": "M",
+      "body": "<!-- impact:win32k-wpf:Config1 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Kernel Elevation of Privilege Vulnerability | [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: Config1\n- Model / role: CTConsole-A300 / ct-imaging-workstation\n- Deployment group: imaging-ct\n- OS: Windows 11 IoT Enterprise build 10.0.22621.2500\n- Clinical criticality: high\n- Network exposure: restricted_lan\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | H | M | M |\n| Product | M | M | M |\n\nLetters are C / H / M / L. Vendor comes from FindUpdates severity, KEV, and exploitability. Product is allowed to be lower when the patched component is not loaded.\n\n## Technical Impact Assessment\n\n### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; windowing/DPI after the KB is not covered by a UI test.\n\n### Conclusions\n\nWin32k may change WPF windowing or DPI. Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.\n\n## Cybersecurity impact assessment\n\nThis patch fixes CVE-2026-12345 in KB5060001. SBOM scan and source code scan revealed that the WPF UI module has such host windowing dependency.\n\n## Product Risk assessment\n\n- Affected product functions: WPF windowing, DPI, and composition.\n- Potential hazards: operator cannot read the UI if windowing or DPI breaks after the host KB.\n- Failure scenarios: install \u2014 layout or DPI may break; skip \u2014 host windowing stays exposed.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No Unit, Smoke, or Regression case in `docs/test-plan.md` for this host path.\n- No UI automation.\n\n## Recommendation\n\nInstall - High Prio: lab-check the published win-x64 build for Config1 against this `win32k-wpf` coupling. Do not instruct production install from this analysis.\n",
+      "impact": "### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; w\u2026",
+      "config_label": "Config1"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config2 - Win32k may change WPF windowing or DPI",
+      "device_id": "Config2",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "unknown",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "M",
+      "product_risk": "M",
+      "body": "<!-- impact:win32k-wpf:Config2 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Kernel Elevation of Privilege Vulnerability | [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Low Prio |\n\n## Product Configuration Specification\n\n- Product configuration: Config2\n- Model / role: LabBench-L110 / lab-analysis-workstation\n- Deployment group: lab-ring-0\n- OS: Windows 11 IoT Enterprise build 10.0.26100.4200\n- Clinical criticality: high\n- Network exposure: restricted_lan\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | H | M | M |\n| Product | M | M | M |\n\nLetters are C / H / M / L. Vendor comes from FindUpdates severity, KEV, and exploitability. Product is allowed to be lower when the patched component is not loaded.\n\n## Technical Impact Assessment\n\n### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; windowing/DPI after the KB is not covered by a UI test.\n\n### Conclusions\n\nWin32k may change WPF windowing or DPI. Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.\n\n## Cybersecurity impact assessment\n\nThis patch fixes CVE-2026-12345 in KB5060001. SBOM scan and source code scan revealed that the WPF UI module has such host windowing dependency.\n\n## Product Risk assessment\n\n- Affected product functions: WPF windowing, DPI, and composition.\n- Potential hazards: operator cannot read the UI if windowing or DPI breaks after the host KB.\n- Failure scenarios: install \u2014 layout or DPI may break; skip \u2014 host windowing stays exposed.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No Unit, Smoke, or Regression case in `docs/test-plan.md` for this host path.\n- No UI automation.\n\n## Recommendation\n\nLow Prio: do not treat this host KB as a product patch for Config2 (`win32k-wpf`). Keep it off the product install set.\n",
+      "impact": "### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; w\u2026",
+      "config_label": "Config2"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config3 - Win32k may change WPF windowing or DPI",
+      "device_id": "Config3",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "unknown",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "M",
+      "product_risk": "M",
+      "body": "<!-- impact:win32k-wpf:Config3 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Kernel Elevation of Privilege Vulnerability | [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: Config3\n- Model / role: MRConsole-R200 / mr-imaging-workstation\n- Deployment group: imaging-mr\n- OS: Windows 11 IoT Enterprise build 10.0.22621.2500\n- Clinical criticality: critical\n- Network exposure: restricted_lan\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | H | M | M |\n| Product | M | M | M |\n\nLetters are C / H / M / L. Vendor comes from FindUpdates severity, KEV, and exploitability. Product is allowed to be lower when the patched component is not loaded.\n\n## Technical Impact Assessment\n\n### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; windowing/DPI after the KB is not covered by a UI test.\n\n### Conclusions\n\nWin32k may change WPF windowing or DPI. Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.\n\n## Cybersecurity impact assessment\n\nThis patch fixes CVE-2026-12345 in KB5060001. SBOM scan and source code scan revealed that the WPF UI module has such host windowing dependency.\n\n## Product Risk assessment\n\n- Affected product functions: WPF windowing, DPI, and composition.\n- Potential hazards: operator cannot read the UI if windowing or DPI breaks after the host KB.\n- Failure scenarios: install \u2014 layout or DPI may break; skip \u2014 host windowing stays exposed.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No Unit, Smoke, or Regression case in `docs/test-plan.md` for this host path.\n- No UI automation.\n\n## Recommendation\n\nInstall - High Prio: lab-check the published win-x64 build for Config3 against this `win32k-wpf` coupling. Do not instruct production install from this analysis.\n",
+      "impact": "### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; w\u2026",
+      "config_label": "Config3"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config4 - Win32k may change WPF windowing or DPI",
+      "device_id": "Config4",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "unknown",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "M",
+      "product_risk": "M",
+      "body": "<!-- impact:win32k-wpf:Config4 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Kernel Elevation of Privilege Vulnerability | [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: Config4\n- Model / role: PACS-Review-21 / pacs-review-workstation\n- Deployment group: pacs-review\n- OS: Windows 11 IoT Enterprise build 10.0.22621.2500\n- Clinical criticality: medium\n- Network exposure: isolated\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | H | M | M |\n| Product | M | M | M |\n\nLetters are C / H / M / L. Vendor comes from FindUpdates severity, KEV, and exploitability. Product is allowed to be lower when the patched component is not loaded.\n\n## Technical Impact Assessment\n\n### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; windowing/DPI after the KB is not covered by a UI test.\n\n### Conclusions\n\nWin32k may change WPF windowing or DPI. Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.\n\n## Cybersecurity impact assessment\n\nThis patch fixes CVE-2026-12345 in KB5060001. SBOM scan and source code scan revealed that the WPF UI module has such host windowing dependency.\n\n## Product Risk assessment\n\n- Affected product functions: WPF windowing, DPI, and composition.\n- Potential hazards: operator cannot read the UI if windowing or DPI breaks after the host KB.\n- Failure scenarios: install \u2014 layout or DPI may break; skip \u2014 host windowing stays exposed.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No Unit, Smoke, or Regression case in `docs/test-plan.md` for this host path.\n- No UI automation.\n\n## Recommendation\n\nInstall - High Prio: lab-check the published win-x64 build for Config4 against this `win32k-wpf` coupling. Do not instruct production install from this analysis.\n",
+      "impact": "### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; w\u2026",
+      "config_label": "Config4"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config6 - Win32k may change WPF windowing or DPI",
+      "device_id": "Config6",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "unknown",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "M",
+      "product_risk": "M",
+      "body": "<!-- impact:win32k-wpf:Config6 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Kernel Elevation of Privilege Vulnerability | [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Low Prio |\n\n## Product Configuration Specification\n\n- Product configuration: Config6\n- Model / role: PACS-Validate-24H2 / pacs-review-workstation\n- Deployment group: pacs-validate\n- OS: Windows 11 Version 24H2 for x64-based Systems build 10.0.26100.4200\n- Clinical criticality: medium\n- Network exposure: restricted_lan\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | H | M | M |\n| Product | M | M | M |\n\nLetters are C / H / M / L. Vendor comes from FindUpdates severity, KEV, and exploitability. Product is allowed to be lower when the patched component is not loaded.\n\n## Technical Impact Assessment\n\n### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; windowing/DPI after the KB is not covered by a UI test.\n\n### Conclusions\n\nWin32k may change WPF windowing or DPI. Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.\n\n## Cybersecurity impact assessment\n\nThis patch fixes CVE-2026-12345 in KB5060001. SBOM scan and source code scan revealed that the WPF UI module has such host windowing dependency.\n\n## Product Risk assessment\n\n- Affected product functions: WPF windowing, DPI, and composition.\n- Potential hazards: operator cannot read the UI if windowing or DPI breaks after the host KB.\n- Failure scenarios: install \u2014 layout or DPI may break; skip \u2014 host windowing stays exposed.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No Unit, Smoke, or Regression case in `docs/test-plan.md` for this host path.\n- No UI automation.\n\n## Recommendation\n\nLow Prio: do not treat this host KB as a product patch for Config6 (`win32k-wpf`). Keep it off the product install set.\n",
+      "impact": "### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; w\u2026",
+      "config_label": "Config6"
+    },
+    {
+      "title": "[Impact] KB5060001 on Config7 - Win32k may change WPF windowing or DPI",
+      "device_id": "Config7",
+      "cluster_key": "win32k-wpf",
+      "advisory_id": "win32k-wpf",
+      "required_for_app": "not_required",
+      "install_risk": "may_break_app",
+      "skip_risk": "stays_vulnerable",
+      "compatibility": "unknown",
+      "packages": [
+        "KB5060001"
+      ],
+      "vendor_severity": "H",
+      "vendor_likelihood": "M",
+      "vendor_risk": "M",
+      "product_severity": "M",
+      "product_likelihood": "M",
+      "product_risk": "M",
+      "body": "<!-- impact:win32k-wpf:Config7 -->\n\nImpact analysis conducted on source code version:\n\n- https://github.com/defrances/HostApplication - commit `22b249a754b849dac151e976b533f60994fc6098`\n\n## Updates applicable for this product configuration\n\n| Title | Package | CVEs | Recommendation |\n| --- | --- | --- | --- |\n| Windows Kernel Elevation of Privilege Vulnerability | [KB5060001](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345) | CVE-2026-12345 | Install - High Prio |\n\n## Product Configuration Specification\n\n- Product configuration: Config7\n- Model / role: Worklist-PC-5 / worklist-workstation\n- Deployment group: worklist\n- OS: Windows 11 IoT Enterprise build 10.0.22621.2500\n- Clinical criticality: low\n- Network exposure: enterprise_lan\n\n## Vendor vs product scores\n\n| | Severity | Likelihood | Risk |\n| --- | --- | --- | --- |\n| Vendor | H | M | M |\n| Product | M | M | M |\n\nLetters are C / H / M / L. Vendor comes from FindUpdates severity, KEV, and exploitability. Product is allowed to be lower when the patched component is not loaded.\n\n## Technical Impact Assessment\n\n### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; windowing/DPI after the KB is not covered by a UI test.\n\n### Conclusions\n\nWin32k may change WPF windowing or DPI. Current `main` has no third-party PackageReference. CI publishes a self-contained win-x64 exe, so an OS .NET KB does not patch the bundled runtime.\n\n## Cybersecurity impact assessment\n\nThis patch fixes CVE-2026-12345 in KB5060001. SBOM scan and source code scan revealed that the WPF UI module has such host windowing dependency.\n\n## Product Risk assessment\n\n- Affected product functions: WPF windowing, DPI, and composition.\n- Potential hazards: operator cannot read the UI if windowing or DPI breaks after the host KB.\n- Failure scenarios: install \u2014 layout or DPI may break; skip \u2014 host windowing stays exposed.\n\n## Test Planning\n\n### Recommended Regression Suite\n\n- None. No documented test covers this coupling.\n\n### Gap Analysis\n\n- No Unit, Smoke, or Regression case in `docs/test-plan.md` for this host path.\n- No UI automation.\n\n## Recommendation\n\nInstall - High Prio: lab-check the published win-x64 build for Config7 against this `win32k-wpf` coupling. Do not instruct production install from this analysis.\n",
+      "impact": "### Impacted Components\n\n- `src/HostApplication/HostApplication.csproj` \u2014 `UseWPF`, WinExe, `net9.0-windows`.\n- `.github/workflows/ci.yml` \u2014 `dotnet publish` `--self-contained true` `-r win-x64`.\n- `src/HostApplication.Core/NoteStore.cs` \u2014 `%AppData%\\HostApplication\\notes.txt`.\n- `src/HostApplication.Core/SystemInformation.cs` \u2014 `RuntimeInformation` host strings.\n- `src/HostApplication/app.manifest` \u2014 Windows 10 compatibility and `PerMonitorV2`.\n- `src/HostApplication.Core/InsecureVendorBulletinClient.cs` \u2014 HTTPS via host Schannel.\n- SBOM present at `workspace/sbom/HostApplication.sbom.spdx.json`.\n\n### Potential Risks\n\n- **Required for the app to keep working: Not required.** The exe still starts without this KB. WPF is bundled by self-contained publish; this is a host windowing KB, not a product `PackageReference`.\n- **If we install: App may break.** A host Win32k/DWM KB can change DPI or composition used by `MainWindow.xaml` and `app.manifest` (`PerMonitorV2`).\n- **If we skip: Station stays exposed.** Leaving the KB off leaves that host windowing stack unpatched. The WPF UI can still launch.\n- **Compatibility: Unknown.** We did not prove an API/ABI break against current `main`; w\u2026",
+      "config_label": "Config7"
+    }
+  ],
+  "cluster_count": 6,
+  "no_clusters": false,
+  "findings": [
+    {
+      "id": "VR-TLS-001",
+      "title": "Vendor bulletin HTTPS accepts any server certificate",
+      "countermeasure": "present",
+      "evidence": "Catalog is stale: cited code on main no longer carries the intentional-vuln marker.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-REG-TLS-CALLBACK"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/InsecureVendorBulletinClient.cs"
+      ]
+    },
+    {
+      "id": "VR-NOTES-001",
+      "title": "Notes stored as plaintext in user AppData",
+      "countermeasure": "absent",
+      "evidence": "Cited file still contains `INTENTIONAL_SKILL_TEST_VULNERABILITY`.",
+      "patch_plan": "Address `VR-NOTES-001` in the cited files on Host Application main. Orchestrator does not apply product patches.",
+      "tests_to_run": [
+        "TC-SMOKE-NOTES"
+      ],
+      "impact_files": [
+        "src/HostApplication.Core/NoteStore.cs"
+      ]
+    },
+    {
+      "id": "VR-NET-001",
+      "title": "No inbound network listener",
+      "countermeasure": "present",
+      "evidence": "Catalog status `closed` / countermeasure cell scored `present`.",
+      "patch_plan": "none",
+      "tests_to_run": [
+        "TC-SMOKE-NOTES",
+        "TC-SMOKE-SYSINFO"
+      ],
+      "impact_files": []
+    }
+  ],
+  "os_kb_advice": [
+    "Host OS KBs stay a station-level recommendation and are not packaged in the application zip.",
+    "An OS .NET KB does not patch the bundled self-contained runtime."
+  ],
+  "bundle": {
+    "bundle_id": "windows-patch-bundle-fixtures-20261112T173032Z",
+    "generated": "2026-11-12T17:30:32Z",
+    "findupdates_run_id": "43269723349",
+    "findupdates_html_url": "https://github.com/defrances/FindUpdates/actions/runs/43269723349",
+    "counts": {
+      "report_rows": 9,
+      "packages": 3,
+      "deploy": 1,
+      "do_not_install": 2,
+      "stations": 7
+    },
+    "packages": [
+      {
+        "kb": "KB5060001",
+        "title": "Windows Kernel Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "candidate_for_validation",
+        "include_in_deploy": true,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345",
+        "stations": [
+          "SYNTHETIC-CT-IMG-01",
+          "SYNTHETIC-MR-IMG-01",
+          "SYNTHETIC-PACS-01",
+          "SYNTHETIC-WKLIST-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-12345"
+        ],
+        "known_exploited": "unknown",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_5582b122814f9dee7938",
+        "os_products": [
+          "Windows 11 IoT Enterprise"
+        ],
+        "deployment_groups": [
+          "imaging-ct",
+          "imaging-mr",
+          "pacs-review",
+          "worklist"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "KB5060001",
+        "title": "Windows Kernel Elevation of Privilege Vulnerability",
+        "vendor": "microsoft",
+        "action": "do_not_install",
+        "include_in_deploy": false,
+        "severity": "HIGH",
+        "official_url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-12345",
+        "stations": [
+          "SYNTHETIC-LAB-24H2-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-12345"
+        ],
+        "known_exploited": "unknown",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_5582b122814f9dee7938",
+        "os_products": [
+          "Windows 11 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "lab-ring-0",
+          "pacs-validate"
+        ],
+        "vendor_severity": "H",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      },
+      {
+        "kb": "mcu-0x00000012",
+        "title": "Intel Processor Microcode Update Advisory",
+        "vendor": "intel",
+        "action": "not_in_scope",
+        "include_in_deploy": false,
+        "severity": "MEDIUM",
+        "official_url": "https://www.intel.com/content/www/us/en/security-center/advisory/intel-sa-01234.html",
+        "stations": [
+          "SYNTHETIC-CT-IMG-01",
+          "SYNTHETIC-US-01",
+          "SYNTHETIC-W11-24H2-01"
+        ],
+        "cve_ids": [
+          "CVE-2026-22222"
+        ],
+        "known_exploited": "unknown",
+        "exploitability": "unknown",
+        "advisory_id": "advisory_96c75c0782da38ee3681",
+        "os_products": [
+          "Windows 11 IoT Enterprise",
+          "Windows 10 IoT Enterprise",
+          "Windows 11 Version 24H2 for x64-based Systems"
+        ],
+        "deployment_groups": [
+          "imaging-ct",
+          "ultrasound",
+          "pacs-validate"
+        ],
+        "vendor_severity": "M",
+        "vendor_likelihood": "M",
+        "vendor_risk": "M"
+      }
+    ],
+    "stations": [
+      {
+        "device_id": "SYNTHETIC-CT-IMG-01",
+        "model": "CTConsole-A300",
+        "device_role": "ct-imaging-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "imaging-ct"
+      },
+      {
+        "device_id": "SYNTHETIC-LAB-24H2-01",
+        "model": "LabBench-L110",
+        "device_role": "lab-analysis-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.26100.4200",
+        "deployment_group": "lab-ring-0"
+      },
+      {
+        "device_id": "SYNTHETIC-MR-IMG-01",
+        "model": "MRConsole-R200",
+        "device_role": "mr-imaging-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "imaging-mr"
+      },
+      {
+        "device_id": "SYNTHETIC-PACS-01",
+        "model": "PACS-Review-21",
+        "device_role": "pacs-review-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "pacs-review"
+      },
+      {
+        "device_id": "SYNTHETIC-US-01",
+        "model": "UltrasoundCart-U90",
+        "device_role": "ultrasound-workstation",
+        "os_product": "Windows 10 IoT Enterprise",
+        "os_build": "10.0.19044.3803",
+        "deployment_group": "ultrasound"
+      },
+      {
+        "device_id": "SYNTHETIC-W11-24H2-01",
+        "model": "PACS-Validate-24H2",
+        "device_role": "pacs-review-workstation",
+        "os_product": "Windows 11 Version 24H2 for x64-based Systems",
+        "os_build": "10.0.26100.4200",
+        "deployment_group": "pacs-validate"
+      },
+      {
+        "device_id": "SYNTHETIC-WKLIST-01",
+        "model": "Worklist-PC-5",
+        "device_role": "worklist-workstation",
+        "os_product": "Windows 11 IoT Enterprise",
+        "os_build": "10.0.22621.2500",
+        "deployment_group": "worklist"
+      }
+    ]
+  },
+  "psirt_matrix": {
+    "columns": [
+      "Config1",
+      "Config2",
+      "Config3",
+      "Config4",
+      "Config5",
+      "Config6",
+      "Config7"
+    ],
+    "rows": [
+      {
+        "kb": "KB5060001",
+        "cells": [
+          "M / M",
+          "NA",
+          "M / M",
+          "M / M",
+          "NA",
+          "NA",
+          "M / M"
+        ]
+      },
+      {
+        "kb": "KB5060001",
+        "cells": [
+          "NA",
+          "M / M",
+          "NA",
+          "NA",
+          "NA",
+          "M / M",
+          "NA"
+        ]
+      },
+      {
+        "kb": "mcu-0x00000012",
+        "cells": [
+          "M / \u2014",
+          "NA",
+          "NA",
+          "NA",
+          "M / \u2014",
+          "M / \u2014",
+          "NA"
+        ]
+      }
+    ]
+  },
+  "tests": {
+    "outcome": "passed",
+    "failed": 0,
+    "passed": 3,
+    "skipped": 0,
+    "total": 3,
+    "filter": "Smoke|Regression"
+  },
+  "release": {
+    "zip_name": "HostApplication-20261112T173032Z-43269780512-win-x64.zip"
+  },
+  "ai": {
+    "provider": "agent + offline",
+    "model": "composer-2.5"
+  }
+}
