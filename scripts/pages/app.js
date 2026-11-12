@@ -676,6 +676,34 @@
     return Array.isArray(store.entries) ? store.entries : [];
   }
 
+  function reviewsBranchUrl() {
+    return "https://raw.githubusercontent.com/" + githubRepo() + "/gh-pages/data/reviews.json";
+  }
+
+  function applyReviewStore(store) {
+    if (!store || !Array.isArray(store.entries)) return false;
+    window.SITE_REVIEWS = store;
+    return true;
+  }
+
+  function refreshReviewsFromNetwork() {
+    var urls = ["data/reviews.json?cb=" + Date.now(), reviewsBranchUrl()];
+    function next(i) {
+      if (i >= urls.length) return;
+      fetch(urls[i], { cache: "no-store" })
+        .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+        .then(function (store) {
+          if (!store || !Array.isArray(store.entries) || !store.entries.length) {
+            next(i + 1);
+            return;
+          }
+          if (applyReviewStore(store) && currentRun) paint(currentRun);
+        })
+        .catch(function () { next(i + 1); });
+    }
+    next(0);
+  }
+
   function githubRepo() {
     return String((index && index.repo) || "defrances/Orchestrator").trim();
   }
@@ -2357,4 +2385,5 @@
 
   restoreReviewWhoami();
   show(index.latest || (index.runs[0] && index.runs[0].run_id));
+  refreshReviewsFromNetwork();
 })();

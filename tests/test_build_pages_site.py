@@ -263,6 +263,8 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("Human reviewed", app_js)
             self.assertIn("function humanReviewPanel", app_js)
             self.assertIn("function effectiveProductRisk", app_js)
+            self.assertIn("function refreshReviewsFromNetwork", app_js)
+            self.assertIn("gh-pages/data/reviews.json", app_js)
             self.assertIn("orchestrator.reviewToken", app_js)
             self.assertIn("localStorage", app_js)
             self.assertIn("Token saved in this browser", app_js)

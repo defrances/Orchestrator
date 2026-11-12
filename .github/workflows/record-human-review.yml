@@ -3,9 +3,12 @@ name: Record human review
 on:
   repository_dispatch:
     types: [human-review]
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: human-review-gh-pages
@@ -16,6 +19,9 @@ jobs:
     name: Append review on gh-pages
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - name: Checkout Orchestrator
         uses: actions/checkout@v4
@@ -33,6 +39,7 @@ jobs:
           python-version: "3.12"
 
       - name: Append review
+        if: github.event_name == 'repository_dispatch'
         env:
           REVIEW_PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
@@ -41,6 +48,7 @@ jobs:
           python3 scripts/append-human-review.py --site gh-pages --payload-env REVIEW_PAYLOAD
 
       - name: Commit reviews
+        if: github.event_name == 'repository_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -61,3 +69,21 @@ jobs:
           fi
           git commit -m "Record human review overlay on the Pages report."
           git push origin HEAD:gh-pages
+
+      - name: Stage site for Pages
+        run: |
+          set -euo pipefail
+          rm -rf site-out
+          mkdir site-out
+          cp -a gh-pages/. site-out/
+          rm -rf site-out/.git
+          rm -f site-out/data/github.json site-out/.secrets/github.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site-out
+
+      - name: Deploy GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
