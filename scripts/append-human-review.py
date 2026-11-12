@@ -23,11 +23,25 @@ def _payload(args: argparse.Namespace) -> dict[str, object]:
         if not text.strip():
             raise SystemExit(f"{args.payload_env} is empty")
     else:
-        raise SystemExit("pass --payload-file or --payload-env")
+        raise SystemExit("pass --payload-file, --payload-env, or --inbox")
     data = json.loads(text)
     if not isinstance(data, dict):
         raise SystemExit("payload must be a JSON object")
     return data
+
+
+def _ingest_inbox(site: Path, inbox: Path) -> int:
+    actor = (os.environ.get("GITHUB_ACTOR") or "").strip()
+    processed, errors = human_reviews.ingest_inbox(site, inbox, actor=actor)
+    for line in errors:
+        print(line, file=sys.stderr)
+    for path in processed:
+        path.unlink()
+        print("ingested " + path.name, flush=True)
+    print("ingested_count=" + str(len(processed)), flush=True)
+    if errors and not processed:
+        return 1
+    return 0
 
 
 def main() -> int:
@@ -35,8 +49,13 @@ def main() -> int:
     parser.add_argument("--site", required=True, help="gh-pages checkout directory")
     parser.add_argument("--payload-file", default="")
     parser.add_argument("--payload-env", default="")
+    parser.add_argument("--inbox", default="")
     args = parser.parse_args()
     site = Path(args.site).resolve()
+    if args.inbox:
+        if args.payload_file or args.payload_env:
+            raise SystemExit("use --inbox alone")
+        return _ingest_inbox(site, Path(args.inbox).resolve())
     raw = _payload(args)
     if not str(raw.get("actor") or "").strip():
         raw["actor"] = (os.environ.get("GITHUB_ACTOR") or "").strip()

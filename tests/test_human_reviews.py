@@ -163,6 +163,34 @@ class HumanReviewsTests(unittest.TestCase):
             after = json.loads((site / "data" / "reviews.json").read_text(encoding="utf-8"))
             self.assertEqual(len(after["entries"]), 1)
 
+    def test_inbox_cli_ingests_and_leaves_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            site = Path(raw) / "gh-pages"
+            inbox = Path(raw) / "review-inbox"
+            inbox.mkdir()
+            (inbox / "ok.json").write_text(
+                json.dumps(_event(actor="", id="inbox1")) + "\n", encoding="utf-8"
+            )
+            (inbox / "bad.json").write_text(
+                json.dumps(_event(comment="", id="inbox2")) + "\n", encoding="utf-8"
+            )
+            env = os.environ.copy()
+            env["GITHUB_ACTOR"] = "defrances"
+            done = subprocess.run(
+                [sys.executable, str(APPEND_SCRIPT), "--site", str(site), "--inbox", str(inbox)],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn("ingested_count=1", done.stdout)
+            self.assertFalse((inbox / "ok.json").exists())
+            self.assertTrue((inbox / "bad.json").exists())
+            store = json.loads((site / "data" / "reviews.json").read_text(encoding="utf-8"))
+            self.assertEqual(store["entries"][0]["actor"], "defrances")
+            self.assertEqual(store["entries"][0]["id"], "inbox1")
+
     def test_github_token_reads_secrets_json(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

@@ -11,6 +11,7 @@ from typing import Any
 RISK_LETTERS = frozenset({"C", "H", "M", "L"})
 REVIEWS_REL = Path("data") / "reviews.json"
 REVIEWS_JS_REL = Path("assets") / "reviews.js"
+INBOX_REL = Path("review-inbox")
 
 
 def empty_store() -> dict[str, Any]:
@@ -149,3 +150,48 @@ def latest_for(store: dict[str, Any], kb: str, config: str) -> dict[str, Any] | 
             continue
         found = item
     return found
+
+
+def inbox_files(inbox: Path) -> list[Path]:
+    if not inbox.is_dir():
+        return []
+    return sorted(path for path in inbox.glob("*.json") if path.is_file())
+
+
+def ingest_inbox(
+    site: Path,
+    inbox: Path,
+    *,
+    actor: str = "",
+) -> tuple[list[Path], list[str]]:
+    """Append valid inbox JSON onto the site store. Invalid files stay."""
+    store = load_store(find_reviews_file(site))
+    processed: list[Path] = []
+    errors: list[str] = []
+    fallback_actor = str(actor or "").strip()
+    for path in inbox_files(inbox):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            errors.append(path.name + ": invalid JSON (" + str(exc) + ")")
+            continue
+        if not isinstance(raw, dict):
+            errors.append(path.name + ": payload must be a JSON object")
+            continue
+        if not str(raw.get("actor") or "").strip():
+            raw["actor"] = fallback_actor
+        previous = latest_for(
+            store,
+            str(raw.get("kb") or ""),
+            str(raw.get("config") or ""),
+        )
+        try:
+            event = normalize_event(raw, previous=previous)
+        except ValueError as exc:
+            errors.append(path.name + ": " + str(exc))
+            continue
+        store = append_event(store, event)
+        processed.append(path)
+    if processed:
+        write_store(site, store)
+    return processed, errors

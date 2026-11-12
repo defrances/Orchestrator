@@ -930,13 +930,12 @@
       (reviewed ? " checked" : "") + "> Human reviewed</label>" +
       '<label>Comment <textarea id="review-comment" name="comment" required rows="3" ' +
       'placeholder="Required when marking reviewed or changing Product risk"></textarea></label>' +
-      '<button class="primary" type="submit"' + (hasToken ? "" : " disabled") +
-      ">Save review</button>" +
+      '<button class="primary" type="submit">Save review</button>' +
       (hasToken
         ? (window.REVIEW_WHOAMI || reviewWhoami()
           ? "<p>Saving as " + esc(window.REVIEW_WHOAMI || reviewWhoami()) + ".</p>"
           : "")
-        : "<p>Add a GitHub token on Settings once. It stays in this browser.</p>") +
+        : "<p>This browser has no PAT. Save opens GitHub — commit while logged in as a writer on Orchestrator.</p>") +
       "</form>");
   }
 
@@ -2081,9 +2080,9 @@
         ["Authorization", "HOLD and BLOCK stay"]
       ])) +
       panel("Human review token",
-        "<p>Saving a review sends <code>repository_dispatch</code> to " +
+        "<p>GitHub Secrets cannot reach this public page. On a computer with no PAT, Save opens GitHub and records the review after you commit (you must be logged in with write access on " +
         esc(githubRepo()) +
-        ". Contents write and Actions dispatch on Orchestrator are required. Store the PAT once on this PC with <code>python scripts/store-github-token.py</code> (Windows Credential Manager + gitignored <code>.secrets/github.json</code>). This public page cannot read that file, so save it once in this browser or load <code>github.json</code>. Empty Save does not clear a stored token. It is never written to Pages JSON or git.</p>" +
+        "). A PAT in this browser skips that extra commit. Store a PAT once on a PC with <code>python scripts/store-github-token.py</code> (Windows Credential Manager + gitignored <code>.secrets/github.json</code>), then load <code>github.json</code> here. Empty Save does not clear a stored token. It is never written to Pages JSON or git.</p>" +
         '<p class="tokenStatus' + (saved ? " ok" : "") + '">' + status + "</p>" +
         '<form id="review-token-form" class="reviewForm">' +
         '<label>GitHub token <input id="review-token" name="password" type="password" autocomplete="current-password" ' +
@@ -2188,12 +2187,25 @@
     if (fromField) fromField.value = human;
   }
 
+  function githubInboxCommitUrl(event) {
+    var id = String((event && event.kb) || "kb").replace(/[^A-Za-z0-9]+/g, "-") +
+      "-" + String((event && event.config) || "config").replace(/[^A-Za-z0-9]+/g, "-") +
+      "-" + String((event && event.at) || "").replace(/[^0-9]+/g, "").slice(0, 14);
+    if (!id.replace(/-/g, "")) id = "review";
+    var body = JSON.stringify(event, null, 2);
+    return "https://github.com/" + githubRepo() + "/new/main/review-inbox?filename=" +
+      encodeURIComponent(id + ".json") + "&value=" + encodeURIComponent(body);
+  }
+
+  function saveReviewViaGithub(event, run) {
+    rememberReview(event);
+    window.open(githubInboxCommitUrl(event), "_blank", "noopener");
+    showToast("Commit the new file on GitHub. If Commit is disabled, click the file body, press space, then commit.");
+    paint(run);
+  }
+
   function submitHumanReview(form, run) {
     var token = reviewToken();
-    if (!token) {
-      showToast("Add a GitHub token on Settings to save.");
-      return;
-    }
     var kb = (form.querySelector("[name=kb]") || {}).value || "";
     var cfg = (document.getElementById("review-config") || {}).value || "";
     var runId = (form.querySelector("[name=run_id]") || {}).value || "";
@@ -2225,9 +2237,13 @@
       product_risk_from: from,
       product_risk_to: to,
       comment: comment,
-      actor: window.REVIEW_WHOAMI || "",
+      actor: window.REVIEW_WHOAMI || reviewWhoami() || "",
       at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
     };
+    if (!token) {
+      saveReviewViaGithub(event, run);
+      return;
+    }
     fetch("https://api.github.com/user", { headers: githubHeaders(token) })
       .then(function (res) {
         if (!res.ok) throw new Error("token");

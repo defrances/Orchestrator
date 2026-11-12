@@ -280,6 +280,13 @@ class BuildPagesSiteTests(unittest.TestCase):
             self.assertIn("Token is saved in this browser", app_js)
             self.assertIn("Token unchanged.", app_js)
             self.assertIn("tokenUnauthorized", app_js)
+            self.assertIn("function githubInboxCommitUrl", app_js)
+            self.assertIn("review-inbox", app_js)
+            self.assertIn("Save opens GitHub", app_js)
+            workflow = (ROOT / ".github" / "workflows" / "record-human-review.yml").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("review-inbox/**", workflow)
             self.assertNotIn("Human approved", app_js)
             self.assertNotIn("this tab only (sessionStorage)", app_js)
             self.assertNotIn("model tokens", app_js)

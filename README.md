@@ -135,7 +135,9 @@ python scripts/store-github-token.py
 
 `--from-git` copies the existing `github.com` login. The script writes gitignored `.secrets/github.json` and, on Windows, Credential Manager (`defrances/Orchestrator/review-pat`). It never prints the value.
 
-On https://defrances.github.io/Orchestrator/ open Settings once: paste the PAT or **Load github.json**. It stays in this browser until **Clear token**. Empty Save does not clear it.
+On https://defrances.github.io/Orchestrator/ a PAT is optional. Without one, **Save review** opens GitHub: commit the inbox file while logged in as a writer on Orchestrator. With a PAT in this browser, Save uses `repository_dispatch` and skips that extra commit.
+
+Settings once per browser: paste the PAT or **Load github.json**. It stays until **Clear token**. Empty Save does not clear it. GitHub Actions secrets cannot reach this public page.
 
 ### Mail and analysis
 

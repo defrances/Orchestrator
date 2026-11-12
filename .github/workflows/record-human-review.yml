@@ -4,6 +4,9 @@ on:
   repository_dispatch:
     types: [human-review]
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["review-inbox/**"]
 
 permissions:
   contents: write
@@ -47,8 +50,33 @@ jobs:
           mkdir -p gh-pages
           python3 scripts/append-human-review.py --site gh-pages --payload-env REVIEW_PAYLOAD
 
+      - name: Ingest review inbox
+        if: github.event_name == 'push'
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          mkdir -p gh-pages
+          python3 scripts/append-human-review.py --site gh-pages --inbox review-inbox
+
+      - name: Commit ingested inbox deletions
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add review-inbox
+          if git diff --cached --quiet; then
+            echo "No inbox files to remove."
+            exit 0
+          fi
+          git commit -m "Remove ingested human-review inbox files."
+          git push origin HEAD:main
+
       - name: Commit reviews
-        if: github.event_name == 'repository_dispatch'
+        if: github.event_name == 'repository_dispatch' || github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -82,6 +110,7 @@ jobs:
           cp scripts/pages/style.css site-out/assets/style.css
           cp scripts/pages/index.html site-out/index.html
           rm -f site-out/data/github.json site-out/.secrets/github.json
+          rm -rf site-out/data/inbox site-out/review-inbox
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
