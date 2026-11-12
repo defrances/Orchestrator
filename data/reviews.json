@@ -95,6 +95,18 @@
       "comment": "sa",
       "actor": "defrances",
       "at": "2026-11-12T20:28:14Z"
+    },
+    {
+      "id": "a62755f428ae4ddbacb1605be7f7c673",
+      "kb": "KB5087420",
+      "config": "Config2",
+      "run_id": "39381934757",
+      "reviewed": true,
+      "product_risk_from": "M",
+      "product_risk_to": "H",
+      "comment": "sasas",
+      "actor": "defrances",
+      "at": "2026-11-12T21:42:13Z"
     }
   ]
 }
