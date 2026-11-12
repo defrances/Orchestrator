@@ -740,7 +740,7 @@
     var needleCfg = String(config || "").trim();
     reviewEntries().forEach(function (item) {
       if (String(item.kb || "").toUpperCase() !== needleKb) return;
-      if (String(item.config || "").trim() !== needleCfg) return;
+      if (!sameConfig(item.config, needleCfg)) return;
       found = item;
     });
     return found;
@@ -755,17 +755,31 @@
     return found;
   }
 
-  function reviewConfigForPkg(pkg) {
+  function stationLabels(pkg) {
     var labels = [];
     ((pkg && pkg.stations) || []).forEach(function (id) {
       var label = configLabel(id);
       if (label && labels.indexOf(label) === -1) labels.push(label);
     });
-    var wanted = selectedConfig ? configLabel(selectedConfig) : "";
-    if (wanted && labels.indexOf(wanted) !== -1) return wanted;
+    return labels;
+  }
+
+  function reviewConfigForPkg(pkg) {
+    var labels = stationLabels(pkg);
+    if (labels.length === 1) return labels[0];
     var filterCfg = config;
-    if (filterCfg && filterCfg !== "All configurations" && labels.indexOf(filterCfg) !== -1) {
-      return filterCfg;
+    if (filterCfg && filterCfg !== "All configurations") {
+      for (var i = 0; i < labels.length; i++) {
+        if (sameConfig(labels[i], filterCfg)) return labels[i];
+      }
+    }
+    if (role === "engineer") {
+      var wanted = selectedConfig ? configLabel(selectedConfig) : "";
+      if (wanted) {
+        for (var j = 0; j < labels.length; j++) {
+          if (sameConfig(labels[j], wanted)) return labels[j];
+        }
+      }
     }
     return labels[0] || "Config1";
   }
@@ -776,19 +790,33 @@
     return "";
   }
 
+  function configFilterPinned() {
+    return (config && config !== "All configurations") ||
+      (role === "engineer" && Boolean(selectedConfig));
+  }
+
+  function overlayPinned(pkg) {
+    return configFilterPinned() || stationLabels(pkg).length === 1;
+  }
+
   function effectiveProductRisk(run, pkg, analysis) {
-    var cfg = reviewConfigForPkg(pkg);
-    var latest = latestReview(pkg && pkg.kb, cfg);
-    if (latest && latest.product_risk_to) return latest.product_risk_to;
+    if (overlayPinned(pkg)) {
+      var latest = latestReview(pkg && pkg.kb, reviewConfigForPkg(pkg));
+      if (latest && latest.product_risk_to) return latest.product_risk_to;
+      return analysis;
+    }
     var any = latestReviewForKb(pkg && pkg.kb);
     if (any && any.product_risk_to) return any.product_risk_to;
     return analysis;
   }
 
   function kbReviewed(pkg) {
-    var latest = latestReview(pkg && pkg.kb, reviewConfigForPkg(pkg)) ||
-      latestReviewForKb(pkg && pkg.kb);
-    return Boolean(latest && latest.reviewed);
+    if (overlayPinned(pkg)) {
+      var latest = latestReview(pkg && pkg.kb, reviewConfigForPkg(pkg));
+      return Boolean(latest && latest.reviewed);
+    }
+    var any = latestReviewForKb(pkg && pkg.kb);
+    return Boolean(any && any.reviewed);
   }
 
   function reviewedBadge(pkg) {

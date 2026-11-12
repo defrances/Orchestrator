@@ -77,6 +77,10 @@ jobs:
           mkdir site-out
           cp -a gh-pages/. site-out/
           rm -rf site-out/.git
+          mkdir -p site-out/assets
+          cp scripts/pages/app.js site-out/assets/app.js
+          cp scripts/pages/style.css site-out/assets/style.css
+          cp scripts/pages/index.html site-out/index.html
           rm -f site-out/data/github.json site-out/.secrets/github.json
 
       - name: Upload Pages artifact
