@@ -680,12 +680,30 @@
     return String((index && index.repo) || "defrances/Orchestrator").trim();
   }
 
+  var TOKEN_KEY = "orchestrator.reviewToken";
+
   function reviewToken() {
     try {
-      return sessionStorage.getItem("orchestrator.reviewToken") || "";
+      var stored = localStorage.getItem(TOKEN_KEY) || "";
+      if (stored) return stored;
+      var previous = sessionStorage.getItem(TOKEN_KEY) || "";
+      if (previous) {
+        localStorage.setItem(TOKEN_KEY, previous);
+        sessionStorage.removeItem(TOKEN_KEY);
+        return previous;
+      }
+      return "";
     } catch (err) {
       return "";
     }
+  }
+
+  function setReviewToken(token) {
+    try {
+      if (token) localStorage.setItem(TOKEN_KEY, token);
+      else localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
+    } catch (err) {}
   }
 
   function latestReview(kb, config) {
@@ -1951,11 +1969,11 @@
       panel("Human review token",
         "<p>Saving a review sends <code>repository_dispatch</code> to " +
         esc(githubRepo()) +
-        ". Contents write and Actions dispatch on Orchestrator are required. The token stays in this tab only (sessionStorage), never in git.</p>" +
+        ". Contents write and Actions dispatch on Orchestrator are required. The token stays in this browser until you clear it. It is never written to Pages JSON or git — that URL is public.</p>" +
         '<form id="review-token-form" class="reviewForm">' +
         '<label>GitHub token <input id="review-token" type="password" autocomplete="off" ' +
-        'placeholder="' + (saved ? "Token saved in this tab" : "Paste PAT") + '"></label>' +
-        '<button class="primary" type="submit">Save token in this tab</button>' +
+        'placeholder="' + (saved ? "Token saved in this browser" : "Paste PAT") + '"></label>' +
+        '<button class="primary" type="submit">Save token in this browser</button>' +
         (who ? "<p>Signed in as " + esc(who) + "</p>" : "") +
         "</form>");
   }
@@ -2123,9 +2141,9 @@
     var input = document.getElementById("review-token");
     var token = String((input && input.value) || "").trim();
     if (!token) {
-      try { sessionStorage.removeItem("orchestrator.reviewToken"); } catch (err) {}
+      setReviewToken("");
       window.REVIEW_WHOAMI = "";
-      showToast("Token cleared for this tab.");
+      showToast("Token cleared for this browser.");
       paint(run);
       return;
     }
@@ -2135,13 +2153,31 @@
         return res.json();
       })
       .then(function (user) {
-        try { sessionStorage.setItem("orchestrator.reviewToken", token); } catch (err) {}
+        setReviewToken(token);
         window.REVIEW_WHOAMI = user.login || "";
-        showToast("Token saved in this tab as " + (user.login || "GitHub user") + ".");
+        showToast("Token saved in this browser as " + (user.login || "GitHub user") + ".");
         paint(run);
       })
       .catch(function () {
         showToast("Token check failed. Token was not saved.");
+      });
+  }
+
+  function restoreReviewWhoami() {
+    var token = reviewToken();
+    if (!token || window.REVIEW_WHOAMI) return;
+    fetch("https://api.github.com/user", { headers: githubHeaders(token) })
+      .then(function (res) {
+        if (!res.ok) throw new Error("token");
+        return res.json();
+      })
+      .then(function (user) {
+        window.REVIEW_WHOAMI = user.login || "";
+        if (currentRun && page === "Settings") paint(currentRun);
+      })
+      .catch(function () {
+        setReviewToken("");
+        window.REVIEW_WHOAMI = "";
       });
   }
 
@@ -2319,5 +2355,6 @@
       .catch(function () { paint(null); });
   }
 
+  restoreReviewWhoami();
   show(index.latest || (index.runs[0] && index.runs[0].run_id));
 })();

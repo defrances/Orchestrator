@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,7 @@ if SPEC is None or SPEC.loader is None:
 pages = importlib.util.module_from_spec(SPEC)
 sys.modules["build_pages_site"] = pages
 SPEC.loader.exec_module(pages)
+import github_token  # noqa: E402
 import human_reviews  # noqa: E402  # loaded via scripts/ on sys.path
 
 
@@ -160,6 +162,42 @@ class HumanReviewsTests(unittest.TestCase):
             self.assertIn("comment", failed.stderr)
             after = json.loads((site / "data" / "reviews.json").read_text(encoding="utf-8"))
             self.assertEqual(len(after["entries"]), 1)
+
+    def test_github_token_reads_secrets_json(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            github_token.write("gho_test_not_real", root=root)
+            saved = {
+                name: os.environ.pop(name, None)
+                for name in ("GITHUB_TOKEN", "GH_TOKEN", "ORCHESTRATOR_PAT")
+            }
+            try:
+                self.assertEqual(github_token.load(root), "gho_test_not_real")
+            finally:
+                for name, value in saved.items():
+                    if value is None:
+                        os.environ.pop(name, None)
+                    else:
+                        os.environ[name] = value
+
+    def test_write_site_does_not_publish_token_json(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history = Path(raw) / "site-prev"
+            (history / "data").mkdir(parents=True)
+            (history / "data" / "github.json").write_text(
+                '{"token": "gho_must_not_publish"}\n', encoding="utf-8"
+            )
+            github_token.write("gho_must_not_publish", root=history)
+            out = Path(raw) / "site"
+            pages.write_site(out, [_snapshot("101")], history_dir=history)
+            self.assertFalse((out / "data" / "github.json").exists())
+            self.assertFalse((out / ".secrets" / "github.json").exists())
+            published = "\n".join(
+                path.read_text(encoding="utf-8", errors="ignore")
+                for path in out.rglob("*")
+                if path.is_file()
+            )
+            self.assertNotIn("gho_must_not_publish", published)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ artifacts/
 workspace/
 site/
 .pages-backfill/
+.secrets/github.json
 .DS_Store
 *.log
 __pycache__/
