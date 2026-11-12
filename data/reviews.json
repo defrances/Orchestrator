@@ -119,6 +119,18 @@
       "comment": "dsdsd",
       "actor": "defrances",
       "at": "2026-11-12T21:42:47Z"
+    },
+    {
+      "id": "2078a3a62a07414ea234caec8451bb38",
+      "kb": "KB5120228",
+      "config": "Config2",
+      "run_id": "39381934757",
+      "reviewed": true,
+      "product_risk_from": "M",
+      "product_risk_to": "C",
+      "comment": "sasasasa",
+      "actor": "defrances",
+      "at": "2026-11-12T21:43:36Z"
     }
   ]
 }
