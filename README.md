@@ -125,6 +125,18 @@ Fine-grained PAT (or classic `repo` PAT):
 
 `GITHUB_TOKEN` cannot start workflows in another repository. This PAT does not need Issues write.
 
+### Human review PAT on this PC
+
+The public Pages URL cannot hold a PAT. Store it once on this machine:
+
+```
+python scripts/store-github-token.py
+```
+
+`--from-git` copies the existing `github.com` login. The script writes gitignored `.secrets/github.json` and, on Windows, Credential Manager (`defrances/Orchestrator/review-pat`). It never prints the value.
+
+On https://defrances.github.io/Orchestrator/ open Settings once: paste the PAT or **Load github.json**. It stays in this browser until **Clear token**. Empty Save does not clear it.
+
 ### Mail and analysis
 
 | Name | Where | Role |

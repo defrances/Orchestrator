@@ -180,6 +180,88 @@ class HumanReviewsTests(unittest.TestCase):
                     else:
                         os.environ[name] = value
 
+    def test_github_token_load_prefers_os_store_without_root(self) -> None:
+        original_os_read = github_token._os_read
+        saved = {
+            name: os.environ.pop(name, None)
+            for name in ("GITHUB_TOKEN", "GH_TOKEN", "ORCHESTRATOR_PAT")
+        }
+        github_token._os_read = lambda: "gho_from_vault"  # type: ignore[method-assign]
+        try:
+            self.assertEqual(github_token.load(), "gho_from_vault")
+        finally:
+            github_token._os_read = original_os_read  # type: ignore[method-assign]
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    def test_github_token_write_with_root_skips_os_store(self) -> None:
+        original_os_write = github_token._os_write
+        called = {"n": 0}
+
+        def boom(token: str) -> bool:
+            called["n"] += 1
+            raise AssertionError("os store must not run for a test root")
+
+        github_token._os_write = boom  # type: ignore[method-assign]
+        try:
+            with tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                github_token.write("gho_test_not_real", root=root)
+                self.assertEqual(github_token.load(root), "gho_test_not_real")
+            self.assertEqual(called["n"], 0)
+        finally:
+            github_token._os_write = original_os_write  # type: ignore[method-assign]
+
+    def test_store_github_token_script_stdin_to_root(self) -> None:
+        script = ROOT / "scripts" / "store-github-token.py"
+        saved = {
+            name: os.environ.pop(name, None)
+            for name in ("GITHUB_TOKEN", "GH_TOKEN", "ORCHESTRATOR_PAT")
+        }
+        try:
+            with tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                done = subprocess.run(
+                    [sys.executable, str(script), "--root", str(root), "--stdin"],
+                    input="gho_test_not_real\n",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertNotIn("gho_test_not_real", done.stdout)
+                self.assertNotIn("gho_test_not_real", done.stderr)
+                self.assertEqual(github_token.load(root), "gho_test_not_real")
+                again = subprocess.run(
+                    [sys.executable, str(script), "--root", str(root)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(again.returncode, 0, again.stderr)
+                self.assertIn("already stored", again.stdout)
+        finally:
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    def test_windows_credential_roundtrip_throwaway_target(self) -> None:
+        if sys.platform != "win32":
+            self.skipTest("Windows Credential Manager")
+        target = "defrances/Orchestrator/review-pat-test"
+        try:
+            self.assertTrue(
+                github_token._windows_cred_write(target, "github-pat", "gho_test_not_real")
+            )
+            self.assertEqual(github_token._windows_cred_read(target), "gho_test_not_real")
+        finally:
+            github_token._windows_cred_delete(target)
+
     def test_write_site_does_not_publish_token_json(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             history = Path(raw) / "site-prev"

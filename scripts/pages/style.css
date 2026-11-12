@@ -404,6 +404,9 @@ svg.chart .chart-n { font-size: 11px; fill: #122b52; }
   font: inherit;
 }
 .reviewForm .check { display: flex; align-items: center; gap: 8px; font-weight: 650; }
+.reviewForm .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tokenStatus { margin: 0 0 10px; font-size: 13px; color: #5b6f88; }
+.tokenStatus.ok { color: #087a3f; font-weight: 650; }
 .badge.reviewed { background: #def7e8; color: #087a3f; margin-left: 6px; }
 .toast {
   position: fixed;

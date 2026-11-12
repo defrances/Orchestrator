@@ -709,6 +709,7 @@
   }
 
   var TOKEN_KEY = "orchestrator.reviewToken";
+  var WHOAMI_KEY = "orchestrator.reviewWhoami";
 
   function reviewToken() {
     try {
@@ -726,12 +727,55 @@
     }
   }
 
+  function reviewWhoami() {
+    try {
+      return localStorage.getItem(WHOAMI_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function setReviewWhoami(login) {
+    try {
+      if (login) localStorage.setItem(WHOAMI_KEY, login);
+      else localStorage.removeItem(WHOAMI_KEY);
+    } catch (err) {}
+    window.REVIEW_WHOAMI = login || "";
+  }
+
   function setReviewToken(token) {
     try {
       if (token) localStorage.setItem(TOKEN_KEY, token);
       else localStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TOKEN_KEY);
     } catch (err) {}
+    if (!token) setReviewWhoami("");
+  }
+
+  function storePasswordCredential(token, login) {
+    if (!token || !window.PasswordCredential || !navigator.credentials || !navigator.credentials.store) {
+      return;
+    }
+    try {
+      navigator.credentials.store(new PasswordCredential({
+        id: "orchestrator-review",
+        name: login || "GitHub PAT",
+        password: token
+      })).catch(function () {});
+    } catch (err) {}
+  }
+
+  function restoreFromPasswordManager() {
+    if (reviewToken()) return;
+    if (!navigator.credentials || !navigator.credentials.get) return;
+    navigator.credentials.get({ password: true, mediation: "optional" })
+      .then(function (cred) {
+        if (!cred || !cred.password) return;
+        setReviewToken(cred.password);
+        if (cred.name && cred.name !== "GitHub PAT") setReviewWhoami(cred.name);
+        restoreReviewWhoami();
+      })
+      .catch(function () {});
   }
 
   function latestReview(kb, config) {
@@ -811,12 +855,19 @@
   }
 
   function kbReviewed(pkg) {
-    if (overlayPinned(pkg)) {
-      var latest = latestReview(pkg && pkg.kb, reviewConfigForPkg(pkg));
-      return Boolean(latest && latest.reviewed);
+    var needleKb = String((pkg && pkg.kb) || "").toUpperCase();
+    if (!needleKb) return false;
+    var latestByConfig = {};
+    reviewEntries().forEach(function (item) {
+      if (String(item.kb || "").toUpperCase() !== needleKb) return;
+      var cfg = String(item.config || "").trim() || "_";
+      latestByConfig[cfg] = item;
+    });
+    var keys = Object.keys(latestByConfig);
+    for (var i = 0; i < keys.length; i++) {
+      if (latestByConfig[keys[i]] && latestByConfig[keys[i]].reviewed) return true;
     }
-    var any = latestReviewForKb(pkg && pkg.kb);
-    return Boolean(any && any.reviewed);
+    return false;
   }
 
   function reviewedBadge(pkg) {
@@ -881,7 +932,11 @@
       'placeholder="Required when marking reviewed or changing Product risk"></textarea></label>' +
       '<button class="primary" type="submit"' + (hasToken ? "" : " disabled") +
       ">Save review</button>" +
-      (hasToken ? "" : "<p>Add a GitHub token on Settings to save.</p>") +
+      (hasToken
+        ? (window.REVIEW_WHOAMI || reviewWhoami()
+          ? "<p>Saving as " + esc(window.REVIEW_WHOAMI || reviewWhoami()) + ".</p>"
+          : "")
+        : "<p>Add a GitHub token on Settings once. It stays in this browser.</p>") +
       "</form>");
   }
 
@@ -2015,7 +2070,10 @@
 
   function settingsPage() {
     var saved = Boolean(reviewToken());
-    var who = window.REVIEW_WHOAMI || "";
+    var who = window.REVIEW_WHOAMI || reviewWhoami() || "";
+    var status = saved
+      ? ("Token is saved in this browser" + (who ? " as " + esc(who) : "") + ".")
+      : "No token in this browser yet.";
     return '<div class="pageHead"><div><h1>Settings</h1><p>Advisory GitHub Page</p></div></div>' +
       panel("Scope", infoRows([
         ["Role", "This page cannot start Orchestrator"],
@@ -2025,13 +2083,16 @@
       panel("Human review token",
         "<p>Saving a review sends <code>repository_dispatch</code> to " +
         esc(githubRepo()) +
-        ". Contents write and Actions dispatch on Orchestrator are required. The token stays in this browser until you clear it. It is never written to Pages JSON or git — that URL is public.</p>" +
+        ". Contents write and Actions dispatch on Orchestrator are required. Store the PAT once on this PC with <code>python scripts/store-github-token.py</code> (Windows Credential Manager + gitignored <code>.secrets/github.json</code>). This public page cannot read that file, so save it once in this browser or load <code>github.json</code>. Empty Save does not clear a stored token. It is never written to Pages JSON or git.</p>" +
+        '<p class="tokenStatus' + (saved ? " ok" : "") + '">' + status + "</p>" +
         '<form id="review-token-form" class="reviewForm">' +
-        '<label>GitHub token <input id="review-token" type="password" autocomplete="off" ' +
-        'placeholder="' + (saved ? "Token saved in this browser" : "Paste PAT") + '"></label>' +
+        '<label>GitHub token <input id="review-token" name="password" type="password" autocomplete="current-password" ' +
+        'placeholder="' + (saved ? "Leave blank to keep the saved token" : "Paste PAT or load github.json") + '"></label>' +
+        '<div class="actions">' +
         '<button class="primary" type="submit">Save token in this browser</button>' +
-        (who ? "<p>Signed in as " + esc(who) + "</p>" : "") +
-        "</form>");
+        '<button class="secondary" type="button" id="review-token-file">Load github.json</button>' +
+        (saved ? '<button class="secondary" type="button" id="review-token-clear">Clear token</button>' : "") +
+        "</div></form>");
   }
 
   function navItems() {
@@ -2193,48 +2254,119 @@
       });
   }
 
-  function saveReviewToken(form, run) {
-    var input = document.getElementById("review-token");
-    var token = String((input && input.value) || "").trim();
-    if (!token) {
-      setReviewToken("");
-      window.REVIEW_WHOAMI = "";
-      showToast("Token cleared for this browser.");
-      paint(run);
+  function rememberValidToken(token, login) {
+    setReviewToken(token);
+    setReviewWhoami(login || "");
+    storePasswordCredential(token, login || "");
+  }
+
+  function tokenUnauthorized(res) {
+    return Boolean(res && (res.status === 401 || res.status === 403));
+  }
+
+  function tokenFromJsonText(text) {
+    try {
+      var payload = JSON.parse(text);
+      if (typeof payload === "string") return payload.trim();
+      if (!payload || typeof payload !== "object") return "";
+      return String(payload.token || payload.github_token || payload.pat || "").trim();
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function applyTokenString(token, run, source) {
+    var value = String(token || "").trim();
+    if (!value) {
+      showToast("No token in " + (source || "that file") + ".");
       return;
     }
-    fetch("https://api.github.com/user", { headers: githubHeaders(token) })
+    fetch("https://api.github.com/user", { headers: githubHeaders(value) })
       .then(function (res) {
-        if (!res.ok) throw new Error("token");
+        if (tokenUnauthorized(res) || !res.ok) throw new Error("token");
         return res.json();
       })
       .then(function (user) {
-        setReviewToken(token);
-        window.REVIEW_WHOAMI = user.login || "";
+        rememberValidToken(value, user.login || "");
         showToast("Token saved in this browser as " + (user.login || "GitHub user") + ".");
         paint(run);
       })
       .catch(function () {
-        showToast("Token check failed. Token was not saved.");
+        showToast("Token check failed. Saved token was left unchanged.");
       });
   }
 
+  function loadTokenFromFile(run) {
+    function readFile(file) {
+      if (!file) return;
+      if (file.text) {
+        file.text().then(function (text) {
+          applyTokenString(tokenFromJsonText(text), run, "github.json");
+        });
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        applyTokenString(tokenFromJsonText(String(reader.result || "")), run, "github.json");
+      };
+      reader.readAsText(file);
+    }
+    if (window.showOpenFilePicker) {
+      window.showOpenFilePicker({
+        types: [{ description: "GitHub token JSON", accept: { "application/json": [".json"] } }]
+      }).then(function (handles) {
+        var handle = handles && handles[0];
+        if (!handle) return;
+        return handle.getFile();
+      }).then(readFile).catch(function () {});
+      return;
+    }
+    var input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.addEventListener("change", function () {
+      readFile(input.files && input.files[0]);
+    });
+    input.click();
+  }
+
+  function saveReviewToken(form, run) {
+    var input = document.getElementById("review-token");
+    var token = String((input && input.value) || "").trim();
+    if (!token) {
+      showToast(reviewToken() ? "Token unchanged." : "Paste a GitHub token or load github.json.");
+      return;
+    }
+    applyTokenString(token, run, "the form");
+  }
+
+  function clearReviewToken(run) {
+    setReviewToken("");
+    showToast("Token cleared for this browser.");
+    paint(run);
+  }
+
   function restoreReviewWhoami() {
+    if (!window.REVIEW_WHOAMI) window.REVIEW_WHOAMI = reviewWhoami();
     var token = reviewToken();
-    if (!token || window.REVIEW_WHOAMI) return;
+    if (!token) {
+      restoreFromPasswordManager();
+      return;
+    }
     fetch("https://api.github.com/user", { headers: githubHeaders(token) })
       .then(function (res) {
-        if (!res.ok) throw new Error("token");
+        if (tokenUnauthorized(res)) {
+          setReviewToken("");
+          throw new Error("token");
+        }
+        if (!res.ok) throw new Error("network");
         return res.json();
       })
       .then(function (user) {
-        window.REVIEW_WHOAMI = user.login || "";
+        setReviewWhoami(user.login || "");
         if (currentRun && page === "Settings") paint(currentRun);
       })
-      .catch(function () {
-        setReviewToken("");
-        window.REVIEW_WHOAMI = "";
-      });
+      .catch(function () {});
   }
 
   function bind(run) {
@@ -2378,6 +2510,14 @@
         ev.preventDefault();
         saveReviewToken(tokenForm, run);
       });
+    }
+    var tokenFile = document.getElementById("review-token-file");
+    if (tokenFile) {
+      tokenFile.addEventListener("click", function () { loadTokenFromFile(run); });
+    }
+    var tokenClear = document.getElementById("review-token-clear");
+    if (tokenClear) {
+      tokenClear.addEventListener("click", function () { clearReviewToken(run); });
     }
   }
 
