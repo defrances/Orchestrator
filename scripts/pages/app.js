@@ -409,6 +409,8 @@
         }
         var cluster = clusterForStation(letters.clusters || [], name);
         var product = cluster ? productFromCluster(cluster).risk : letters.product;
+        var overlay = latestReview(pkg.kb, configLabel(name));
+        if (overlay && overlay.product_risk_to) product = overlay.product_risk_to;
         parts.push("<td>" + esc((letters.vendor || "NA") + "/" + (product || "NA")) + "</td>");
       });
       parts.push("</tr>");
@@ -667,6 +669,146 @@
       cluster: list[0] || {},
       clusters: list
     };
+  }
+
+  function reviewEntries() {
+    var store = window.SITE_REVIEWS || {};
+    return Array.isArray(store.entries) ? store.entries : [];
+  }
+
+  function githubRepo() {
+    return String((index && index.repo) || "defrances/Orchestrator").trim();
+  }
+
+  function reviewToken() {
+    try {
+      return sessionStorage.getItem("orchestrator.reviewToken") || "";
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function latestReview(kb, config) {
+    var found = null;
+    var needleKb = String(kb || "").toUpperCase();
+    var needleCfg = String(config || "").trim();
+    reviewEntries().forEach(function (item) {
+      if (String(item.kb || "").toUpperCase() !== needleKb) return;
+      if (String(item.config || "").trim() !== needleCfg) return;
+      found = item;
+    });
+    return found;
+  }
+
+  function latestReviewForKb(kb) {
+    var found = null;
+    var needleKb = String(kb || "").toUpperCase();
+    reviewEntries().forEach(function (item) {
+      if (String(item.kb || "").toUpperCase() === needleKb) found = item;
+    });
+    return found;
+  }
+
+  function reviewConfigForPkg(pkg) {
+    var labels = [];
+    ((pkg && pkg.stations) || []).forEach(function (id) {
+      var label = configLabel(id);
+      if (label && labels.indexOf(label) === -1) labels.push(label);
+    });
+    var wanted = selectedConfig ? configLabel(selectedConfig) : "";
+    if (wanted && labels.indexOf(wanted) !== -1) return wanted;
+    var filterCfg = config;
+    if (filterCfg && filterCfg !== "All configurations" && labels.indexOf(filterCfg) !== -1) {
+      return filterCfg;
+    }
+    return labels[0] || "Config1";
+  }
+
+  function riskLetter(value) {
+    var raw = String(value || "").trim().toUpperCase();
+    if (raw === "C" || raw === "H" || raw === "M" || raw === "L") return raw;
+    return "";
+  }
+
+  function effectiveProductRisk(run, pkg, analysis) {
+    var cfg = reviewConfigForPkg(pkg);
+    var latest = latestReview(pkg && pkg.kb, cfg);
+    if (latest && latest.product_risk_to) return latest.product_risk_to;
+    var any = latestReviewForKb(pkg && pkg.kb);
+    if (any && any.product_risk_to) return any.product_risk_to;
+    return analysis;
+  }
+
+  function kbReviewed(pkg) {
+    var latest = latestReview(pkg && pkg.kb, reviewConfigForPkg(pkg)) ||
+      latestReviewForKb(pkg && pkg.kb);
+    return Boolean(latest && latest.reviewed);
+  }
+
+  function reviewedBadge(pkg) {
+    if (!kbReviewed(pkg)) return "";
+    return '<span class="badge reviewed">Reviewed</span>';
+  }
+
+  function showToast(message) {
+    var el = document.getElementById("toast");
+    if (!el) return;
+    el.textContent = message;
+    el.className = "toast show";
+    setTimeout(function () { el.className = "toast"; }, 5000);
+  }
+
+  function humanReviewEvents(kb, config) {
+    var needleKb = String(kb || "").toUpperCase();
+    var needleCfg = String(config || "").trim();
+    return reviewEntries().filter(function (item) {
+      if (String(item.kb || "").toUpperCase() !== needleKb) return false;
+      if (needleCfg && String(item.config || "").trim() !== needleCfg) return false;
+      return true;
+    });
+  }
+
+  function humanReviewPanel(run, pkg) {
+    if (!pkg) return "";
+    var cfg = reviewConfigForPkg(pkg);
+    var letters = lettersForKb(run, pkg.kb);
+    var analysis = letters.product_risk || letters.product || "NA";
+    var latest = latestReview(pkg.kb, cfg);
+    var human = (latest && latest.product_risk_to) || analysis;
+    var reviewed = Boolean(latest && latest.reviewed);
+    var hasToken = Boolean(reviewToken());
+    var labels = [];
+    (pkg.stations || []).forEach(function (id) {
+      var label = configLabel(id);
+      if (label && labels.indexOf(label) === -1) labels.push(label);
+    });
+    if (!labels.length) labels = [cfg];
+    var cfgOpts = labels.map(function (name) {
+      return "<option" + (name === cfg ? " selected" : "") + ">" + esc(name) + "</option>";
+    }).join("");
+    var riskOpts = ["C", "H", "M", "L"].map(function (letter) {
+      return "<option" + (letter === human ? " selected" : "") + ">" + letter + "</option>";
+    }).join("");
+    return panel("Human review",
+      '<p class="banner">Advisory only. Human reviewed is not an authorization to install, approve, or deploy. HOLD and BLOCK stay. Fail-closed: a missing token, empty comment, or failed save does not change the overlay or analysis Product risk.</p>' +
+      '<form id="human-review-form" class="reviewForm">' +
+      '<input type="hidden" name="kb" value="' + esc(pkg.kb) + '">' +
+      '<input type="hidden" name="run_id" value="' + esc((run && run.run_id) || "") + '">' +
+      '<input type="hidden" name="analysis_risk" value="' + esc(riskLetter(analysis) || analysis) + '">' +
+      '<input type="hidden" name="product_risk_from" value="' +
+      esc(riskLetter((latest && latest.product_risk_to) || analysis)) + '">' +
+      "<label>Configuration <select id=\"review-config\" name=\"config\">" + cfgOpts + "</select></label>" +
+      "<p>Analysis Product risk " + risk(analysis) + "</p>" +
+      "<label>Human Product risk <select id=\"review-risk\" name=\"product_risk_to\">" +
+      riskOpts + "</select></label>" +
+      '<label class="check"><input type="checkbox" id="review-checked" name="reviewed"' +
+      (reviewed ? " checked" : "") + "> Human reviewed</label>" +
+      '<label>Comment <textarea id="review-comment" name="comment" required rows="3" ' +
+      'placeholder="Required when marking reviewed or changing Product risk"></textarea></label>' +
+      '<button class="primary" type="submit"' + (hasToken ? "" : " disabled") +
+      ">Save review</button>" +
+      (hasToken ? "" : "<p>Add a GitHub token on Settings to save.</p>") +
+      "</form>");
   }
 
   function impactHtml(text) {
@@ -1002,8 +1144,9 @@
         "</td><td>" + badgeSev(pkg.severity) +
         "</td><td>" + decisionBadge(pkg) + "</td><td>" + esc(labeledStations(pkg.stations)) +
         "</td><td>" + esc((pkg.cve_ids || []).join(", ") || "—") +
-        "</td><td>" + risk(letters.vendor) + "</td><td>" + risk(letters.product) +
-        "</td><td>" + decisionStatus(pkg) + "</td><td><button class=\"view\" data-open-kb=\"" +
+        "</td><td>" + risk(letters.vendor) + "</td><td>" +
+        risk(effectiveProductRisk(run, pkg, letters.product)) +
+        "</td><td>" + decisionStatus(pkg) + reviewedBadge(pkg) + "</td><td><button class=\"view\" data-open-kb=\"" +
         esc(pkg.kb) + "\">View</button></td></tr>";
     });
     return html + "</tbody></table></div>";
@@ -1231,8 +1374,11 @@
         '<table><thead><tr><th></th><th>Severity</th><th>Likelihood</th><th>Risk</th></tr></thead><tbody>' +
         "<tr><th>Vendor</th><td>" + risk(letters.vendor_severity) + "</td><td>" + risk(letters.vendor_likelihood) +
         "</td><td>" + risk(letters.vendor_risk) + "</td></tr>" +
-        "<tr><th>Product</th><td>" + risk(letters.product_severity) + "</td><td>" + risk(letters.product_likelihood) +
-        "</td><td>" + risk(letters.product_risk) + "</td></tr></tbody></table>") +
+        "<tr><th>Product (analysis)</th><td>" + risk(letters.product_severity) + "</td><td>" +
+        risk(letters.product_likelihood) + "</td><td>" + risk(letters.product_risk) + "</td></tr>" +
+        "<tr><th>Product (human)</th><td>—</td><td>—</td><td>" +
+        risk(effectiveProductRisk(run, pkg, letters.product_risk)) + "</td></tr></tbody></table>") +
+      humanReviewPanel(run, pkg) +
       panel("Technical Impact", impactBlocks(run, pkg) + citedFileList(run, list)) +
       panel("Test Coverage", testSnippet(run)) +
       panel("Install vs Skip", '<div class="installSkip"><div class="install"><h3>If we install</h3><ul><li>' +
@@ -1264,8 +1410,11 @@
         "<table><tr><th></th><th>Severity</th><th>Likelihood</th><th>Risk</th></tr>" +
         "<tr><th>Vendor</th><td>" + risk(letters.vendor_severity) + "</td><td>" + risk(letters.vendor_likelihood) +
         "</td><td>" + risk(letters.vendor_risk) + "</td></tr>" +
-        "<tr><th>Product</th><td>" + risk(letters.product_severity) + "</td><td>" + risk(letters.product_likelihood) +
-        "</td><td>" + risk(letters.product_risk) + "</td></tr></table>") +
+        "<tr><th>Product (analysis)</th><td>" + risk(letters.product_severity) + "</td><td>" +
+        risk(letters.product_likelihood) + "</td><td>" + risk(letters.product_risk) + "</td></tr>" +
+        "<tr><th>Product (human)</th><td>—</td><td>—</td><td>" +
+        risk(effectiveProductRisk(run, pkg, letters.product_risk)) + "</td></tr></table>") +
+      humanReviewPanel(run, pkg) +
       panel("Decision Logic", infoRows([
         ["If we install", esc(filledScore(cluster, "install_risk"))],
         ["If we skip", esc(filledScore(cluster, "skip_risk"))],
@@ -1471,7 +1620,26 @@
             (found && found.action ? " · " + esc(found.action) : "") +
             "</div></div>";
         }).join("") + "</div>"
-        : '<p class="empty">History will grow with later runs.</p>');
+        : '<p class="empty">History will grow with later runs.</p>') +
+      panel("Human review history",
+        (function () {
+          var events = humanReviewEvents(kb, "");
+          if (!events.length) {
+            return '<p class="empty">No human review events for this KB.</p>';
+          }
+          return '<div class="timeline">' + events.map(function (item) {
+            var from = item.product_risk_from || "—";
+            var to = item.product_risk_to || "—";
+            var mark = item.reviewed ? "Reviewed" : "Not reviewed";
+            return '<div class="timelineItem"><div class="dot ' +
+              (item.reviewed ? "done" : "pending") + '"></div><div>' +
+              esc(String(item.at || "").replace("T", " ")) +
+              "<small>" + esc(item.actor || "—") + " · " + esc(item.config || "") +
+              "</small></div><div>" + esc(mark) + " · Product risk " +
+              esc(from) + " → " + esc(to) + " · " + esc(item.comment || "") +
+              "</div></div>";
+          }).join("") + "</div>";
+        })());
   }
 
   function engineerPage(run) {
@@ -1772,12 +1940,24 @@
   }
 
   function settingsPage() {
+    var saved = Boolean(reviewToken());
+    var who = window.REVIEW_WHOAMI || "";
     return '<div class="pageHead"><div><h1>Settings</h1><p>Advisory GitHub Page</p></div></div>' +
       panel("Scope", infoRows([
         ["Role", "This page cannot start Orchestrator"],
         ["Data", "90-day snapshots from build-pages-site.py"],
         ["Authorization", "HOLD and BLOCK stay"]
-      ]));
+      ])) +
+      panel("Human review token",
+        "<p>Saving a review sends <code>repository_dispatch</code> to " +
+        esc(githubRepo()) +
+        ". Contents write and Actions dispatch on Orchestrator are required. The token stays in this tab only (sessionStorage), never in git.</p>" +
+        '<form id="review-token-form" class="reviewForm">' +
+        '<label>GitHub token <input id="review-token" type="password" autocomplete="off" ' +
+        'placeholder="' + (saved ? "Token saved in this tab" : "Paste PAT") + '"></label>' +
+        '<button class="primary" type="submit">Save token in this tab</button>' +
+        (who ? "<p>Signed in as " + esc(who) + "</p>" : "") +
+        "</form>");
   }
 
   function navItems() {
@@ -1838,6 +2018,131 @@
     if (page === "Q&A") return qaPage();
     if (page === "Settings") return settingsPage();
     return managerDashboard(run);
+  }
+
+  function githubHeaders(token) {
+    return {
+      Accept: "application/vnd.github+json",
+      Authorization: "Bearer " + token,
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
+  }
+
+  function rememberReview(event) {
+    var store = window.SITE_REVIEWS && typeof window.SITE_REVIEWS === "object"
+      ? window.SITE_REVIEWS
+      : { entries: [] };
+    var entries = Array.isArray(store.entries) ? store.entries.slice() : [];
+    entries.push(event);
+    window.SITE_REVIEWS = { entries: entries };
+  }
+
+  function applyReviewConfig(form) {
+    var kb = form.querySelector("[name=kb]");
+    var cfg = document.getElementById("review-config");
+    var riskSel = document.getElementById("review-risk");
+    var checked = document.getElementById("review-checked");
+    var fromField = form.querySelector("[name=product_risk_from]");
+    var analysisField = form.querySelector("[name=analysis_risk]");
+    if (!kb || !cfg) return;
+    var latest = latestReview(kb.value, cfg.value);
+    var analysis = analysisField ? analysisField.value : "";
+    var human = riskLetter((latest && latest.product_risk_to) || analysis);
+    if (riskSel && human) riskSel.value = human;
+    if (checked) checked.checked = Boolean(latest && latest.reviewed);
+    if (fromField) fromField.value = human;
+  }
+
+  function submitHumanReview(form, run) {
+    var token = reviewToken();
+    if (!token) {
+      showToast("Add a GitHub token on Settings to save.");
+      return;
+    }
+    var kb = (form.querySelector("[name=kb]") || {}).value || "";
+    var cfg = (document.getElementById("review-config") || {}).value || "";
+    var runId = (form.querySelector("[name=run_id]") || {}).value || "";
+    var from = riskLetter((form.querySelector("[name=product_risk_from]") || {}).value);
+    var to = riskLetter((document.getElementById("review-risk") || {}).value);
+    var analysis = riskLetter((form.querySelector("[name=analysis_risk]") || {}).value);
+    if (!from) from = analysis;
+    if (!to) to = from;
+    var reviewed = Boolean((document.getElementById("review-checked") || {}).checked);
+    var comment = String((document.getElementById("review-comment") || {}).value || "").trim();
+    var previous = latestReview(kb, cfg);
+    var riskChanged = from !== to;
+    var unreview = Boolean(previous && previous.reviewed && !reviewed);
+    if (!comment) {
+      showToast("Comment is required.");
+      return;
+    }
+    if (!reviewed && !riskChanged && !unreview) {
+      showToast("Mark Human reviewed or change Product risk.");
+      return;
+    }
+    var button = form.querySelector("button[type=submit]");
+    if (button) button.disabled = true;
+    var event = {
+      kb: kb,
+      config: cfg,
+      run_id: runId,
+      reviewed: reviewed,
+      product_risk_from: from,
+      product_risk_to: to,
+      comment: comment,
+      actor: window.REVIEW_WHOAMI || "",
+      at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
+    };
+    fetch("https://api.github.com/user", { headers: githubHeaders(token) })
+      .then(function (res) {
+        if (!res.ok) throw new Error("token");
+        return res.json();
+      })
+      .then(function (user) {
+        event.actor = user.login || event.actor;
+        window.REVIEW_WHOAMI = event.actor;
+        return fetch("https://api.github.com/repos/" + githubRepo() + "/dispatches", {
+          method: "POST",
+          headers: Object.assign({ "Content-Type": "application/json" }, githubHeaders(token)),
+          body: JSON.stringify({ event_type: "human-review", client_payload: event })
+        });
+      })
+      .then(function (res) {
+        if (!res.ok) throw new Error("dispatch");
+        rememberReview(event);
+        showToast("Human review saved. Overlay updates on this tab; gh-pages records it shortly.");
+        paint(run);
+      })
+      .catch(function () {
+        if (button) button.disabled = false;
+        showToast("Save failed. Overlay unchanged (fail-closed).");
+      });
+  }
+
+  function saveReviewToken(form, run) {
+    var input = document.getElementById("review-token");
+    var token = String((input && input.value) || "").trim();
+    if (!token) {
+      try { sessionStorage.removeItem("orchestrator.reviewToken"); } catch (err) {}
+      window.REVIEW_WHOAMI = "";
+      showToast("Token cleared for this tab.");
+      paint(run);
+      return;
+    }
+    fetch("https://api.github.com/user", { headers: githubHeaders(token) })
+      .then(function (res) {
+        if (!res.ok) throw new Error("token");
+        return res.json();
+      })
+      .then(function (user) {
+        try { sessionStorage.setItem("orchestrator.reviewToken", token); } catch (err) {}
+        window.REVIEW_WHOAMI = user.login || "";
+        showToast("Token saved in this tab as " + (user.login || "GitHub user") + ".");
+        paint(run);
+      })
+      .catch(function () {
+        showToast("Token check failed. Token was not saved.");
+      });
   }
 
   function bind(run) {
@@ -1964,6 +2269,24 @@
         if (again) again.focus();
       });
     });
+    var reviewForm = document.getElementById("human-review-form");
+    if (reviewForm) {
+      var cfgSel = document.getElementById("review-config");
+      if (cfgSel) {
+        cfgSel.addEventListener("change", function () { applyReviewConfig(reviewForm); });
+      }
+      reviewForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        submitHumanReview(reviewForm, run);
+      });
+    }
+    var tokenForm = document.getElementById("review-token-form");
+    if (tokenForm) {
+      tokenForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        saveReviewToken(tokenForm, run);
+      });
+    }
   }
 
   function paint(run) {

@@ -1,0 +1,63 @@
+name: Record human review
+
+on:
+  repository_dispatch:
+    types: [human-review]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: human-review-gh-pages
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Append review on gh-pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Orchestrator
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Append review
+        env:
+          REVIEW_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          set -euo pipefail
+          mkdir -p gh-pages
+          python3 scripts/append-human-review.py --site gh-pages --payload-env REVIEW_PAYLOAD
+
+      - name: Commit reviews
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd gh-pages
+          if [ ! -d .git ]; then
+            git init
+            git checkout -B gh-pages
+            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add data/reviews.json assets/reviews.js
+          if git diff --cached --quiet; then
+            echo "No review files to commit."
+            exit 0
+          fi
+          git commit -m "Record human review overlay on the Pages report."
+          git push origin HEAD:gh-pages

@@ -18,6 +18,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 PAGES_DIR = _SCRIPTS / "pages"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
+import human_reviews
 import psirt_scores
 
 RETENTION_DAYS = 90
@@ -1077,10 +1078,17 @@ def merge_history(
     return merged
 
 
-def write_site(out: Path, snapshots: list[dict[str, object]]) -> dict[str, object]:
+def write_site(
+    out: Path,
+    snapshots: list[dict[str, object]],
+    *,
+    history_dir: Path | None = None,
+    repo: str = "",
+) -> dict[str, object]:
     if not snapshots:
         raise SystemExit("no snapshots to publish")
     latest = snapshots[0]
+    reviews = human_reviews.load_store(human_reviews.find_reviews_file(history_dir))
     out.mkdir(parents=True, exist_ok=True)
     data = out / "data"
     history = data / "history"
@@ -1093,9 +1101,11 @@ def write_site(out: Path, snapshots: list[dict[str, object]]) -> dict[str, objec
         run_id = str(item["run_id"])
         (history / f"{run_id}.json").write_text(json.dumps(item, indent=2) + "\n", encoding="utf-8")
     (data / "latest.json").write_text(json.dumps(latest, indent=2) + "\n", encoding="utf-8")
+    human_reviews.write_store(out, reviews)
     index = {
         "generated": _iso(),
         "latest": latest["run_id"],
+        "repo": (repo or os.environ.get("GITHUB_REPOSITORY") or "defrances/Orchestrator").strip(),
         "retention_days": RETENTION_DAYS,
         "runs": [
             {
@@ -1204,7 +1214,8 @@ def build(
         existing.extend(backfill_snapshots(repo, out.parent / ".pages-backfill"))
     current = snapshot_from_workspace(workspace, env=env)
     snapshots = merge_history(existing, current)
-    return write_site(out, snapshots)
+    repo = (os.environ.get("GITHUB_REPOSITORY") or "defrances/Orchestrator").strip()
+    return write_site(out, snapshots, history_dir=history_dir, repo=repo)
 
 
 def main() -> int:
