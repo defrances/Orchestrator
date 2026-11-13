@@ -131,6 +131,18 @@
       "comment": "sasasasa",
       "actor": "defrances",
       "at": "2026-11-12T21:43:36Z"
+    },
+    {
+      "id": "75d6445feca24719bca7a17293e1ebd4",
+      "kb": "KB5002916",
+      "config": "Config2",
+      "run_id": "39381934757",
+      "reviewed": true,
+      "product_risk_from": "M",
+      "product_risk_to": "L",
+      "comment": "Test comments",
+      "actor": "defrances",
+      "at": "2026-11-13T15:19:55Z"
     }
   ]
 }
